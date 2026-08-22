@@ -2,13 +2,16 @@
 
 namespace App\Http\Requests\Settings;
 
-use App\Concerns\ProfileUpdateValidationRules;
+use App\Concerns\ProfilepictureRules;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class ProfileUpdateRequest extends FormRequest
+use Illuminate\Support\Facades\Log;
+
+
+class ProfilepictureRequest extends FormRequest
 {
-    use ProfileUpdateValidationRules;
+    use ProfilepictureRules;
 
     /**
      * Get the validation rules that apply to the request.
@@ -17,6 +20,10 @@ class ProfileUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        return $this->profileRules($this->user()->id);
+
+        $test = ['profilepicture' => $this->profilepictureRules()];
+
+
+        return $test;
     }
 }

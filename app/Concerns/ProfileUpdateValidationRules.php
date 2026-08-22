@@ -2,12 +2,12 @@
 
 namespace App\Concerns;
 
+use App\Enums\Languages;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
-use App\Enums\Languages;
 
-trait ProfileValidationRules
+trait ProfileUpdateValidationRules
 {
     /**
      * Get the validation rules used to validate user profiles.
@@ -21,7 +21,7 @@ trait ProfileValidationRules
             'firstname' => $this->firstlastnameRules(),
             'lastname' => $this->firstlastnameRules(),
             'email' => $this->emailRules($userId),
-            'preferredlanguage' => $this->preferredlanguageRules(),
+            'preferredlanguage' => $this->preferredlanguageRules()
         ];
     }
 
@@ -32,10 +32,8 @@ trait ProfileValidationRules
      */
     protected function usernameRules(): array
     {
-        return ['required', 'string', 'max:255', Rule::unique(User::class)];
+        return ['sometimes', 'string', 'max:255', Rule::unique(User::class)];
     }
-
-
 
     /**
      * Get the validation rules used to validate user firstnames.
@@ -44,7 +42,7 @@ trait ProfileValidationRules
      */
     protected function firstlastnameRules(): array
     {
-        return ['required', 'string', 'max:255'];
+        return ['sometimes', 'string', 'max:255'];
     }
 
     /**
@@ -55,7 +53,7 @@ trait ProfileValidationRules
     protected function emailRules(?int $userId = null): array
     {
         return [
-            'required',
+            'sometimes',
             'string',
             'email',
             'max:255',
@@ -71,6 +69,7 @@ trait ProfileValidationRules
     protected function preferredlanguageRules(): array
     {
         return [
+            'sometimes',
             Rule::enum(Languages::class)
         ];
     }

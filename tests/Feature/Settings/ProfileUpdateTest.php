@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Enums\Languages;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -18,7 +19,7 @@ test('profile information can be updated', function () {
     $response = $this
         ->actingAs($user)
         ->patch(route('profile.update'), [
-            'name' => 'Test User',
+            'username' => 'Test User',
             'email' => 'test@example.com',
         ]);
 
@@ -28,7 +29,7 @@ test('profile information can be updated', function () {
 
     $user->refresh();
 
-    expect($user->name)->toBe('Test User');
+    expect($user->username)->toBe('Test User');
     expect($user->email)->toBe('test@example.com');
     expect($user->email_verified_at)->toBeNull();
 });
@@ -82,4 +83,22 @@ test('correct password must be provided to delete account', function () {
         ->assertRedirect(route('profile.edit'));
 
     expect($user->fresh())->not->toBeNull();
+});
+
+test('preferred language can be change', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->patch(route('profile.update'), [
+            'preferredlanguage' => 'german',
+        ]);
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
+
+    $user->refresh();
+
+    expect($user->preferredlanguage)->toBe(Languages::German);
 });

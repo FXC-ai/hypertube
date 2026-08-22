@@ -4,6 +4,7 @@ use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Log;
 use Laravel\Fortify\Features;
 
 beforeEach(function () {
@@ -28,6 +29,8 @@ test('email can be verified', function () {
         now()->addMinutes(60),
         ['id' => $user->id, 'hash' => sha1($user->email)],
     );
+
+    // Log::channel('my_debug')->debug('verificationUrl ', [$verificationUrl]);
 
     $response = $this->actingAs($user)->get($verificationUrl);
 

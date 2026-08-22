@@ -1,11 +1,14 @@
 <laravel-boost-guidelines>
+=== .ai/guidelines_no_modification rules ===
+
+# ABOUT FILE MODIFICATION
+
+No modifications are allowed without the express request of the user. All code snippets must be suggested; never take the initiative to modify any file yourself. The only sentence which authorize you to modify any file is "Tu peux modifier les fichiers". If it does not appears in the user prompt (even a similar sentence or the same sentence with a tiny variation), do not modify any file.
+
+
 === foundation rules ===
 
 # Laravel Boost Guidelines
-
-NEVER modify or create any project file without the user's explicit consent. The only statement that grants permission to create or modify files is: “Tu es autorisé à créer ou modifier les fichiers.” If this exact statement does not appear in the user's prompt, do not modify or create any project file under any circumstances.
-
-You may read and inspect any file in the project whenever necessary.
 
 The Laravel Boost guidelines are specifically curated by Laravel maintainers for this application. These guidelines should be followed closely to ensure the best experience when building Laravel applications.
 
