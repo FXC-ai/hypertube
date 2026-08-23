@@ -1,9 +1,14 @@
-import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { Link, router } from '@inertiajs/react';
+import { LogOut, BookOpen, Settings, LayoutGrid, User, Film } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
+import { logout } from '@/routes';
+import { edit } from '@/routes/profile';
+
+import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+
 import {
     Sidebar,
     SidebarContent,
@@ -18,6 +23,16 @@ import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
+        title: 'Video',
+        href: "/",
+        icon: Film,
+    },
+    {
+        title: 'Users',
+        href: "/",
+        icon: User,
+    },
+    {
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
@@ -27,15 +42,26 @@ const mainNavItems: NavItem[] = [
 const footerNavItems: NavItem[] = [
 
     {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
+        title: 'Repository',
+        href: "",
         icon: BookOpen,
     },
 ];
 
 export function AppSidebar() {
+    const cleanup = useMobileNavigation();
+
+    const handleLogout = () => {
+        cleanup();
+        router.flushAll();
+    };
+
+
+
+
     return (
         <Sidebar collapsible="icon" variant="inset">
+
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
@@ -53,8 +79,42 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
-                <NavUser />
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton asChild>
+                            <Link
+                                className="block w-full cursor-pointer"
+                                href={edit()}
+                                prefetch
+                                onClick={cleanup}
+                            >
+                                <Settings className="h-5 w-5" />
+                                <span>Settings</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton asChild>
+                            <Link
+                                href={logout()}
+                                as="button"
+                                onClick={handleLogout}
+                                className="w-full cursor-pointer"
+                                data-test="logout-button"
+                            >
+                                <LogOut className="h-5 w-5" />
+                                <span>Log out</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+
+                {/*<NavFooter items={footerNavItems} className="mt-auto" />*/}
+
+                {/*<NavUser />*/}
             </SidebarFooter>
         </Sidebar>
     );

@@ -1,6 +1,7 @@
 import { Form, Head, usePage } from '@inertiajs/react';
 import { Link } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import ProfilepictureController from '@/actions/App/Http/Controllers/Settings/ProfilePictureController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -10,6 +11,11 @@ import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
+
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useInitials } from '@/hooks/use-initials';
+import ProfilePictureController from '@/actions/App/Http/Controllers/Settings/ProfilePictureController';
+
 
 type PageProps = {
     auth: Auth;
@@ -23,7 +29,7 @@ export default function Profile({
     status?: string;
 }) {
     const { auth } = usePage<PageProps>().props;
-
+    const getInitials = useInitials();
     return (
         <>
             <Head title="Profile settings" />
@@ -34,7 +40,7 @@ export default function Profile({
                 <Heading
                     variant="small"
                     title="Profile"
-                    description="Update your name and email address"
+                    description="Update your profile"
                 />
 
                 <Form
@@ -47,21 +53,40 @@ export default function Profile({
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                                <Label htmlFor="username">Username</Label>
 
                                 <Input
-                                    id="name"
+                                    id="username"
                                     className="mt-1 block w-full"
-                                    defaultValue={auth.user.name}
-                                    name="name"
+                                    defaultValue={auth.user.username}
+                                    name="username"
                                     required
-                                    autoComplete="name"
-                                    placeholder="Full name"
+                                    autoComplete="username"
+                                    placeholder="Username"
                                 />
 
                                 <InputError
                                     className="mt-2"
-                                    message={errors.name}
+                                    message={errors.username}
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="firstname">First Name</Label>
+
+                                <Input
+                                    id="firstname"
+                                    className="mt-1 block w-full"
+                                    defaultValue={auth.user.firstname}
+                                    name="firstname"
+                                    required
+                                    autoComplete="First Name"
+                                    placeholder="First Name"
+                                />
+
+                                <InputError
+                                    className="mt-2"
+                                    message={errors.firstname}
                                 />
                             </div>
 
@@ -75,7 +100,7 @@ export default function Profile({
                                     defaultValue={auth.user.email}
                                     name="email"
                                     required
-                                    autoComplete="username"
+                                    autoComplete="email"
                                     placeholder="Email address"
                                 />
 
@@ -102,11 +127,11 @@ export default function Profile({
 
                                         {status ===
                                             'verification-link-sent' && (
-                                            <div className="mt-2 text-sm font-medium text-green-600">
-                                                A new verification link has been
-                                                sent to your email address.
-                                            </div>
-                                        )}
+                                                <div className="mt-2 text-sm font-medium text-green-600">
+                                                    A new verification link has been
+                                                    sent to your email address.
+                                                </div>
+                                            )}
                                     </div>
                                 )}
 
@@ -121,7 +146,60 @@ export default function Profile({
                         </>
                     )}
                 </Form>
+
+                <Form
+                    {...ProfilePictureController.update.form()}
+                    options={{
+                        preserveScroll: true,
+                    }}
+                    className="space-y-6"
+                >
+                    {({ processing, errors }) => (
+                        <>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="email">Profile picture</Label>
+
+                                <Input
+                                    id="profilepicture"
+                                    type="file"
+                                    className="mt-1 block w-full"
+                                    name="profilepicture"
+                                    required
+                                    autoComplete="Profile Picture"
+                                    placeholder="Profile Picture"
+                                />
+
+                                <InputError
+                                    className="mt-2"
+                                    message={errors.profilepicture}
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <Button
+                                    disabled={processing}
+                                    data-test="update-profile-button"
+                                >
+                                    Save
+                                </Button>
+                            </div>
+                        </>
+                    )}
+                </Form>
             </div>
+
+
+            <Avatar className="h-8 w-8 overflow-hidden rounded-full">
+                <AvatarImage src={
+                    auth.user.profilepicture
+                        ? `/storage/${auth.user.profilepicture}`
+                        : undefined
+                } alt={auth.user.username} />
+                <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
+                    {getInitials(auth.user.username)}
+                </AvatarFallback>
+            </Avatar>
 
             <DeleteUser />
         </>

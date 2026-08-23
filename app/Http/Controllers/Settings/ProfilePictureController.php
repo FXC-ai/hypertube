@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfilepictureRequest;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Storage;
 
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,7 @@ class ProfilePictureController extends Controller
     /**
      * Update the avatar for the user.
      */
-    public function update(ProfilepictureRequest $request): JsonResponse
+    public function update(ProfilepictureRequest $request): RedirectResponse
     {
         $validated = $request->validated();
 
@@ -32,6 +33,6 @@ class ProfilePictureController extends Controller
             Storage::disk('public')->delete($previousProfilepicture);
         }
 
-        return response()->json(['path' => $newPath]);
+        return to_route('profile.edit');
     }
 }
