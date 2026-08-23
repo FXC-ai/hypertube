@@ -27,16 +27,52 @@ export default function Register({ passwordRules }: Props) {
                     <>
                         <div className="grid gap-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                                <Label htmlFor="name">Username</Label>
                                 <Input
-                                    id="name"
+                                    id="username"
                                     type="text"
                                     required
                                     autoFocus
                                     tabIndex={1}
-                                    autoComplete="name"
-                                    name="name"
-                                    placeholder="Full name"
+                                    autoComplete="username"
+                                    name="username"
+                                    placeholder="Username"
+                                />
+                                <InputError
+                                    message={errors.name}
+                                    className="mt-2"
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="name">First Name</Label>
+                                <Input
+                                    id="firstname"
+                                    type="text"
+                                    required
+                                    autoFocus
+                                    tabIndex={1}
+                                    autoComplete="First Name"
+                                    name="firstname"
+                                    placeholder="First Name"
+                                />
+                                <InputError
+                                    message={errors.name}
+                                    className="mt-2"
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="name">Last Name</Label>
+                                <Input
+                                    id="lastname"
+                                    type="text"
+                                    required
+                                    autoFocus
+                                    tabIndex={1}
+                                    autoComplete="Last Name"
+                                    name="lastname"
+                                    placeholder="Last Name"
                                 />
                                 <InputError
                                     message={errors.name}
