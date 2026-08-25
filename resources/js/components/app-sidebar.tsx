@@ -6,6 +6,7 @@ import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
+import { index } from '@/routes/users'
 
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 
@@ -29,7 +30,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Users',
-        href: "/",
+        href: index(),
         icon: User,
     },
     {

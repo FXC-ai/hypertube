@@ -16,6 +16,7 @@ class PublicUserResource extends JsonResource
             'lastname' => $this->lastname,
             'profilepicture' => $this->profilepicture,
             'preferredlanguage' => $this->preferredlanguage,
+            'created_at' => $this->created_at,
         ];
     }
 }
