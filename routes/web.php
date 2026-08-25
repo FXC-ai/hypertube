@@ -14,6 +14,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
     Route::patch('/updateavatar', [ProfilePictureController::class, 'update'])->name('update.avatar');
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
 });
 
 require __DIR__ . '/settings.php';

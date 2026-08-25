@@ -11,6 +11,13 @@ import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
@@ -91,6 +98,55 @@ export default function Profile({
                             </div>
 
                             <div className="grid gap-2">
+                                <Label htmlFor="lastname">Last Name</Label>
+
+                                <Input
+                                    id="lastname"
+                                    className="mt-1 block w-full"
+                                    defaultValue={auth.user.lastname}
+                                    name="lastname"
+                                    required
+                                    autoComplete="Last Name"
+                                    placeholder="Last Name"
+                                />
+
+                                <InputError
+                                    className="mt-2"
+                                    message={errors.lastname}
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="preferredlanguage">Preferred Language</Label>
+
+                                <Select
+                                    name="preferredlanguage"
+                                    defaultValue={auth.user.preferredlanguage}
+                                    required
+                                >
+                                    <SelectTrigger
+                                        id="preferredlanguage"
+                                        className='mt-1 w-full'
+                                        aria-invalid={Boolean(errors.preferredlanguage)}
+                                    >
+                                        <SelectValue placeholder="Select a language" />
+                                    </SelectTrigger>
+
+                                    <SelectContent>
+                                        <SelectItem value="english">English</SelectItem>
+                                        <SelectItem value="french">French</SelectItem>
+                                        <SelectItem value="german">German</SelectItem>
+                                        <SelectItem value="spanish">Spanish</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
+                                <InputError
+                                    className="mt-2"
+                                    message={errors.preferredlanguage}
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
                                 <Label htmlFor="email">Email address</Label>
 
                                 <Input
@@ -159,7 +215,16 @@ export default function Profile({
 
                             <div className="grid gap-2">
                                 <Label htmlFor="email">Profile picture</Label>
-
+                                <Avatar className="h-40 w-64 overflow-hidden rounded-xl">
+                                    <AvatarImage
+                                        src={auth.user.profilepicture ? `/storage/${auth.user.profilepicture}` : undefined}
+                                        alt={auth.user.username}
+                                        className="h-full w-full object-contain"
+                                    />
+                                    <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
+                                        {getInitials(auth.user.username)}
+                                    </AvatarFallback>
+                                </Avatar>
                                 <Input
                                     id="profilepicture"
                                     type="file"
@@ -190,16 +255,7 @@ export default function Profile({
             </div>
 
 
-            <Avatar className="h-8 w-8 overflow-hidden rounded-full">
-                <AvatarImage src={
-                    auth.user.profilepicture
-                        ? `/storage/${auth.user.profilepicture}`
-                        : undefined
-                } alt={auth.user.username} />
-                <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                    {getInitials(auth.user.username)}
-                </AvatarFallback>
-            </Avatar>
+
 
             <DeleteUser />
         </>
