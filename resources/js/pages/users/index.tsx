@@ -10,8 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import InputError from '@/components/input-error';
 
-
-
 type User = {
     id: number;
     username: string;
@@ -77,9 +75,9 @@ function UserItem({ user }: { user: User }) {
 
 export default function UsersIndex({ users, filters }: UserIndexProps) {
 
+    console.log(filters, users);
     return (
         <>
-
             <Head title="Users" />
 
             <div className='flex h-full flex-1 flex-col gap-6 p-4'>
@@ -92,8 +90,8 @@ export default function UsersIndex({ users, filters }: UserIndexProps) {
                         className="flex flex-col gap-2 sm:flex-row sm:items-start"
                         options={{
                             preserveScroll: true,
-                            only: ['users'],
-                            reset: ['users'],
+                            // only: ['users', 'filters'],
+                            // reset: ['users'],
                             replace: true,
                         }}
                     >
@@ -110,6 +108,7 @@ export default function UsersIndex({ users, filters }: UserIndexProps) {
                                             id="search"
                                             type="search"
                                             name="search"
+                                            defaultValue={filters.search ?? ''}
                                             placeholder="Search by username..."
                                             aria-invalid={Boolean(errors.search)}
                                             autoComplete='off'
@@ -121,7 +120,6 @@ export default function UsersIndex({ users, filters }: UserIndexProps) {
                                         />
 
                                     </div>
-
 
                                     <Button
                                         type="submit"
@@ -135,12 +133,16 @@ export default function UsersIndex({ users, filters }: UserIndexProps) {
                         }
 
                     </Form>
-                    <Button>
-                        Clear
-                    </Button>
+
+                    {filters.search && (
+                        <Button variant="outline" asChild>
+                            <Link href={index()} replace>
+                                Clear filters
+                            </Link>
+                        </Button>
+                    )}
 
                 </div>
-
 
                 {
                     users.data.length > 0 ?
@@ -153,7 +155,7 @@ export default function UsersIndex({ users, filters }: UserIndexProps) {
 
                             </InfiniteScroll>
                         ) : (
-                            filters != null ?
+                            filters.search != null ?
                                 (
 
                                     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">

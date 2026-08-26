@@ -14,13 +14,21 @@ use Inertia\Response;
 
 class UserController extends Controller
 {
-    public function show(User $user): PublicUserResource
+    public function show(User $user): Response
     {
         $publicUserResource = new PublicUserResource($user);
 
         // Log::channel('my_debug')->debug('verificationUrl ', [$publicUserResource]);
 
-        return new PublicUserResource($user);
+        // return new PublicUserResource($user);
+
+        return Inertia::render(
+            'users/show',
+            [
+                "user" => $publicUserResource,
+
+            ]
+        );
     }
 
     public function index(IndexUserRequest $request): Response
@@ -32,6 +40,8 @@ class UserController extends Controller
         $sort = $params['sort'] ?? null;
         $dir = $params['dir'] ?? 'asc';
         $perPage = (int) ($params['perPage'] ?? 5);
+
+        Log::channel("my_debug")->debug("search = ", [$search]);
         // $page = (int) ($params['page'] ?? 1);
 
         $query = User::query();
