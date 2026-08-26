@@ -39,7 +39,7 @@ export default function Register({ passwordRules }: Props) {
                                     placeholder="Username"
                                 />
                                 <InputError
-                                    message={errors.name}
+                                    message={errors.username}
                                     className="mt-2"
                                 />
                             </div>
@@ -57,7 +57,7 @@ export default function Register({ passwordRules }: Props) {
                                     placeholder="First Name"
                                 />
                                 <InputError
-                                    message={errors.name}
+                                    message={errors.firstname}
                                     className="mt-2"
                                 />
                             </div>
@@ -75,7 +75,7 @@ export default function Register({ passwordRules }: Props) {
                                     placeholder="Last Name"
                                 />
                                 <InputError
-                                    message={errors.name}
+                                    message={errors.lastname}
                                     className="mt-2"
                                 />
                             </div>

@@ -36,9 +36,8 @@ trait ProfileUpdateValidationRules
             'sometimes',
             'string',
             'max:255',
-
+            'lowercase',
             $userId === null ? Rule::unique(User::class) : Rule::unique(User::class)->ignore($userId),
-
         ];
     }
 

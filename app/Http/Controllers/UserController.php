@@ -25,6 +25,7 @@ class UserController extends Controller
 
     public function index(IndexUserRequest $request): Response
     {
+
         $params = $request->validated();
 
         $search = $params['search'] ?? null;
@@ -50,7 +51,7 @@ class UserController extends Controller
         // Log::channel('my_debug')->debug('List USers ', [$users]);
 
         return Inertia::render(
-            'usersindex',
+            'users/index',
             [
                 "users" => Inertia::scroll(
                     fn() => PublicUserResource::collection($query->paginate($perPage))

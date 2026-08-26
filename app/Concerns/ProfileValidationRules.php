@@ -32,7 +32,7 @@ trait ProfileValidationRules
      */
     protected function usernameRules(): array
     {
-        return ['required', 'string', 'max:255', Rule::unique(User::class)];
+        return ['required', 'lowercase', 'string', 'max:255', Rule::unique(User::class)];
     }
 
 

@@ -6,7 +6,7 @@ import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
-import { index } from '@/routes/users'
+import { index } from '@/routes/users/index'
 
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 
