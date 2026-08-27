@@ -1,11 +1,4 @@
 <laravel-boost-guidelines>
-=== .ai/guidelines_no_modification rules ===
-
-# ABOUT FILE MODIFICATION
-
-No modifications are allowed without the express request of the user. All code snippets must be suggested; never take the initiative to modify any file yourself. The only sentence which authorize you to modify any file is "Tu peux modifier les fichiers". If it does not appears in the user prompt (even a similar sentence or the same sentence with a tiny variation), do not modify any file.
-
-
 === foundation rules ===
 
 # Laravel Boost Guidelines
@@ -14,7 +7,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 ## Foundational Context
 
-This application is a Laravel application running on PHP 8.5. You are an expert with the Laravel ecosystem. Always use the APIs that match the installed major version of each package — do not assume a version.
+This application is a Laravel application running on PHP 8.4. You are an expert with the Laravel ecosystem. Always use the APIs that match the installed major version of each package — do not assume a version.
 
 Before relying on a package's API, confirm its installed version:
 - PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.

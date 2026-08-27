@@ -64,37 +64,40 @@ export default function UserShow({ user }: UserShowProps) {
                 </Avatar>
 
                 <div className="min-w-0 flex-1">
-                    <h1 className="mb-6 truncate text-3xl font-semibold tracking-tight">
-                        {profile.username}
-                    </h1>
+                    <dl className="grid grid-cols-[10rem_minmax(0,1fr)] items-baseline gap-x-6 gap-y-4 text-base">
+                        <div className="contents">
+                            <dt className="font-medium">Username:</dt>
+                            <dd className="truncate text-2xl font-semibold tracking-tight">
+                                {profile.username}
+                            </dd>
+                        </div>
 
-                    <dl className="space-y-4 text-base">
-                        <div className="flex flex-wrap gap-x-2">
+                        <div className="contents">
                             <dt className="font-medium">First Name:</dt>
-                            <dd className="text-muted-foreground">
+                            <dd className="min-w-0 text-muted-foreground">
                                 {profile.firstname || 'Not provided'}
                             </dd>
                         </div>
 
-                        <div className="flex flex-wrap gap-x-2">
+                        <div className="contents">
                             <dt className="font-medium">Last Name:</dt>
-                            <dd className="text-muted-foreground">
+                            <dd className="min-w-0 text-muted-foreground">
                                 {profile.lastname || 'Not provided'}
                             </dd>
                         </div>
 
-                        <div className="flex flex-wrap gap-x-2">
+                        <div className="contents">
                             <dt className="font-medium">Preferred language:</dt>
-                            <dd className="text-muted-foreground">
+                            <dd className="min-w-0 text-muted-foreground">
                                 {profile.preferredlanguage
                                     ? formatLanguage(profile.preferredlanguage)
                                     : 'Not provided'}
                             </dd>
                         </div>
 
-                        <div className="flex flex-wrap gap-x-2">
+                        <div className="contents">
                             <dt className="font-medium">Member since:</dt>
-                            <dd className="text-muted-foreground">
+                            <dd className="min-w-0 text-muted-foreground">
                                 <time dateTime={profile.created_at}>
                                     {formatRegistrationDate(profile.created_at)}
                                 </time>
