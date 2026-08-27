@@ -26,7 +26,6 @@ class UserController extends Controller
             'users/show',
             [
                 "user" => $publicUserResource,
-
             ]
         );
     }
