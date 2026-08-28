@@ -25,6 +25,8 @@ class ProfilePictureController extends Controller
         $previousProfilepicture = $user->profilepicture;
 
         $newPath = $validated['profilepicture']->store('avatars', 'public');
+
+        Log::channel('my_debug')->debug('newPath = ', [$newPath]);
         // https://laravel.com/framework/docs/13.x/images
 
         $user->update(['profilepicture' => $newPath]);

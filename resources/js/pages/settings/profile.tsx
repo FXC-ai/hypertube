@@ -24,6 +24,23 @@ import { useInitials } from '@/hooks/use-initials';
 import ProfilePictureController from '@/actions/App/Http/Controllers/Settings/ProfilePictureController';
 
 
+function ManageProfilePicturePath(path: string): string {
+
+    const externPicture = /https?:\/\/[^"]*/g
+
+    const uploadedPicture = /avatars\/[^"]*/g
+
+    if (externPicture.test(path)) {
+        return path;
+    }
+
+    if (uploadedPicture.test(path)) {
+        return "/storage/" + path
+    }
+
+    return ""
+}
+
 type PageProps = {
     auth: Auth;
 };
@@ -37,6 +54,9 @@ export default function Profile({
 }) {
     const { auth } = usePage<PageProps>().props;
     const getInitials = useInitials();
+
+    console.log("AVATAR = ", auth.user.profilepicture);
+
     return (
         <>
             <Head title="Profile settings" />
@@ -217,7 +237,7 @@ export default function Profile({
                                 <Label htmlFor="email">Profile picture</Label>
                                 <Avatar className="h-40 w-64 overflow-hidden rounded-xl">
                                     <AvatarImage
-                                        src={auth.user.profilepicture ? `/storage/${auth.user.profilepicture}` : undefined}
+                                        src={auth.user.profilepicture ? ManageProfilePicturePath(auth.user.profilepicture) : undefined}
                                         alt={auth.user.username}
                                         className="h-full w-full object-contain"
                                     />

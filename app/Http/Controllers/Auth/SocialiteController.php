@@ -53,27 +53,34 @@ class SocialiteController extends Controller
         Log::channel('my_debug')->debug('Avatar = ', [$socialUser->getAvatar()]);
         Log::channel('my_debug')->debug('Name = ', [$socialUser->getName()]);
         Log::channel('my_debug')->debug('Id = ', [$socialUser->getId()]);
+        Log::channel('my_debug')->debug('Provider token = ', [$socialUser->token]);
+        Log::channel('my_debug')->debug('provider_refresh_token = ', [$socialUser->refreshToken]);
         // updateOrCreate va :
         // 1. Chercher un User avec le bon 'provider' et 'provider_id'
         // 2. Si non trouvé, le créer avec les informations du deuxième tableau
+
+
         $user = User::updateOrCreate(
             [
                 'provider' => $provider,
                 'provider_id' => $socialUser->getId(),
             ],
             [
-                'name' => $socialUser->getName(),
+                'username' => $socialUser->getNickname(),
                 'email' => $socialUser->getEmail(),
-                'avatar' => $socialUser->getAvatar(),
+                'profilepicture' => $socialUser->getAvatar(),
                 'provider_token' => $socialUser->token,
-                'provider_refresh_token' => $socialUser->refreshToken, // Utile pour taper dans les API
-                'password' => bcrypt(Str::random(24)),  // Mot de passe aléatoire car géré par GitHub
+                'provider_refresh_token' => $socialUser->refreshToken,
             ]
         );
+
+        $user->markEmailAsVerified();
 
         // Connecter manuellement l'utilisateur dans Laravel (avec le cookie Remember Me)
         Auth::login($user, remember: true);
 
         return redirect()->intended('/dashboard');
+
+        // return redirect()->intended('/');
     }
 }
