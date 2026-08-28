@@ -11,12 +11,6 @@ Route::inertia('/dashboard2', 'dashboard2')->name('dashboard2');
 Route::inertia('/', 'welcome')->name('home');
 
 
-Route::get('/auth/{provider}', [SocialiteController::class, 'redirect'])->name('socialite.redirect');
-
-Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->name('socialite.callback');
-
-
-
 Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
