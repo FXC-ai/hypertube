@@ -13,7 +13,7 @@ Route::inertia('/', 'welcome')->name('home');
 
 Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->name('socialite.redirect');
 Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->name('socialite.callback');
-Route::whereIn('provider', ['github']);
+Route::whereIn('provider', ['github', 'fortytwo']);
 
 Route::middleware(['auth', 'verified'])->group(function () {
 

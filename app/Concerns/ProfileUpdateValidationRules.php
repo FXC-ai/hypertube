@@ -17,7 +17,7 @@ trait ProfileUpdateValidationRules
      */
     protected function profileRules(?int $userId = null): array
     {
-        Log::channel('my_debug')->debug('profileRules est déclenché ', []);
+        // Log::channel('my_debug')->debug('profileRules est déclenché ', []);
 
         return [
             'username' => $this->usernameRules($userId),

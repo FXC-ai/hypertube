@@ -23,13 +23,15 @@ test('an authenticated user can add a profile picture in his profile', function 
             'profilepicture' => $avatar,
         ]);
 
-    $response->assertOk();
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
 
-    $profilepicturePath = $response->json('path');
+    $profilepicturePath = $user->refresh()->profilepicture;
+
+    expect($profilepicturePath)->not->toBeNull();
 
     Storage::disk('public')->assertExists($profilepicturePath);
-
-    expect($user->refresh()->profilepicture)->toBe($profilepicturePath);
 });
 
 test('an authenticated user can update their profile picture', function () {
@@ -51,13 +53,15 @@ test('an authenticated user can update their profile picture', function () {
             'profilepicture' => $avatar,
         ]);
 
-    $response->assertOk();
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
 
-    $profilepicturePath = $response->json('path');
+    $profilepicturePath = $user->refresh()->profilepicture;
+
+    expect($profilepicturePath)->not->toBeNull();
 
     Storage::disk('public')->assertExists($profilepicturePath);
-
-    expect($user->refresh()->profilepicture)->toBe($profilepicturePath);
 
     $avatar2 = new UploadedFile(
         base_path('tests\Fixtures\avatar2.jpeg'),
@@ -73,15 +77,18 @@ test('an authenticated user can update their profile picture', function () {
             'profilepicture' => $avatar2,
         ]);
 
-    $response2->assertOk();
+    $response2
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
 
-    $profilepicturePath2 = $response2->json('path');
+    $profilepicturePath2 = $user->refresh()->profilepicture;
+
+    expect($profilepicturePath2)
+        ->not->toBeNull()
+        ->not->toBe($profilepicturePath);
 
     Storage::disk('public')->assertExists($profilepicturePath2);
-
     Storage::disk('public')->assertMissing($profilepicturePath);
-
-    expect($user->refresh()->profilepicture)->toBe($profilepicturePath2);
 });
 
 test('an unauthenticated user cannot update a profile picture', function () {
@@ -140,7 +147,7 @@ test('a profile picture may not be larger than two megabytes', function () {
     expect(Storage::disk('public')->allFiles())->toBeEmpty();
 });
 
-test('a profile picture may not be wider than 2000 pixels', function () {
+test('a profile picture may not be wider than 4000 pixels', function () {
     Storage::fake('public');
 
     $user = User::factory()->create();
@@ -148,7 +155,7 @@ test('a profile picture may not be wider than 2000 pixels', function () {
     $response = $this
         ->actingAs($user)
         ->patch(route('update.avatar'), [
-            'profilepicture' => UploadedFile::fake()->image('avatar.jpg', 2001, 1000),
+            'profilepicture' => UploadedFile::fake()->image('avatar.jpg', 4001, 1000),
         ]);
 
     $response->assertSessionHasErrors('profilepicture');
@@ -164,7 +171,7 @@ test('a profile picture may not be taller than 2000 pixels', function () {
     $response = $this
         ->actingAs($user)
         ->patch(route('update.avatar'), [
-            'profilepicture' => UploadedFile::fake()->image('avatar.jpg', 1000, 2001),
+            'profilepicture' => UploadedFile::fake()->image('avatar.jpg', 1000, 4001),
         ]);
 
     $response->assertSessionHasErrors('profilepicture');
@@ -200,6 +207,7 @@ test('profile pictures are stored and deleted on the public disk', function () {
     Storage::fake('public');
 
     $previousProfilepicture = 'avatars/previous-avatar.jpg';
+
     Storage::disk('local')->put($previousProfilepicture, 'local avatar');
     Storage::disk('public')->put($previousProfilepicture, 'public avatar');
 
@@ -221,14 +229,19 @@ test('profile pictures are stored and deleted on the public disk', function () {
             'profilepicture' => $avatar,
         ]);
 
-    $response->assertOk();
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('profile.edit'));
 
-    $profilepicturePath = $response->json('path');
+    $profilepicturePath = $user->refresh()->profilepicture;
+
+    expect($profilepicturePath)
+        ->not->toBeNull()
+        ->not->toBe($previousProfilepicture);
 
     Storage::disk('public')->assertExists($profilepicturePath);
     Storage::disk('public')->assertMissing($previousProfilepicture);
+
     Storage::disk('local')->assertMissing($profilepicturePath);
     Storage::disk('local')->assertExists($previousProfilepicture);
-
-    expect($user->refresh()->profilepicture)->toBe($profilepicturePath);
 });

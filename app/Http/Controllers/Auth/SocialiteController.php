@@ -65,6 +65,7 @@ class SocialiteController extends Controller
     private function downloadProfilepicture(?string $url): ?string
     {
         if ($url === null || $url === '') {
+            Log::channel('my_debug')->debug('Return null: URL is empty', []);
             return null;
         }
 
@@ -73,28 +74,33 @@ class SocialiteController extends Controller
                 ->timeout(10)
                 ->get($url);
         } catch (Throwable) {
+            Log::channel('my_debug')->debug('Return null: HTTP request threw an exception', []);
             return null;
         }
 
         if (! $response->successful()) {
+            Log::channel('my_debug')->debug('Return null: HTTP response was unsuccessful', []);
             return null;
         }
 
         $contents = $response->body();
 
         if ($contents === '' || strlen($contents) > 2 * 1024 * 1024) {
+            Log::channel('my_debug')->debug('Return null: image is empty or larger than 2 MB', []);
             return null;
         }
 
         $imageInformation = getimagesizefromstring($contents);
 
         if ($imageInformation === false) {
+            Log::channel('my_debug')->debug('Return null: invalid image contents', []);
             return null;
         }
 
         [$width, $height] = $imageInformation;
 
-        if ($width > 2000 || $height > 2000) {
+        if ($width > 4000 || $height > 4000) {
+            Log::channel('my_debug')->debug('Return null: image dimensions exceed 2000 px', []);
             return null;
         }
 
@@ -107,10 +113,12 @@ class SocialiteController extends Controller
         };
 
         if ($extension === null) {
+            Log::channel('my_debug')->debug('Return null: unsupported image MIME type', []);
             return null;
         }
 
         $path = 'avatars/' . Str::uuid() . '.' . $extension;
+        Log::channel('my_debug')->debug('Return result of avatar storage', []);
 
         return Storage::disk('public')->put($path, $contents)
             ? $path

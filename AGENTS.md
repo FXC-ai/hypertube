@@ -3,6 +3,7 @@
 
 ## Authorization Required Before Any Changes
 
+- Never create, modify, move, delete, or format any file, nor run any command that may alter files, unless the user’s current message contains the exact standalone phrase “Tu peux coder”; permission from an earlier message never carries over.
 - Never create, modify, move, or delete a file without the user’s explicit authorization.
 - The verbs “suggest,” “explain,” “show,” “advise,” “analyze,” and “give an example” only authorize a response within the conversation.
 - An edit is permitted only if the user explicitly says “Tu peux coder”.

@@ -40,4 +40,10 @@ return [
         'redirect' => env('GITHUB_REDIRECT_URI'),
     ],
 
+    'fortytwo' => [
+        'client_id' => env('FORTY_TWO_CLIENT_ID'),
+        'client_secret' => env('FORTY_TWO_CLIENT_SECRET'),
+        'redirect' => env('FORTY_TWO_REDIRECT_URI')
+    ],
+
 ];

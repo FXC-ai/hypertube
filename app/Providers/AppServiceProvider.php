@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Socialite\Socialite;
+use App\Socialite\FortytwoProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,6 +26,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        Socialite::extend(
+            'fortytwo',
+            function(){return Socialite::buildProvider(
+                FortytwoProvider::class, config('services.fortytwo'));
+            }
+        );
     }
 
     /**
