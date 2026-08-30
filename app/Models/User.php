@@ -14,7 +14,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property string $name
+ * @property string $username
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string $password
@@ -44,5 +44,10 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'preferredlanguage' => Languages::class
         ];
+    }
+
+    public function socialAccounts()
+    {
+        return $this->hasMany(SocialAccount::class);
     }
 }

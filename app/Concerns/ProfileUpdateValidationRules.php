@@ -5,6 +5,7 @@ namespace App\Concerns;
 use App\Enums\Languages;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 trait ProfileUpdateValidationRules
@@ -16,6 +17,8 @@ trait ProfileUpdateValidationRules
      */
     protected function profileRules(?int $userId = null): array
     {
+        Log::channel('my_debug')->debug('profileRules est déclenché ', []);
+
         return [
             'username' => $this->usernameRules($userId),
             'firstname' => $this->firstlastnameRules(),
