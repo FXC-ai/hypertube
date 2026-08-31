@@ -21,6 +21,9 @@ use Illuminate\Support\Str;
 use Laravel\Socialite\Two\InvalidStateException;
 use phpDocumentor\Reflection\PseudoTypes\LowercaseString;
 use Throwable;
+use Laravel\Socialite\Two\User as SocialiteUser;
+
+
 
 class SocialiteController extends Controller
 {
@@ -146,8 +149,6 @@ class SocialiteController extends Controller
 
         // Si c'est la premiere fois que l'utilisateur se connecte avec un compte externe
         // on crée un nouveau user
-
-
         return DB::transaction(function () use ($provider, $socialUser) {
 
             // ici on gere le cas ou l'utilisateur a déjà un compte
@@ -187,6 +188,13 @@ class SocialiteController extends Controller
                 'social' => 'That sign in attempt expired. Please try again.',
             ]);
         }
+
+        if ($socialUser->getEmail() == null) {
+            return redirect()->route('login')->withErrors([
+                'social' => 'No mail adress had been provided to this provider account.',
+            ]);
+        }
+
 
         $user = $this->findOrCreateUser($provider, $socialUser);
 

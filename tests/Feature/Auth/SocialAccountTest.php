@@ -3,7 +3,9 @@
 use App\Models\User;
 use Laravel\Socialite\Contracts\Provider;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as SocialiteUser;
+
 
 
 test('a user can create an account via github', function () {
@@ -479,4 +481,38 @@ test(
         'fortytwo',
         'fortytwo-user-without-email',
     ],
+]);
+
+test(
+    'sign in is refused when OAuth authorization is cancelled',
+    function (string $provider) {
+        $socialiteProvider = Mockery::mock(Provider::class);
+
+        $socialiteProvider
+            ->shouldReceive('user')
+            ->once()
+            ->andThrow(new InvalidStateException());
+
+        Socialite::shouldReceive('driver')
+            ->once()
+            ->with($provider)
+            ->andReturn($socialiteProvider);
+
+        $response = $this->get(route('socialite.callback', [
+            'provider' => $provider,
+        ]));
+
+        $this->assertGuest();
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('social_accounts', 0);
+
+        $response
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors([
+                'social' => 'That sign in attempt expired. Please try again.',
+            ]);
+    },
+)->with([
+    'GitHub' => ['github'],
+    '42' => ['fortytwo'],
 ]);

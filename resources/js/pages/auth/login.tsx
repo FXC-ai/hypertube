@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Form, Head } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -10,6 +11,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
+import { redirect } from '@/routes/socialite';
 
 type Props = {
     status?: string;
@@ -17,6 +19,13 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword }: Props) {
+
+    const [redirectingProvider, setRedirectingProvider] = useState<'github' | 'fortytwo' | null>(null);
+
+    const redirectToProvider = (provider: 'github' | 'fortytwo') => {
+        setRedirectingProvider(provider);
+        window.location.assign(redirect.url(provider));
+    };
     return (
         <>
             <Head title="Log in" />
@@ -89,12 +98,35 @@ export default function Login({ status, canResetPassword }: Props) {
                             </Button>
                         </div>
 
+                        <Button
+                            type="button"
+                            className="mt-4 w-full"
+                            variant="secondary"
+                            onClick={() => redirectToProvider("github")}
+                            disabled={redirectingProvider !== null}
+                        >
+                            {redirectingProvider === 'github' && <Spinner />}
+                            Sign in with GitHub
+                        </Button>
+
+                        <Button
+                            type="button"
+                            className="mt-2 w-full"
+                            variant="secondary"
+                            onClick={() => redirectToProvider("fortytwo")}
+                            disabled={redirectingProvider !== null}
+                        >
+                            {redirectingProvider === 'fortytwo' && <Spinner />}
+                            Sign in with 42
+                        </Button>
+
                         <div className="text-center text-sm text-muted-foreground">
                             Don't have an account?{' '}
                             <TextLink href={register()} tabIndex={5}>
-                                Sign up
+                                Register
                             </TextLink>
                         </div>
+
                     </>
                 )}
             </Form>
