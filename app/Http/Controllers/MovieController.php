@@ -3,43 +3,67 @@
 namespace App\Http\Controllers;
 
 use App\Models\Movie;
+use FFMpeg\FFMpeg;
+use FFMpeg\FFProbe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+
+
 
 class MovieController extends Controller
 {
-    public function watch(Movie $movie)
+    public function hlsManifest(Movie $movie): BinaryFileResponse
     {
-        Log::channel("my_debug")->debug("stream = ", ["appel"]);
+        Log::channel("my_debug")->debug("metadatas = ", ["ca fonctionne"]);
 
-        $path = Storage::disk('public')->path('movies/test.mp4');
+        $path = Storage::disk('public')->path("movies/{$movie->id}/hls/index.m3u8");
+
+
+
+        $ffprobe = FFProbe::create([
+            'ffprobe.binaries' => 'C:\\ffmpeg\\bin\\ffprobe.exe',
+        ]);
+        $duration = $ffprobe
+            ->format($path)
+            ->get('duration');
+
+        Log::channel("my_debug")->debug("metadatas = ", [$duration]);
+
+
+        return response()->file($path, [
+            'Content-Type' => 'application/vnd.apple.mpegurl',
+            'Cache-Control' => 'private, no-cache, must-revalidate', // Le manifeste utilise no-cache afin que le lecteur puisse le redemander. C’est particulièrement utile plus tard lorsque le manifeste sera produit progressivement.
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function hlsSegment(
+        Movie $movie,
+        string $segment,
+    ): BinaryFileResponse {
+        $path = Storage::disk('public')->path("movies/{$segment}");
+
+        return response()->file($path, [
+            'Content-Type' => 'video/mp2t',
+            'Cache-Control' => 'private, max-age=31536000, immutable', // Les segments sont immuables : segment_00001.ts ne doit jamais changer après sa création. Ils peuvent donc être conservés longtemps dans le cache privé du navigateur.
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+
+    public function watch(Movie $movie): BinaryFileResponse
+    {
+        $filename = Storage::disk('public')->path($movie->filename);
+
+        $path = Storage::disk('public')->path("movies/{$movie->id}/{$movie->filename}");
         Log::channel("my_debug")->debug("path = ", [$path]);
 
-        $exist = Storage::disk('public')->exists('movies/test.mp4');
-        Log::channel("my_debug")->debug("exist = ", [$exist]);
-
-        $size = Storage::disk('public')->size('movies/test.mp4');
-        Log::channel("my_debug")->debug("size = ", [$size]);
-
-        $stream = function () use ($path) {
-            $stream = fopen($path, 'rb');
-            while (!feof($stream)) {
-                echo fread($stream, 1024 * 8);
-                flush();
-            }
-            fclose($stream);
-        };
-        Log::channel("my_debug")->debug("stream = ", [$stream]);
-
-
-
-
-        return response()->stream($stream, 200, [
+        return response()->file($path, [
             'Content-Type' => 'video/mp4',
-            'Content-Length' => $size,
             'Accept-Ranges' => 'bytes',
         ]);
     }

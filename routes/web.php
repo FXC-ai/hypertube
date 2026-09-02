@@ -23,6 +23,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
     Route::get('/movies/{movie}/watch', [MovieController::class, 'watch'])->name('movies.watch');
+
+
+    Route::get('/movies/{movie}/hls/index.m3u8', [MovieController::class, 'hlsManifest'])->name('movies.hls.manifest');
+
+    Route::get('/movies/{movie}/hls/{segment}', [MovieController::class, 'hlsSegment'])->where('segment', 'segment_[0-9]+\.ts')->name('movies.hls.segment');
 });
+
+
+
+
+
+
 
 require __DIR__ . '/settings.php';
