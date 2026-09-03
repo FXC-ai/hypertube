@@ -5,7 +5,11 @@ import { usePage } from "@inertiajs/react";
 
 import { useRef, useState, useEffect } from "react";
 import Hls from 'hls.js';
-import { manifest, } from "@/routes/movies/hls";
+import { manifest } from "@/routes/movies/hls";
+
+import { encode } from "@/routes/movies";
+import { Link } from "@inertiajs/react";
+
 
 export type Movie = {
     id: number;
@@ -76,7 +80,8 @@ export default function MovieShow({ movie }: MovieShowProps) {
             <p>{movie.filepath}</p>
 
 
-            <HlsPlayer src={manifest.url(movie.id)}></HlsPlayer>
+            <Link href={encode.url(movie.id)}>Watch movie</Link>
+            {/* {<HlsPlayer src={manifest.url(movie.id)}></HlsPlayer>} */}
 
         </>
     );

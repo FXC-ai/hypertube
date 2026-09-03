@@ -15,35 +15,96 @@ use Symfony\Component\Process\Process;
 
 class MovieController extends Controller
 {
-    public function hlsManifest(Movie $movie): BinaryFileResponse
+
+    /*     public function __construct()
     {
-        Log::channel("my_debug")->debug("\n", ["hlsManifest :"]);
+        Log::channel("my_debug")->debug("\n", ["MovieController constructed"]);
+    } */
 
-        $path = Storage::disk('public')->path("movies/{$movie->id}/hls/index.m3u8");
 
-        Log::channel("my_debug")->debug("\n", ['path = ', $path]);
+    public function  encode(Movie $movie)
+    {
 
-        /*         $temporaryDirectory = storage_path('framework');
+        $path = Storage::disk('public')->path("movies/{$movie->id}/{$movie->filename}");
+
+
+        $temporaryDirectory = storage_path('framework');
 
         putenv("TMP={$temporaryDirectory}");
         putenv("TEMP={$temporaryDirectory}");
 
         Log::channel("my_debug")->debug("TMP, TEMP = ", [getenv('TMP'), getenv('TEMP')]);
 
-        $process = new Process([
+        /*   $process_audio = new Process([
             'C:\\ffmpeg\\bin\\ffprobe.exe',
             '-v',
             'error',
-            '-show_entries',
-            'format=duration',
+            '-select_streams',
+            'a',
+            '-show_streams',
             '-of',
-            'default=noprint_wrappers=1:nokey=1',
+            'json',
             $path,
         ]);
 
-        Log::channel("my_debug")->debug("process = ", [$process]); */
+        $process_audio->mustRun();
 
-        // $process->mustRun();
+        $data_audio = json_decode($process_audio->getOutput(), true);
+
+        Log::channel('my_debug')->debug('Metadata', ['data audio' => $data_audio]);
+        Log::channel('my_debug')->debug('Metadata', ['output' => $data_audio["streams"][0]["codec_name"]]);
+        Log::channel('my_debug')->debug('Metadata', ['output' => $data_audio["streams"][0]["tags"]["language"]]);
+ */
+        $process_subtitle = new Process([
+            'C:\\ffmpeg\\bin\\ffprobe.exe',
+            '-v',
+            'error',
+            '-select_streams',
+            's',
+            '-show_entries',
+            'stream=index,codec_name:stream_tags=language,title',
+            '-of',
+            'json',
+
+            $path,
+        ]);
+
+        $process_subtitle->mustRun();
+        $data_subtitle = json_decode($process_subtitle->getOutput(), true);
+
+        $subtitles_maps = [];
+        $subtitles_names = [];
+
+        Log::channel('my_debug')->debug('Metadata', [$data_subtitle["streams"]]);
+
+
+        foreach ($data_subtitle["streams"] as $subtitle) {
+            Log::channel('my_debug')->debug('Metadata', [$subtitle]);
+            Log::channel('my_debug')->debug('Metadata', [$subtitle["codec_name"]]);
+
+            if (
+                ($subtitle["tags"]["language"] == "fre" || $subtitle["tags"]["language"] == "eng")
+                && ($subtitle["codec_name"] == "subrip" || $subtitle["codec_name"] == "srt" || $subtitle["codec_name"] == "ass")
+            ) {
+                $subtitles_maps[] = "-map 0:s:" . $subtitle["index"];
+                $subtitles_names[] = "s:0,sgroup:subs,sname:" . $subtitle["tags"]["language"];
+            }
+        }
+
+        Log::channel('my_debug')->debug('Metadata', ['data subtitle' => $subtitles_maps]);
+        Log::channel('my_debug')->debug('Metadata', ['names subtitle' => $subtitles_names]);
+    }
+
+
+    public function hlsManifest(Movie $movie): BinaryFileResponse
+    {
+
+        Log::channel("my_debug")->debug("\n", ["hlsManifest :"]);
+
+        $path = Storage::disk('public')->path("movies/{$movie->id}/hls/index.m3u8");
+
+        Log::channel("my_debug")->debug("\n", ['path = ', $path]);
+
 
         return response()->file($path, [
             'Content-Type' => 'application/vnd.apple.mpegurl',
