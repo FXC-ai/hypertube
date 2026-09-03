@@ -5,7 +5,7 @@ import { usePage } from "@inertiajs/react";
 
 import { useRef, useState, useEffect } from "react";
 import Hls from 'hls.js';
-import { manifest } from "@/routes/movies/hls";
+import { manifest, } from "@/routes/movies/hls";
 
 export type Movie = {
     id: number;
@@ -62,6 +62,11 @@ export default function MovieShow({ movie }: MovieShowProps) {
 
     console.log("test = ", movie);
 
+    /*     <video width="640" height="360" controls preload="metadata">
+            <source src={watch.url(movie.id)} type="video/mp4" />
+            Votre navigateur ne supporte pas la lecture de vidéos.
+        </video> */
+
     return (
         <>
             <h1>Movie : </h1>
@@ -70,10 +75,6 @@ export default function MovieShow({ movie }: MovieShowProps) {
             <p>{movie.filename}</p>
             <p>{movie.filepath}</p>
 
-            <video width="640" height="360" controls preload="metadata">
-                <source src={watch.url(movie.id)} type="video/mp4" />
-                Votre navigateur ne supporte pas la lecture de vidéos.
-            </video>
 
             <HlsPlayer src={manifest.url(movie.id)}></HlsPlayer>
 

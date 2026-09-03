@@ -27,13 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/movies/{movie}/hls/index.m3u8', [MovieController::class, 'hlsManifest'])->name('movies.hls.manifest');
 
-    Route::get('/movies/{movie}/hls/{segment}', [MovieController::class, 'hlsSegment'])->where('segment', 'segment_[0-9]+\.ts')->name('movies.hls.segment');
+    Route::get('/movies/{movie}/hls/{segment}', [MovieController::class, 'hlsSegment'])->name('movies.hls.segment');
 });
-
-
-
-
-
-
 
 require __DIR__ . '/settings.php';

@@ -18,7 +18,6 @@
         "laravel/socialite": "^5.30",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
-        "php-ffmpeg/php-ffmpeg": "^1.4",
         "resend/resend-laravel": "^1.4"
     },
     "require-dev": {

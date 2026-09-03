@@ -3,36 +3,47 @@
 namespace App\Http\Controllers;
 
 use App\Models\Movie;
-use FFMpeg\FFMpeg;
-use FFMpeg\FFProbe;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-
+use Symfony\Component\Process\Process;
 
 
 class MovieController extends Controller
 {
     public function hlsManifest(Movie $movie): BinaryFileResponse
     {
-        Log::channel("my_debug")->debug("metadatas = ", ["ca fonctionne"]);
+        Log::channel("my_debug")->debug("\n", ["hlsManifest :"]);
 
         $path = Storage::disk('public')->path("movies/{$movie->id}/hls/index.m3u8");
 
+        Log::channel("my_debug")->debug("\n", ['path = ', $path]);
 
+        /*         $temporaryDirectory = storage_path('framework');
 
-        $ffprobe = FFProbe::create([
-            'ffprobe.binaries' => 'C:\\ffmpeg\\bin\\ffprobe.exe',
+        putenv("TMP={$temporaryDirectory}");
+        putenv("TEMP={$temporaryDirectory}");
+
+        Log::channel("my_debug")->debug("TMP, TEMP = ", [getenv('TMP'), getenv('TEMP')]);
+
+        $process = new Process([
+            'C:\\ffmpeg\\bin\\ffprobe.exe',
+            '-v',
+            'error',
+            '-show_entries',
+            'format=duration',
+            '-of',
+            'default=noprint_wrappers=1:nokey=1',
+            $path,
         ]);
-        $duration = $ffprobe
-            ->format($path)
-            ->get('duration');
 
-        Log::channel("my_debug")->debug("metadatas = ", [$duration]);
+        Log::channel("my_debug")->debug("process = ", [$process]); */
 
+        // $process->mustRun();
 
         return response()->file($path, [
             'Content-Type' => 'application/vnd.apple.mpegurl',
@@ -41,11 +52,14 @@ class MovieController extends Controller
         ]);
     }
 
-    public function hlsSegment(
-        Movie $movie,
-        string $segment,
-    ): BinaryFileResponse {
-        $path = Storage::disk('public')->path("movies/{$segment}");
+    public function hlsSegment(Movie $movie, string $segment,): BinaryFileResponse
+    {
+
+        Log::channel("my_debug")->debug("hlsSegment ", ["called"]);
+
+        $path = Storage::disk('public')->path("movies/{$movie->id}/hls/{$segment}");
+
+        Log::channel("my_debug")->debug("hls segment = ", [$path]);
 
         return response()->file($path, [
             'Content-Type' => 'video/mp2t',
@@ -60,7 +74,6 @@ class MovieController extends Controller
         $filename = Storage::disk('public')->path($movie->filename);
 
         $path = Storage::disk('public')->path("movies/{$movie->id}/{$movie->filename}");
-        Log::channel("my_debug")->debug("path = ", [$path]);
 
         return response()->file($path, [
             'Content-Type' => 'video/mp4',
