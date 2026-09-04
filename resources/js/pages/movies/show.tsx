@@ -49,6 +49,8 @@ function HlsPlayer({ src }: HlsPlayerProps) {
 
         const hls = new Hls();
 
+        console.log("subtitle = ", hls.subtitleTrack);
+
         hls.loadSource(src);
         hls.attachMedia(video);
 
@@ -81,7 +83,7 @@ export default function MovieShow({ movie }: MovieShowProps) {
 
 
             <Link href={encode.url(movie.id)}>Watch movie</Link>
-            {/* {<HlsPlayer src={manifest.url(movie.id)}></HlsPlayer>} */}
+            {/* <HlsPlayer src={manifest.url(movie.id)}></HlsPlayer> */}
 
         </>
     );

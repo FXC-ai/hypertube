@@ -21,40 +21,8 @@ class MovieController extends Controller
         Log::channel("my_debug")->debug("\n", ["MovieController constructed"]);
     } */
 
-
-    public function  encode(Movie $movie)
+    private function encodeSubtitle(string $path)
     {
-
-        $path = Storage::disk('public')->path("movies/{$movie->id}/{$movie->filename}");
-
-
-        $temporaryDirectory = storage_path('framework');
-
-        putenv("TMP={$temporaryDirectory}");
-        putenv("TEMP={$temporaryDirectory}");
-
-        Log::channel("my_debug")->debug("TMP, TEMP = ", [getenv('TMP'), getenv('TEMP')]);
-
-        /*   $process_audio = new Process([
-            'C:\\ffmpeg\\bin\\ffprobe.exe',
-            '-v',
-            'error',
-            '-select_streams',
-            'a',
-            '-show_streams',
-            '-of',
-            'json',
-            $path,
-        ]);
-
-        $process_audio->mustRun();
-
-        $data_audio = json_decode($process_audio->getOutput(), true);
-
-        Log::channel('my_debug')->debug('Metadata', ['data audio' => $data_audio]);
-        Log::channel('my_debug')->debug('Metadata', ['output' => $data_audio["streams"][0]["codec_name"]]);
-        Log::channel('my_debug')->debug('Metadata', ['output' => $data_audio["streams"][0]["tags"]["language"]]);
- */
         $process_subtitle = new Process([
             'C:\\ffmpeg\\bin\\ffprobe.exe',
             '-v',
@@ -65,36 +33,189 @@ class MovieController extends Controller
             'stream=index,codec_name:stream_tags=language,title',
             '-of',
             'json',
-
             $path,
         ]);
 
         $process_subtitle->mustRun();
         $data_subtitle = json_decode($process_subtitle->getOutput(), true);
 
+        if (count($data_subtitle['streams']) === 0) {
+            return [[], ''];
+        }
+
+
+        $subtitles_names = "";
         $subtitles_maps = [];
-        $subtitles_names = [];
 
-        Log::channel('my_debug')->debug('Metadata', [$data_subtitle["streams"]]);
+        (int) $shift = $data_subtitle["streams"][0]["index"];
 
 
+        $count = 0;
         foreach ($data_subtitle["streams"] as $subtitle) {
-            Log::channel('my_debug')->debug('Metadata', [$subtitle]);
-            Log::channel('my_debug')->debug('Metadata', [$subtitle["codec_name"]]);
 
             if (
-                ($subtitle["tags"]["language"] == "fre" || $subtitle["tags"]["language"] == "eng")
+                ($subtitle["tags"]["language"] == "fre" || $subtitle["tags"]["language"] == "eng" || $subtitle["tags"]["language"] == "ger" || $subtitle["tags"]["language"] == "ita")
                 && ($subtitle["codec_name"] == "subrip" || $subtitle["codec_name"] == "srt" || $subtitle["codec_name"] == "ass")
             ) {
-                $subtitles_maps[] = "-map 0:s:" . $subtitle["index"];
-                $subtitles_names[] = "s:0,sgroup:subs,sname:" . $subtitle["tags"]["language"];
+                $index = (int) $subtitle["index"] - $shift;
+                $subtitles_maps[] = "-map";
+                $subtitles_maps[] = "0:s:" . $index;
+                $subtitles_names = "s:" . $count . ",sgroup:subs,sname:" . $count . "_" . $subtitle["tags"]["language"];
+                $count += 1;
+                break;
             }
         }
 
-        Log::channel('my_debug')->debug('Metadata', ['data subtitle' => $subtitles_maps]);
-        Log::channel('my_debug')->debug('Metadata', ['names subtitle' => $subtitles_names]);
+        Log::channel("my_debug")->debug("subtitles_maps = ", [$subtitles_maps]);
+        Log::channel("my_debug")->debug("subtitles_names = ", [$subtitles_names]);
+
+        return [$subtitles_maps, $subtitles_names];
     }
 
+    private function encodeAudio(string $path)
+    {
+        $process_audio = new Process([
+            'C:\\ffmpeg\\bin\\ffprobe.exe',
+            '-v',
+            'error',
+            '-select_streams',
+            'a',
+            '-show_entries',
+            'stream=index,codec_name:stream_tags=language,title',
+            '-of',
+            'json',
+            $path,
+        ]);
+
+        $process_audio->mustRun();
+
+        $data_audio = json_decode($process_audio->getOutput(), true);
+
+        $nbr_audio = count($data_audio["streams"]);
+
+
+        $audio_selection = "0:a:0";
+
+        if ($nbr_audio > 1) {
+            (int) $shift = $data_audio["streams"][0]["index"];
+            foreach ($data_audio["streams"] as $pist) {
+                if ($pist["tags"]["language"] == "eng" || $pist["tags"]["language"] == "fre" || $pist["tags"]["language"] == "ita" || $pist["tags"]["language"] == "ger") {
+                    $index = (int) $pist['index'] - $shift;
+                    $audio_selection =  '0:a:' . $index;
+                    break;
+                }
+            }
+        }
+
+        Log::channel("my_debug")->debug("audio selection = ", [$audio_selection]);
+
+        return $audio_selection;
+    }
+
+    public function  encode(Movie $movie)
+    {
+        set_time_limit(0);
+        $path = Storage::disk('public')->path("movies/{$movie->id}/{$movie->filename}");
+
+        $temporaryDirectory = storage_path('framework');
+
+        putenv("TMP={$temporaryDirectory}");
+
+        putenv("TEMP={$temporaryDirectory}");
+
+        [$subtitles_maps, $subtitles_names] = $this->encodeSubtitle($path);
+        $audio_selection = $this->encodeAudio($path);
+
+        $outputDirectory = Storage::disk('public')->path("movies/{$movie->id}/hls");
+
+        if (! is_dir($outputDirectory)) {
+            mkdir($outputDirectory, 0755, true);
+        }
+
+        $encodeCommand = [
+
+            'ffmpeg',
+
+            '-y',
+
+            '-i',
+            $path,
+
+            '-map',
+            '0:v:0',
+
+            '-map',
+            $audio_selection,
+
+            ...$subtitles_maps,
+
+            '-c:v',
+            'libx264',
+
+            '-preset',
+            'veryfast',
+
+            '-crf',
+            '23',
+
+            '-pix_fmt',
+            'yuv420p',
+
+            '-force_key_frames',
+            'expr:gte(t,n_forced*6)',
+
+            '-c:a',
+            'aac',
+
+            '-b:a',
+            '128k',
+
+            '-ac',
+            '2',
+
+            '-c:s',
+            'webvtt',
+
+            '-f',
+            'hls',
+
+            '-hls_time',
+            '6',
+
+            '-hls_playlist_type',
+            'event',
+
+            '-hls_list_size',
+            '0',
+
+            '-hls_flags',
+            'independent_segments+temp_file',
+
+            '-var_stream_map',
+            'v:0,a:0,' . $subtitles_names,
+
+            '-master_pl_name',
+            'index.m3u8',
+
+            '-master_pl_publish_rate',
+            '1',
+
+            '-hls_segment_filename',
+            $outputDirectory . DIRECTORY_SEPARATOR . 'stream_%v_segment_%05d.ts',
+
+            $outputDirectory . DIRECTORY_SEPARATOR . 'stream_%v.m3u8',
+        ];
+
+        Log::channel('my_debug')->debug('Metadata', [$encodeCommand]);
+
+
+        $process_encode = new Process($encodeCommand);
+        $process_encode->setTimeout(null);
+        $process_encode->mustRun();
+
+        // Log::channel('my_debug')->debug('Metadata', ['output' => $data_audio["streams"][0]["codec_name"]]);
+        // Log::channel('my_debug')->debug('Metadata', ['output' => $data_audio["streams"][0]["tags"]["language"]]);
+    }
 
     public function hlsManifest(Movie $movie): BinaryFileResponse
     {
