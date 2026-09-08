@@ -83,7 +83,7 @@ export default function MovieShow({ movie }: MovieShowProps) {
 
 
             <Link href={encode.url(movie.id)}>Watch movie</Link>
-            {/* <HlsPlayer src={manifest.url(movie.id)}></HlsPlayer> */}
+            <HlsPlayer src={manifest.url(movie.id)}></HlsPlayer>
 
         </>
     );

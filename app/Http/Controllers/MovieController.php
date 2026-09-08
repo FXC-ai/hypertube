@@ -291,6 +291,7 @@ class MovieController extends Controller
      */
     public function show(Movie $movie): Response
     {
+        Log::channel("my_debug")->debug("MovieController : ", ["show"]);
         return Inertia::render(
             'movies/show',
             [

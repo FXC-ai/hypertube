@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\SocialiteController;
 use App\Http\Controllers\MovieController;
+use App\Http\Controllers\MovieConversionController;
 
 
 Route::inertia('/', 'welcome')->name('home');
@@ -22,12 +23,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
 
     Route::get('/movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
-    Route::get('/movies/{movie}/watch', [MovieController::class, 'watch'])->name('movies.watch');
-
-    Route::get('/movies/{movie}/encode', [MovieController::class, 'encode'])->name('movies.encode');
-
     Route::get('/movies/{movie}/hls/index.m3u8', [MovieController::class, 'hlsManifest'])->name('movies.hls.manifest');
     Route::get('/movies/{movie}/hls/{segment}', [MovieController::class, 'hlsSegment'])->name('movies.hls.segment');
+
+    Route::post('/movies/{movie}/conversion', [MovieConversionController::class, 'store'])->name('movies.conversion.store');
+    Route::get('/movies/{movie}/conversion', [MovieConversionController::class, 'show'])->name('movies.conversion.show');
 });
 
 require __DIR__ . '/settings.php';
