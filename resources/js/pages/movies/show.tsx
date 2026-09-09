@@ -1,46 +1,44 @@
-import { show } from "@/routes/movies";
-
-import { watch } from "@/routes/movies";
-import { usePage } from "@inertiajs/react";
-
-import { useRef, useState, useEffect } from "react";
-import Hls from 'hls.js';
 import { manifest } from "@/routes/movies/hls";
+import { store as conversionStore } from "@/routes/movies/conversion";
+import { show } from "@/routes/movies";
+import { useForm, usePoll } from "@inertiajs/react";
+import { useEffect, useRef } from "react";
 
-import { encode } from "@/routes/movies";
-import { Link } from "@inertiajs/react";
+import Hls from 'hls.js';
 
+type ConversionStatus = 'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
 
-export type Movie = {
+type MoviePageData = {
     id: number;
     title: string;
     filename: string;
-    filepath: string;
-
+    conversion_status: ConversionStatus;
+    conversion_error: string | null;
+    playable: boolean;
 };
+
 
 type MovieShowProps = {
-    movie: Movie;
+    moviePageData: MoviePageData;
 }
 
-
-type HlsPlayerProps = {
-    src: string;
-};
-
-function HlsPlayer({ src }: HlsPlayerProps) {
+function HlsPlayer({ src }: { src: string }) {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
         const video = videoRef.current;
 
-        if (!video) {
+        if (video === null) {
             return;
         }
 
         if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = src;
-            return;
+
+            return () => {
+                video.removeAttribute('src');
+                video.load();
+            };
         }
 
         if (!Hls.isSupported()) {
@@ -48,11 +46,17 @@ function HlsPlayer({ src }: HlsPlayerProps) {
         }
 
         const hls = new Hls();
-
-        console.log("subtitle = ", hls.subtitleTrack);
-
         hls.loadSource(src);
         hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            const preferredLanguage = 'fr';
+            const subtitleIndex = hls.subtitleTracks.findIndex(
+                (track) => track.lang === preferredLanguage,
+            );
+
+            hls.subtitleTrack = subtitleIndex;
+        });
 
         return () => {
             hls.destroy();
@@ -62,39 +66,69 @@ function HlsPlayer({ src }: HlsPlayerProps) {
     return <video ref={videoRef} controls preload="metadata" />;
 }
 
+export default function MovieShow({ moviePageData }: MovieShowProps) {
 
-export default function MovieShow({ movie }: MovieShowProps) {
+    const conversionForm = useForm({});
+    const startConversion = (): void => { console.log("start conversion"); conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true }); };
 
+    const { start: startPolling, stop: stopPolling } = usePoll(2000, { only: ['movie'] }, { autoStart: false, mode: 'rest' });
+    const shouldPoll = moviePageData.conversion_status === 'queued' || moviePageData.conversion_status === 'converting' || moviePageData.conversion_status === 'playable';
 
-    console.log("test = ", movie);
+    useEffect(
+        () => {
+            if (shouldPoll) { startPolling(); }
+            else { stopPolling(); }
 
-    /*     <video width="640" height="360" controls preload="metadata">
-            <source src={watch.url(movie.id)} type="video/mp4" />
-            Votre navigateur ne supporte pas la lecture de vidéos.
-        </video> */
-
-    return (
-        <>
-            <h1>Movie : </h1>
-            <p>{movie.id}</p>
-            <p>{movie.title}</p>
-            <p>{movie.filename}</p>
-            <p>{movie.filepath}</p>
-
-
-            <Link href={encode.url(movie.id)}>Watch movie</Link>
-            <HlsPlayer src={manifest.url(movie.id)}></HlsPlayer>
-
-        </>
+            return stopPolling;
+        },
+        [shouldPoll, startPolling, stopPolling]
     );
+
+    return <main>
+        <p>title = {moviePageData.title}</p>
+
+        {moviePageData.playable && (<HlsPlayer src={manifest.url(moviePageData.id)} />)}
+
+        {
+            (moviePageData.conversion_status === 'pending' || moviePageData.conversion_status === 'failed') && (
+                <button
+                    type="button"
+                    disabled={conversionForm.processing}
+                    onClick={startConversion}
+                >
+                    {moviePageData.conversion_status === 'failed' ? 'Réessayer' : 'Watch movie'}
+                </button>
+            )
+        }
+
+        {moviePageData.conversion_status === 'queued' && (<p>Conversion en attente…</p>)}
+
+        {moviePageData.conversion_status === 'converting' && (<p>Préparation de la vidéo…</p>)}
+
+        {moviePageData.conversion_status === 'playable' && (<p>La lecture est disponible ; la conversion continue.</p>)}
+
+        {moviePageData.conversion_status === 'converted' && (<p>Conversion terminée.</p>)}
+
+        {moviePageData.conversion_status === 'failed' && moviePageData.conversion_error !== null && (<p>Échec de la conversion : {moviePageData.conversion_error}</p>)}
+
+
+        <p>id = {moviePageData.id}</p>
+        <p>filename = {moviePageData.filename}</p>
+        <p>conversion_status = {moviePageData.conversion_status}</p>
+        <p>conversion_error = {moviePageData.conversion_error}</p>
+        <p>playable = {String(moviePageData.playable)}</p>
+        <p>===============================================================</p>
+
+    </main>;
+
 }
 
 
-MovieShow.layout = ({ movie }: MovieShowProps) => ({
+MovieShow.layout = ({ moviePageData }: { moviePageData: MovieShowProps }) => ({
     breadcrumbs: [
         {
             title: 'Show Movie',
-            href: show(movie.id),
+            href: show(moviePageData.id),
         },
     ],
 });

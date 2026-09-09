@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 
 #[Fillable([
     'title',
-    'filepath',
     'filename',
     'conversion_status',
     'conversion_attempt',

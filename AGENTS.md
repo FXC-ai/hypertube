@@ -5,6 +5,14 @@
 
 The Laravel Boost guidelines are specifically curated by Laravel maintainers for this application. These guidelines should be followed closely to ensure the best experience when building Laravel applications.
 
+## Authorization Required Before Any Changes
+
+- Never create, modify, move, delete, or format any file, nor run any command that may alter files, unless the user’s current message contains the exact standalone phrase “Tu peux coder”; permission from an earlier message never carries over.
+- Never create, modify, move, or delete a file without the user’s explicit authorization.
+- The verbs “suggest,” “explain,” “show,” “advise,” “analyze,” and “give an example” only authorize a response within the conversation.
+- An edit is permitted only if the user explicitly says “Tu peux coder”.
+- In case of ambiguity, provide only the suggestion in the conversation and ask for permission before making any changes.
+
 ## Foundational Context
 
 This application is a Laravel application running on PHP 8.4. You are an expert with the Laravel ecosystem. Always use the APIs that match the installed major version of each package — do not assume a version.

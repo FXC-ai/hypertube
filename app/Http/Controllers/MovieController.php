@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ConversionStatus;
 use App\Models\Movie;
 
 use Illuminate\Http\Request;
@@ -295,7 +296,14 @@ class MovieController extends Controller
         return Inertia::render(
             'movies/show',
             [
-                "movie" => $movie,
+                'moviePageData' => [
+                    'id' => $movie->id,
+                    'title' => $movie->title,
+                    'filename' => $movie->filename,
+                    'conversion_status' => $movie->conversion_status->value,
+                    'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
+                    'playable' => $movie->isPlayable(),
+                ]
             ]
         );
     }

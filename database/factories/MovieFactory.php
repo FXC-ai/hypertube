@@ -20,30 +20,21 @@ class MovieFactory extends Factory
      */
     public function definition(): array
     {
-        $filename = fake()->unique()->slug(3).'.mp4';
+        $filename = fake()->unique()->slug(3) . '.mp4';
         /** @var ConversionStatus $status */
         $status = fake()->randomElement(ConversionStatus::cases());
 
         return [
             'title' => fake()->sentence(3),
             'filename' => $filename,
-            'filepath' => '/storage/app/public/movies/pending/'.Str::uuid().'/'.$filename,
             ...$this->conversionAttributes($status),
         ];
     }
 
-    public function configure(): static
-    {
-        return $this->afterCreating(function (Movie $movie): void {
-            $movie->updateQuietly([
-                'filepath' => "/storage/app/public/movies/{$movie->id}/{$movie->filename}",
-            ]);
-        });
-    }
 
     public function withConversionStatus(ConversionStatus $status): static
     {
-        return $this->state(fn (): array => $this->conversionAttributes($status));
+        return $this->state(fn(): array => $this->conversionAttributes($status));
     }
 
     /**
