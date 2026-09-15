@@ -20,5 +20,9 @@ class MovieSeeder extends Seeder
         Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
             ->create(['filename' => 'test.mkv']);
+
+        Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create(['filename' => 'test2.mkv']);
     }
 }

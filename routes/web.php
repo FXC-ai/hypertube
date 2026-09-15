@@ -23,8 +23,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
 
     Route::get('/movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
-    Route::get('/movies/{movie}/hls/index.m3u8', [MovieController::class, 'hlsManifest'])->name('movies.hls.manifest');
-    Route::get('/movies/{movie}/hls/{segment}', [MovieController::class, 'hlsSegment'])->name('movies.hls.segment');
+    Route::get('/movies/{movie}/hls/{conversion_attempt}/index.m3u8', [MovieController::class, 'hlsManifest'])->name('movies.hls.manifest');
+    Route::get('/movies/{movie}/hls/{conversion_attempt}/{segment}', [MovieController::class, 'hlsSegment'])->name('movies.hls.segment');
 
     Route::post('/movies/{movie}/conversion', [MovieConversionController::class, 'store'])->name('movies.conversion.store');
     Route::get('/movies/{movie}/conversion', [MovieConversionController::class, 'show'])->name('movies.conversion.show');

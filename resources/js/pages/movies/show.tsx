@@ -12,6 +12,7 @@ type MoviePageData = {
     id: number;
     title: string;
     filename: string;
+    conversion_attempt: string | null;
     conversion_status: ConversionStatus;
     conversion_error: string | null;
     playable: boolean;
@@ -58,6 +59,27 @@ function HlsPlayer({ src }: { src: string }) {
             hls.subtitleTrack = subtitleIndex;
         });
 
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+            console.error('HLS error', {
+                type: data.type,
+                details: data.details,
+                fatal: data.fatal,
+                reason: data.reason,
+                response: data.response,
+                url: data.url,
+            });
+        });
+
+
+
+        hls.on(Hls.Events.MANIFEST_LOADED, (_event, data) => {
+            console.log('HLS manifest loaded', data);
+        });
+
+        hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
+            console.log('HLS manifest parsed', data);
+        });
+
         return () => {
             hls.destroy();
         };
@@ -69,25 +91,32 @@ function HlsPlayer({ src }: { src: string }) {
 export default function MovieShow({ moviePageData }: MovieShowProps) {
 
     const conversionForm = useForm({});
-    const startConversion = (): void => { console.log("start conversion"); conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true }); };
+    const startConversion = (): void => { conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true }); };
 
-    const { start: startPolling, stop: stopPolling } = usePoll(2000, { only: ['movie'] }, { autoStart: false, mode: 'rest' });
-    const shouldPoll = moviePageData.conversion_status === 'queued' || moviePageData.conversion_status === 'converting' || moviePageData.conversion_status === 'playable';
-
-    useEffect(
-        () => {
-            if (shouldPoll) { startPolling(); }
-            else { stopPolling(); }
-
-            return stopPolling;
-        },
-        [shouldPoll, startPolling, stopPolling]
-    );
+    /*     const { start: startPolling, stop: stopPolling } = usePoll(2000, { only: ['movie'] }, { autoStart: false, mode: 'rest' });
+        const shouldPoll = moviePageData.conversion_status === 'queued' || moviePageData.conversion_status === 'converting' || moviePageData.conversion_status === 'playable';
+    
+        useEffect(
+            () => {
+                if (shouldPoll) { console.log("shoulPoll = true"); startPolling(); }
+                else { console.log("shoulPoll = false"); stopPolling(); }
+    
+                return stopPolling;
+            },
+            [shouldPoll, startPolling, stopPolling]
+        ); */
 
     return <main>
-        <p>title = {moviePageData.title}</p>
 
-        {moviePageData.playable && (<HlsPlayer src={manifest.url(moviePageData.id)} />)}
+        {/* {moviePageData.playable && (<HlsPlayer src={manifest.url(moviePageData.id)} />)} */}
+        {moviePageData.playable && moviePageData.conversion_attempt !== null && (
+            <HlsPlayer
+                src={manifest.url({
+                    movie: moviePageData.id,
+                    conversion_attempt: moviePageData.conversion_attempt,
+                })}
+            />
+        )}
 
         {
             (moviePageData.conversion_status === 'pending' || moviePageData.conversion_status === 'failed') && (
@@ -96,14 +125,14 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
                     disabled={conversionForm.processing}
                     onClick={startConversion}
                 >
-                    {moviePageData.conversion_status === 'failed' ? 'Réessayer' : 'Watch movie'}
+                    {moviePageData.conversion_status === 'failed' ? 'Réessayer' : 'Watch movieeee'}
                 </button>
             )
         }
 
         {moviePageData.conversion_status === 'queued' && (<p>Conversion en attente…</p>)}
 
-        {moviePageData.conversion_status === 'converting' && (<p>Préparation de la vidéo…</p>)}
+        {moviePageData.conversion_status === 'converting' && (<p>Conversion in progress…</p>)}
 
         {moviePageData.conversion_status === 'playable' && (<p>La lecture est disponible ; la conversion continue.</p>)}
 
@@ -111,8 +140,10 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
 
         {moviePageData.conversion_status === 'failed' && moviePageData.conversion_error !== null && (<p>Échec de la conversion : {moviePageData.conversion_error}</p>)}
 
+        <p>===============================================================</p>
 
         <p>id = {moviePageData.id}</p>
+        <p>title = {moviePageData.title}</p>
         <p>filename = {moviePageData.filename}</p>
         <p>conversion_status = {moviePageData.conversion_status}</p>
         <p>conversion_error = {moviePageData.conversion_error}</p>
