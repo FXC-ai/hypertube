@@ -120,6 +120,21 @@ final class ConvertMovie implements ShouldQueue
                 $publishWhenReady,
             );
 
+            $publishWhenReady();
+
+            if (! $published) {
+                throw new \RuntimeException('FFmpeg a terminé sans produire de flux HLS lisible.');
+            }
+
+            Movie::query()
+                ->whereKey($movie->id)
+                ->where('conversion_attempt', $attempt)
+                ->where('conversion_status', ConversionStatus::Playable->value)
+                ->update([
+                    'conversion_status' => ConversionStatus::Converted->value,
+                    'conversion_completed_at' => now(),
+                ]);
+
             Log::channel("my_debug")->debug("ConverMovie", ["handle ended, la conversion est terminée."]);
         } catch (Throwable $exception) {
             Log::channel("my_debug")->debug("ConvertMovie", ["exception : ", $exception]);

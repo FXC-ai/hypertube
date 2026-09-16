@@ -1292,26 +1292,15 @@ Points importants :
 ```tsx
 import { manifest } from '@/routes/movies/hls';
 import {
-    show as conversionShow,
     store as conversionStore,
 } from '@/routes/movies/conversion';
-import type { ConversionState, MoviePageData } from '@/types/movie';
-import type { Page } from '@inertiajs/core';
-import { router } from '@inertiajs/react';
-import Hls from 'hls.js';
-import { useEffect, useRef, useState } from 'react';
+import type { MoviePageData } from '@/types/movie';
+import { useForm, usePoll } from '@inertiajs/react';
+import { useEffect } from 'react';
 
 type MovieShowProps = {
     movie: MoviePageData;
 };
-
-function stateFromMovie(movie: MoviePageData): ConversionState {
-    return {
-        status: movie.conversion_status,
-        playable: movie.playable,
-        error: movie.conversion_error,
-    };
-}
 
 function HlsPlayer({ src }: { src: string }) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -1358,105 +1347,83 @@ function HlsPlayer({ src }: { src: string }) {
 }
 
 export default function MovieShow({ movie }: MovieShowProps) {
-    const [conversion, setConversion] = useState<ConversionState>(() =>
-        stateFromMovie(movie),
+    const conversionForm = useForm({});
+
+    const { start: startPolling, stop: stopPolling } = usePoll(
+        2000,
+        {
+            only: ['movie'],
+        },
+        {
+            autoStart: false,
+            mode: 'rest',
+        },
     );
-    const [isStarting, setIsStarting] = useState(false);
+
+    const shouldPoll =
+        movie.conversion_status === 'queued' ||
+        movie.conversion_status === 'converting' ||
+        movie.conversion_status === 'playable';
 
     useEffect(() => {
-        setConversion(stateFromMovie(movie));
-    }, [movie]);
-
-    useEffect(() => {
-        const shouldPoll = ['queued', 'converting', 'playable'].includes(
-            conversion.status,
-        );
-
-        if (!shouldPoll) {
-            return;
+        if (shouldPoll) {
+            startPolling();
+        } else {
+            stopPolling();
         }
 
-        let cancelled = false;
-        let timer: number | undefined;
+        return stopPolling;
+    }, [shouldPoll, startPolling, stopPolling]);
 
-        const poll = async (): Promise<void> => {
-            try {
-                const response = await fetch(conversionShow.url(movie.id), {
-                    headers: { Accept: 'application/json' },
-                    credentials: 'same-origin',
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const nextState = (await response.json()) as ConversionState;
-
-                if (!cancelled) {
-                    setConversion(nextState);
-                }
-            } catch {
-                // Une panne réseau transitoire ne change pas l'état métier affiché.
-            } finally {
-                if (!cancelled) {
-                    timer = window.setTimeout(() => void poll(), 2000);
-                }
-            }
-        };
-
-        timer = window.setTimeout(() => void poll(), 2000);
-
-        return () => {
-            cancelled = true;
-
-            if (timer !== undefined) {
-                window.clearTimeout(timer);
-            }
-        };
-    }, [conversion.status, movie.id]);
-
-    const start = (): void => {
-        router.post(
-            conversionStore.url(movie.id),
-            {},
-            {
-                preserveScroll: true,
-                onStart: () => setIsStarting(true),
-                onSuccess: (page: Page) => {
-                    const updatedMovie = page.props.movie as MoviePageData;
-                    setConversion(stateFromMovie(updatedMovie));
-                },
-                onFinish: () => setIsStarting(false),
-            },
-        );
+    const startConversion = (): void => {
+        conversionForm.post(conversionStore.url(movie.id), {
+            preserveScroll: true,
+        });
     };
 
     return (
         <main>
             <h1>{movie.title}</h1>
 
-            {conversion.playable && <HlsPlayer src={manifest.url(movie.id)} />}
+            {movie.playable && (
+                <HlsPlayer src={manifest.url(movie.id)} />
+            )}
 
-            {(conversion.status === 'pending' ||
-                conversion.status === 'failed') && (
-                <button type="button" disabled={isStarting} onClick={start}>
-                    {conversion.status === 'failed'
+            {(movie.conversion_status === 'pending' ||
+                movie.conversion_status === 'failed') && (
+                <button
+                    type="button"
+                    disabled={conversionForm.processing}
+                    onClick={startConversion}
+                >
+                    {movie.conversion_status === 'failed'
                         ? 'Réessayer'
                         : 'Watch movie'}
                 </button>
             )}
 
-            {conversion.status === 'queued' && <p>Conversion en attente…</p>}
-            {conversion.status === 'converting' && (
+            {movie.conversion_status === 'queued' && (
+                <p>Conversion en attente…</p>
+            )}
+
+            {movie.conversion_status === 'converting' && (
                 <p>Préparation de la vidéo…</p>
             )}
-            {conversion.status === 'playable' && (
+
+            {movie.conversion_status === 'playable' && (
                 <p>La lecture est disponible ; la conversion continue.</p>
             )}
-            {conversion.status === 'converted' && <p>Conversion terminée.</p>}
-            {conversion.status === 'failed' && conversion.error !== null && (
-                <p>Échec de la conversion : {conversion.error}</p>
+
+            {movie.conversion_status === 'converted' && (
+                <p>Conversion terminée.</p>
             )}
+
+            {movie.conversion_status === 'failed' &&
+                movie.conversion_error !== null && (
+                    <p>
+                        Échec de la conversion : {movie.conversion_error}
+                    </p>
+                )}
         </main>
     );
 }

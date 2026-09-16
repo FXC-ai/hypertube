@@ -43,6 +43,8 @@ export default function UserShow({ user }: UserShowProps) {
     const getInitials = useInitials();
     const profile = user.data;
 
+    console.log(user.data);
+
     return (
         <>
             <Head title={`${profile.username} — User profile`} />

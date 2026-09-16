@@ -1,8 +1,10 @@
 import { manifest } from "@/routes/movies/hls";
 import { store as conversionStore } from "@/routes/movies/conversion";
+import { show as conversionShow } from "@/routes/movies/conversion";
 import { show } from "@/routes/movies";
 import { useForm, usePoll } from "@inertiajs/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { router } from "@inertiajs/react";
 
 import Hls from 'hls.js';
 
@@ -18,6 +20,12 @@ type MoviePageData = {
     playable: boolean;
 };
 
+type Conversion = {
+    attempt: string | null;
+    status: ConversionStatus;
+    error: string | null;
+    playable: boolean;
+};
 
 type MovieShowProps = {
     moviePageData: MoviePageData;
@@ -88,27 +96,23 @@ function HlsPlayer({ src }: { src: string }) {
     return <video ref={videoRef} controls preload="metadata" />;
 }
 
+
+
+
+
+
+
 export default function MovieShow({ moviePageData }: MovieShowProps) {
 
     const conversionForm = useForm({});
     const startConversion = (): void => { conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true }); };
 
-    /*     const { start: startPolling, stop: stopPolling } = usePoll(2000, { only: ['movie'] }, { autoStart: false, mode: 'rest' });
-        const shouldPoll = moviePageData.conversion_status === 'queued' || moviePageData.conversion_status === 'converting' || moviePageData.conversion_status === 'playable';
-    
-        useEffect(
-            () => {
-                if (shouldPoll) { console.log("shoulPoll = true"); startPolling(); }
-                else { console.log("shoulPoll = false"); stopPolling(); }
-    
-                return stopPolling;
-            },
-            [shouldPoll, startPolling, stopPolling]
-        ); */
+    const { stop } = usePoll(2000, {});
+
+    useEffect(() => { if (moviePageData.playable) { stop() } }, [moviePageData.playable, stop])
 
     return <main>
 
-        {/* {moviePageData.playable && (<HlsPlayer src={manifest.url(moviePageData.id)} />)} */}
         {moviePageData.playable && moviePageData.conversion_attempt !== null && (
             <HlsPlayer
                 src={manifest.url({
@@ -130,24 +134,16 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
             )
         }
 
-        {moviePageData.conversion_status === 'queued' && (<p>Conversion en attente…</p>)}
 
-        {moviePageData.conversion_status === 'converting' && (<p>Conversion in progress…</p>)}
+        {moviePageData.playable === true && (<p>The movie is avaible for watching.</p>)}
 
-        {moviePageData.conversion_status === 'playable' && (<p>La lecture est disponible ; la conversion continue.</p>)}
-
-        {moviePageData.conversion_status === 'converted' && (<p>Conversion terminée.</p>)}
-
-        {moviePageData.conversion_status === 'failed' && moviePageData.conversion_error !== null && (<p>Échec de la conversion : {moviePageData.conversion_error}</p>)}
 
         <p>===============================================================</p>
 
         <p>id = {moviePageData.id}</p>
         <p>title = {moviePageData.title}</p>
         <p>filename = {moviePageData.filename}</p>
-        <p>conversion_status = {moviePageData.conversion_status}</p>
-        <p>conversion_error = {moviePageData.conversion_error}</p>
-        <p>playable = {String(moviePageData.playable)}</p>
+
         <p>===============================================================</p>
 
     </main>;

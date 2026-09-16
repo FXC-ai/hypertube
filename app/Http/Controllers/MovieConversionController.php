@@ -6,7 +6,8 @@ namespace App\Http\Controllers;
 use App\Enums\ConversionStatus;
 use App\Jobs\ConvertMovie;
 use App\Models\Movie;
-use Illuminate\Http\JsonResponse;
+use Inertia\Inertia;
+use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 
@@ -38,12 +39,20 @@ final class MovieConversionController extends Controller
         return to_route('movies.show', $movie);
     }
 
-    public function show(Movie $movie): JsonResponse
+    public function show(Movie $movie): Response
     {
-        return response()->json([
-            'status' => 3,
-            'playable' => True,
-            'error' => null,
-        ]);
+        return Inertia::render(
+            'movies/show',
+            [
+                'conversion' =>
+                [
+
+                    'status' => $movie->conversion_status->value,
+                    'attempt' => $movie->conversion_attempt,
+                    'error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
+                    'playable' => $movie->isPlayable(),
+                ]
+            ]
+        );
     }
 }
