@@ -6,6 +6,7 @@ use App\Enums\ConversionStatus;
 use App\Models\Movie;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -120,7 +121,7 @@ class MovieController extends Controller
      */
     public function show(Movie $movie): Response
     {
-        Log::channel("my_debug")->debug("MovieController : ", ["show"]);
+        Log::channel("my_debug")->debug("MovieController : ", ["show", Auth::getUser()->toArray()["preferredlanguage"]]);
         return Inertia::render(
             'movies/show',
             [
@@ -132,7 +133,9 @@ class MovieController extends Controller
                     'conversion_status' => $movie->conversion_status->value,
                     'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
                     'playable' => $movie->isPlayable(),
+                    'preferredlanguage' => Auth::getUser()->toArray()["preferredlanguage"]
                 ]
+
             ]
         );
     }

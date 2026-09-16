@@ -128,7 +128,7 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                                         <SelectItem value="english">English</SelectItem>
                                         <SelectItem value="french">French</SelectItem>
                                         <SelectItem value="german">German</SelectItem>
-                                        <SelectItem value="spanish">Spanish</SelectItem>
+                                        <SelectItem value="italian">Italian</SelectItem>
                                     </SelectContent>
                                 </Select>
 

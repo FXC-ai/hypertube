@@ -39,6 +39,7 @@ Before relying on a package's API, confirm its installed version:
 ## Frontend Bundling
 
 - If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `npm run build`, `npm run dev`, or `composer run dev`. Ask them.
+- The website is in english. Text informations on the website are in english.
 
 ## Documentation Files
 
