@@ -9,7 +9,7 @@ use Laravel\Socialite\Two\AbstractProvider;
 use Laravel\Socialite\Two\ProviderInterface;
 use Laravel\Socialite\Two\User;
 
-class FortytwoProvider extends AbstractProvider implements ProviderInterface
+class FortyTwoProvider extends AbstractProvider implements ProviderInterface
 {
     protected $scopes = ['public'];
 
