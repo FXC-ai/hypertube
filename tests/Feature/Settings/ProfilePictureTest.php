@@ -64,7 +64,7 @@ test('an authenticated user can update their profile picture', function () {
     Storage::disk('public')->assertExists($profilepicturePath);
 
     $avatar2 = new UploadedFile(
-        base_path('tests\Fixtures\avatar2.jpeg'),
+        base_path('tests/Fixtures/avatar2.jpeg'),
         'avatar.jpg',
         'image/jpeg',
         null,
