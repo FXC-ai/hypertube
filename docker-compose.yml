@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel-app
+    volumes:
+      - .:/var/www/html
+      - laravel-storage:/var/www/html/storage
+      - laravel-bootstrap:/var/www/html/bootstrap/cache
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    entrypoint: ./docker/entrypoint.sh
+    healthcheck:
+      test: ["CMD", "php", "artisan", "tinker", "--execute", "echo 'ok'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - laravel
+
+  nginx:
+    image: nginx:alpine
+    container_name: laravel-nginx
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - laravel
+
+  # Optional: Redis (uncomment if needed)
+  # redis:
+  #   image: redis:alpine
+  #   container_name: laravel-redis
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - laravel
+
+volumes:
+  laravel-storage:
+  laravel-bootstrap:
+
+networks:
+  laravel:
+    driver: bridge
+
