@@ -1,0 +1,28 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel-app
+    ports:
+      - "8000:8000"
+      - "5173:5173"
+    volumes:
+      - .:/var/www/html
+      - laravel-storage:/var/www/html/storage
+      - laravel-bootstrap:/var/www/html/bootstrap/cache
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    entrypoint: ./docker/entrypoint.sh
+    healthcheck:
+      test: ["CMD", "php", "artisan", "tinker", "--execute", "echo 'ok'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  laravel-storage:
+  laravel-bootstrap:
+
