@@ -12,8 +12,8 @@ services:
       - laravel-storage:/var/www/html/storage
       - laravel-bootstrap:/var/www/html/bootstrap/cache
     environment:
-      - APP_ENV=local
-      - APP_DEBUG=true
+      HOST_UID: "${HOST_UID:-1000}"
+      HOST_GID: "${HOST_GID:-1000}"
     entrypoint: ./docker/entrypoint.sh
     healthcheck:
       test: ["CMD", "php", "artisan", "tinker", "--execute", "echo 'ok'"]
