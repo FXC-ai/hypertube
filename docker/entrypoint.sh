@@ -14,14 +14,15 @@ if [ -f "database/database.sqlite" ]; then
     chmod 666 database/database.sqlite
 fi
 
+
+echo "📦 Installation des dépendances PHP..."
+composer install --no-interaction --prefer-dist --optimize-autoloader
+
 # Générer la clé de l'application si elle n'existe pas
 if [ -z "$APP_KEY" ]; then
     echo "⚠️  Clé APP_KEY non définie, génération automatique..."
     php artisan key:generate
 fi
-
-echo "📦 Installation des dépendances PHP..."
-composer install --no-interaction --prefer-dist --optimize-autoloader
 
 echo "📦 Installation des dépendances npm..."
 npm install
