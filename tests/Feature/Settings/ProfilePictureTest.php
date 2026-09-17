@@ -10,7 +10,7 @@ test('an authenticated user can add a profile picture in his profile', function 
     $user = User::factory()->create();
 
     $avatar = new UploadedFile(
-        base_path('tests\Fixtures\avatar.jpeg'),
+        base_path('tests/Fixtures/avatar.jpeg'),
         'avatar.jpg',
         'image/jpeg',
         null,
@@ -40,7 +40,7 @@ test('an authenticated user can update their profile picture', function () {
     $user = User::factory()->create();
 
     $avatar = new UploadedFile(
-        base_path('tests\Fixtures\avatar.jpeg'),
+        base_path('tests/Fixtures/avatar.jpeg'),
         'avatar.jpg',
         'image/jpeg',
         null,
@@ -216,7 +216,7 @@ test('profile pictures are stored and deleted on the public disk', function () {
     ]);
 
     $avatar = new UploadedFile(
-        base_path('tests\Fixtures\avatar.jpeg'),
+        base_path('tests/Fixtures/avatar.jpeg'),
         'avatar.jpg',
         'image/jpeg',
         null,
