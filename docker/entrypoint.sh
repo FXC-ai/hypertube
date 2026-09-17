@@ -36,34 +36,6 @@ fi
 echo "📦 Migration de la base de données..."
 php artisan migrate --force
 
-# Compiler les assets
-npm run build
-
-# Redémarrer Vite et queue worker s'ils sont déjà en cours
-pkill -f "vite" 2>/dev/null || true
-pkill -f "queue:listen" 2>/dev/null || true
-
 # Lancer PHP-FPM en arrière-plan
 echo "🐘 Démarrage PHP-FPM..."
-php-fpm &
-PHP_FPM_PID=$!
-
-# Exécuter un script shell en arrière-plan pour démarrer Vite et le queue worker
-(
-    echo "🌐 Démarrage du serveur Vite..."
-    npm run dev &
-    VITE_PID=$!
-
-    echo "📬 Démarrage du queue worker..."
-    php artisan queue:listen --tries=1 --timeout=0 &
-    QUEUE_PID=$!
-
-    # Surveiller les signaux
-    trap "kill $VITE_PID $QUEUE_PID 2>/dev/null; exit 0" SIGINT SIGTERM
-
-    # Attendre que l'un des processus se termine
-    wait
-) &
-
-# Surveiller PHP-FPM
-wait $PHP_FPM_PID
+composer dev

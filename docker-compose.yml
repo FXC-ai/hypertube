@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: laravel-app
+    ports:
+      - "8000:8000"
+      - "5173:5173"
     volumes:
       - .:/var/www/html
       - laravel-storage:/var/www/html/storage
@@ -18,37 +21,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    networks:
-      - laravel
-
-  nginx:
-    image: nginx:alpine
-    container_name: laravel-nginx
-    ports:
-      - "8000:80"
-    volumes:
-      - .:/var/www/html
-      - ./docker/nginx/conf.d:/etc/nginx/conf.d
-    depends_on:
-      app:
-        condition: service_healthy
-    networks:
-      - laravel
-
-  # Optional: Redis (uncomment if needed)
-  # redis:
-  #   image: redis:alpine
-  #   container_name: laravel-redis
-  #   ports:
-  #     - "6379:6379"
-  #   networks:
-  #     - laravel
 
 volumes:
   laravel-storage:
   laravel-bootstrap:
-
-networks:
-  laravel:
-    driver: bridge
 

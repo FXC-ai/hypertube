@@ -21,6 +21,3 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 # Set working directory
 WORKDIR /var/www/html
-
-# Expose port 80 for PHP-FPM (Nginx will proxy to this)
-EXPOSE 9000
