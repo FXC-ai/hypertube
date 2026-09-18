@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -27,6 +28,7 @@ function buildPieces(count, lastPieceLength = PIECE_LENGTH) {
 function torrentFor(pieces, { fileName = 'output.bin' } = {}) {
   const totalLength = pieces.reduce((sum, p) => sum + p.length, 0);
   return {
+    name: 'test-torrent',
     infoHash: INFO_HASH.toString('hex'),
     pieceLength: PIECE_LENGTH,
     pieces: pieces.map((p) => createHash('sha1').update(p).digest('hex')),
@@ -41,6 +43,7 @@ function torrentFor(pieces, { fileName = 'output.bin' } = {}) {
 function multiFileTorrentFor(pieces, splitAt, fileNames = ['a.bin', 'b.bin']) {
   const totalLength = pieces.reduce((sum, p) => sum + p.length, 0);
   return {
+    name: 'test-torrent',
     infoHash: INFO_HASH.toString('hex'),
     pieceLength: PIECE_LENGTH,
     pieces: pieces.map((p) => createHash('sha1').update(p).digest('hex')),
@@ -91,6 +94,48 @@ function startFakePeer(pieces, { refuseAfterHandshake = false, failPieceIndexes 
         else send();
       }
     });
+  });
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
+}
+
+// A fake BEP19 web-seed HTTP server: serves ranged GETs at
+// <base>/<torrentName>/<filePath>, matching the archive.org convention
+// downloadPieceFromWebSeed expects. `files` maps a file path to its full
+// content buffer.
+function startFakeWebSeed(torrentName, files, { failPaths = new Set(), pieceLength, failPieceIndexes = new Set() } = {}) {
+  const server = createHttpServer((req, res) => {
+    const prefix = `/${encodeURIComponent(torrentName)}/`;
+    if (!req.url.startsWith(prefix)) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const filePath = decodeURIComponent(req.url.slice(prefix.length));
+    if (failPaths.has(filePath) || !files[filePath]) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    const content = files[filePath];
+    const match = /bytes=(\d+)-(\d+)/.exec(req.headers.range ?? '');
+    if (match && pieceLength) {
+      const pieceIndex = Math.floor(Number(match[1]) / pieceLength);
+      if (failPieceIndexes.has(pieceIndex)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+    }
+    if (!match) {
+      res.writeHead(200, { 'Content-Length': content.length });
+      res.end(content);
+      return;
+    }
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    const slice = content.subarray(start, end + 1);
+    res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${content.length}`, 'Content-Length': slice.length });
+    res.end(slice);
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
@@ -172,6 +217,40 @@ test('writes a file nested under a subdirectory per its torrent path', async () 
       });
       const written = await readFile(join(outputDir, 'nested/dir/movie.mp4'));
       assert.ok(written.equals(Buffer.concat(pieces)));
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('creates zero-length files on disk even though no piece ever overlaps them', async () => {
+  const pieces = buildPieces(2);
+  const totalLength = pieces.reduce((sum, p) => sum + p.length, 0);
+  const torrent = {
+    ...torrentFor(pieces),
+    files: [
+      { path: 'empty-log.txt', length: 0 },
+      { path: 'movie.mp4', length: totalLength },
+      { path: 'empty-trigger.txt', length: 0 },
+    ],
+  };
+  const server = await startFakePeer(pieces);
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(torrent, [{ ip: '127.0.0.1', port: server.address().port }], {
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        concurrency: 2,
+      });
+      assert.deepEqual(result.files, ['empty-log.txt', 'movie.mp4', 'empty-trigger.txt']);
+      const empty1 = await readFile(join(outputDir, 'empty-log.txt'));
+      const empty2 = await readFile(join(outputDir, 'empty-trigger.txt'));
+      assert.equal(empty1.length, 0);
+      assert.equal(empty2.length, 0);
+      const movie = await readFile(join(outputDir, 'movie.mp4'));
+      assert.ok(movie.equals(Buffer.concat(pieces)));
     });
   } finally {
     server.close();
@@ -329,5 +408,66 @@ test('rejects with CancelledError and stops downloading once the signal is abort
     });
   } finally {
     server.close();
+  }
+});
+
+test('downloads entirely via web-seed when there are no peers at all', async () => {
+  const pieces = buildPieces(4, 5000);
+  const torrent = torrentFor(pieces);
+  const webSeed = await startFakeWebSeed(torrent.name, { 'output.bin': Buffer.concat(pieces) });
+  const { port } = webSeed.address();
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(torrent, [], {
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        concurrency: 4,
+        webSeedUrls: [`http://127.0.0.1:${port}/`],
+      });
+      assert.equal(result.piecesDownloaded, 4);
+      const written = await readFile(join(outputDir, 'output.bin'));
+      assert.ok(written.equals(Buffer.concat(pieces)));
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('combines a real peer and a web-seed in the same download rather than picking one', async () => {
+  const pieces = buildPieces(10);
+  const torrent = torrentFor(pieces);
+  const evenIndexes = pieces.map((_, i) => i).filter((i) => i % 2 === 0);
+  const oddIndexes = pieces.map((_, i) => i).filter((i) => i % 2 !== 0);
+  // the peer can only serve even-indexed pieces, the web-seed only odd --
+  // the download only completes if both sources actually get used, not if
+  // the client sticks to whichever one happens to answer first.
+  const peer = await startFakePeer(pieces, { failPieceIndexes: new Set(oddIndexes) });
+  const fullFile = Buffer.concat(pieces);
+  const webSeed = await startFakeWebSeed(torrent.name, { 'output.bin': fullFile }, {
+    pieceLength: PIECE_LENGTH,
+    failPieceIndexes: new Set(evenIndexes),
+  });
+  const { port } = webSeed.address();
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(torrent, [{ ip: '127.0.0.1', port: peer.address().port }], {
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        concurrency: 4,
+        pieceTimeoutMs: 2000,
+        maxAttemptsPerPiece: 6,
+        webSeedUrls: [`http://127.0.0.1:${port}/`],
+      });
+      assert.equal(result.piecesDownloaded, 10);
+      const written = await readFile(join(outputDir, 'output.bin'));
+      assert.ok(written.equals(fullFile));
+    });
+  } finally {
+    peer.close();
+    webSeed.close();
   }
 });

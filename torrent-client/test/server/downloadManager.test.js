@@ -4,12 +4,13 @@ import { createDownloadManager, DownloadManagerError } from '../../src/server/do
 import { CancelledError } from '../../src/cancelledError.js';
 import { SwarmDownloadError } from '../../src/swarm/downloadTorrent.js';
 
-function fakeTorrent({ pieceLength = 100, lastPieceLength = 40, pieceCount = 3 } = {}) {
+function fakeTorrent({ pieceLength = 100, lastPieceLength = 40, pieceCount = 3, urlList = [] } = {}) {
   const totalLength = pieceLength * (pieceCount - 1) + lastPieceLength;
   return {
     infoHash: '01'.repeat(20),
     announce: 'udp://tracker.example:80',
     announceList: undefined,
+    urlList,
     pieceLength,
     pieces: Array.from({ length: pieceCount }, (_, i) => `hash${i}`),
     totalLength,
@@ -102,6 +103,38 @@ test('a tracker announce with no peers fails the job with a clear error', async 
   const status = manager.getStatus(id);
   assert.equal(status.status, 'failed');
   assert.match(status.error, /peer/i);
+});
+
+test('passes torrent.urlList through to downloadTorrentFn as webSeedUrls', async () => {
+  const torrent = fakeTorrent({ urlList: ['https://mirror.example/download/'] });
+  const parseTorrentFileFn = () => torrent;
+  const announceFn = async () => ({ peers: [{ ip: '127.0.0.1', port: 1 }] });
+  let captured;
+  const downloadTorrentFn = async (t, peers, options) => {
+    captured = options.webSeedUrls;
+    return { outputDir: options.outputDir, piecesDownloaded: 3, files: ['movie.mp4'] };
+  };
+  const manager = createDownloadManager({ parseTorrentFileFn, announceFn, downloadTorrentFn });
+  const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir: '/tmp/out' });
+
+  await waitFor(() => manager.getStatus(id).status !== 'downloading');
+  assert.deepEqual(captured, ['https://mirror.example/download/']);
+});
+
+test('succeeds via web-seed alone when the tracker returns zero peers but the torrent has url-list', async () => {
+  const torrent = fakeTorrent({ urlList: ['https://mirror.example/download/'] });
+  const parseTorrentFileFn = () => torrent;
+  const announceFn = async () => ({ peers: [] });
+  const downloadTorrentFn = async (t, peers, options) => {
+    assert.deepEqual(peers, []);
+    assert.deepEqual(options.webSeedUrls, ['https://mirror.example/download/']);
+    return { outputDir: options.outputDir, piecesDownloaded: 3, files: ['movie.mp4'] };
+  };
+  const manager = createDownloadManager({ parseTorrentFileFn, announceFn, downloadTorrentFn });
+  const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir: '/tmp/out' });
+
+  await waitFor(() => manager.getStatus(id).status !== 'downloading');
+  assert.equal(manager.getStatus(id).status, 'completed');
 });
 
 test('a swarm download failure moves the job to failed', async () => {

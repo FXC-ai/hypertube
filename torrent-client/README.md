@@ -19,7 +19,8 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 | Fichier | Ce qui est testé |
 |---|---|
 | `test/bencode.test.js` | Décodeur bencode (`src/bencode.js`) : entiers, byte strings, listes, dictionnaires, cas malformés |
-| `test/torrentFile.test.js` | Parsing `.torrent` + calcul d'info-hash (`src/torrentFile.js`), contre des fixtures construites à la main |
+| `test/torrentFile.test.js` | Parsing `.torrent` + calcul d'info-hash (`src/torrentFile.js`), contre des fixtures construites à la main. Inclut `url-list` (BEP19, forme liste et forme chaîne unique) |
+| `test/torrentLayout.test.js` | Calculs d'offsets partagés (`src/torrentLayout.js`) : découpage en fichiers, en pièces, chevauchement d'une plage d'octets sur plusieurs fichiers |
 | `test/fixtures.test.js` | Le parser contre un **vrai** `.torrent` archive.org, info-hash comparé au `btih` publié par archive.org lui-même |
 | `test/videoSignature.test.js` | Détection de format conteneur + calcul de signature (`src/videoSignature.js`) sur des buffers synthétiques |
 | `test/referenceVideo.test.js` | La signature du fichier vidéo de référence reste synchronisée avec le JSON de comparaison committé |
@@ -32,8 +33,11 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 | `test/peer/messages.test.js` | Framing des messages peer wire (préfixe de longueur + id), y compris message coupé en deux morceaux TCP puis recollé |
 | `test/peer/downloadPiece.test.js` | Téléchargement d'une pièce complète contre un **faux pair TCP local** scriptable : cas nominal, pièce corrompue rejetée et re-téléchargée (pas acceptée silencieusement), pair qui ne débloque jamais, handshake avec mauvais info-hash, port fermé, keep-alives ignorés |
 | `test/peer/downloadPiece.integration.test.js` | **Réseau réel** : télécharge une vraie pièce de 128 Ko depuis un vrai pair du swarm Sintel et vérifie son SHA-1. Essaie ~30 pairs en parallèle (`Promise.any`) et garde le premier qui répond — la plupart des pairs annoncés par un tracker sont injoignables à un instant donné (NAT/hors ligne), c'est normal en P2P |
-| `test/swarm/downloadTorrent.test.js` | Orchestration multi-pairs (`src/swarm/downloadTorrent.js`) contre des **faux pairs TCP locaux** : plusieurs pairs en parallèle, retry sur un autre pair si l'un échoue, pairs qui refusent la connexion ignorés, échec définitif si personne ne sert jamais une pièce, callback de progression — et surtout **pièce qui chevauche deux fichiers** dans un torrent multi-fichiers |
+| `test/swarm/downloadTorrent.test.js` | Orchestration multi-source (`src/swarm/downloadTorrent.js`) contre des **faux pairs TCP locaux** et un **faux web-seed HTTP local** : plusieurs pairs en parallèle, retry sur une autre source si l'une échoue, pairs qui refusent la connexion ignorés, échec définitif si personne ne sert jamais une pièce, callback de progression, **pièce qui chevauche deux fichiers**, **fichiers de longueur zéro créés même sans pièce**, **téléchargement 100% web-seed sans aucun pair**, et **combinaison réelle pair+web-seed dans le même téléchargement** (pièces paires servies par le pair, impaires par le web-seed) |
 | `test/swarm/downloadTorrent.integration.test.js` | **Réseau réel, téléchargement complet** : télécharge l'intégralité du torrent Sintel (~129 Mo, 987 pièces, 11 fichiers) via le vrai swarm, vérifie la taille finale et que `Sintel.mp4` est ouvrable par `ffprobe` avec un vrai flux vidéo. ~47s en pratique |
+| `test/webseed/downloadPieceFromWebSeed.test.js` | Téléchargement d'une pièce via BEP19 (`src/webseed/downloadPieceFromWebSeed.js`) : requêtes Range, pièce chevauchant deux fichiers, hash invalide, statut HTTP non-206/200, réponse tronquée, encodage URL des chemins — `fetch` injecté, pas de réseau réel |
+| `test/webseed/downloadPieceFromWebSeed.integration.test.js` | **Réseau réel** : télécharge une vraie pièce (qui chevauche plusieurs fichiers) depuis le vrai serveur web-seed archive.org et vérifie son hash |
+| `test/swarm/downloadTorrent.webseed.integration.test.js` | **Réseau réel, téléchargement complet, zéro pair** : télécharge l'intégralité du torrent archive.org (12 fichiers, dont des fichiers vides) uniquement via web-seeding, vérifie la taille totale et compare la signature du `.mp4` obtenu au JSON de référence committé en #7 (même fichier, deux chemins de téléchargement différents) |
 | `test/server/downloadManager.test.js` | Cycle de vie d'un job (`src/server/downloadManager.js`) : succès, échec de parsing/annonce/téléchargement, annulation, id inconnu — dépendances (parse/announce/download) injectées, pas de réseau réel |
 | `test/server/httpServer.test.js` | Contrat HTTP (`src/server/httpServer.js`) : codes de statut, routing, décodage `torrentBase64`, JSON invalide — manager injecté (faux), pas de vrai téléchargement |
 | `test/server/httpServer.integration.test.js` | **Réseau réel, bout en bout via HTTP** : POST démarre un vrai téléchargement (fetch du `.torrent` Sintel depuis webtorrent.io, annonce tracker réelle), poll jusqu'à observer une vraie progression, DELETE annule, vérifie qu'aucune pièce ne progresse plus ensuite. ~19s en pratique |
@@ -169,6 +173,44 @@ vrai » sans avoir à inspecter des messages d'erreur.
 Aucune connexion base de données nulle part dans ce service (exigence de l'issue #6) — il
 ne connaît même pas l'existence de SQLite.
 
+## Repli web-seeding BEP19 (#12)
+
+`src/webseed/downloadPieceFromWebSeed.js` télécharge une pièce via des requêtes HTTP Range
+plutôt que le protocole peer wire, en utilisant les URLs `url-list` déjà présentes dans le
+`.torrent` (`src/torrentFile.js` les expose maintenant — elles ne l'étaient pas avant #12).
+Convention archive.org (et BEP19 en général pour les torrents multi-fichiers) :
+`<url-list entry><torrent.name>/<file.path>`, vérifiée contre le vrai serveur archive.org
+avant d'écrire le code. Une pièce qui chevauche plusieurs fichiers déclenche une requête
+Range par fichier (réutilise `computeOverlaps` de `torrentLayout.js`, le même calcul que
+l'écriture disque de #10), rassemblées dans l'ordre puis vérifiées par SHA-1 — **exactement
+la même garantie d'intégrité que pour une pièce reçue d'un pair**, pas de traitement de
+faveur pour le web-seed.
+
+**Pairs et web-seed sont combinés, pas choisis l'un contre l'autre** : `downloadTorrent()`
+mélange les pairs et les URLs `webSeedUrls` dans une seule liste de sources, avec une simple
+rotation — un worker prend la prochaine source disponible dans la liste, peer-wire ou
+web-seed, peu importe. Testé explicitement (`downloadTorrent.test.js`) avec un torrent où le
+pair ne peut servir que les pièces paires et le web-seed que les impaires : le téléchargement
+ne peut réussir que si les deux sources sont vraiment utilisées ensemble.
+
+**Bug réel trouvé par le test d'intégration** (pas spécifique au web-seed, présent depuis
+#10) : un fichier de longueur zéro (le torrent archive.org en contient — des logs vides)
+n'est recouvert par aucune pièce, donc `handleFor()` n'était jamais appelé pour lui et le
+fichier n'apparaissait jamais sur disque. Corrigé en parcourant explicitement tous les
+fichiers du layout à la fin du téléchargement pour garantir que chacun existe, même vide.
+
+Téléchargement réel et complet de l'item archive.org (12 fichiers, fichiers vides inclus)
+**sans aucun pair P2P**, uniquement via web-seeding, en ~3,4s
+(`downloadTorrent.webseed.integration.test.js`) — et la signature du `.mp4` obtenu est
+identique au JSON de référence committé en #7 (même fichier, téléchargé en HTTP direct à
+l'époque, ici reconstruit pièce par pièce via BEP19).
+
+**`downloadManager` (#11) mis à jour pour rester utilisable** : il extrait maintenant
+`torrent.urlList` et le passe à `downloadTorrent()` comme `webSeedUrls`, et n'échoue plus
+si le tracker ne renvoie aucun pair tant que le `.torrent` fournit au moins une URL
+web-seed — sinon #12 aurait été inaccessible depuis l'API HTTP alors même qu'il marche en
+appel direct.
+
 ## Fixtures
 
 - `test/fixtures/1953_movie_trailers_starting_monday.archive.org.torrent` — vrai `.torrent`
@@ -210,12 +252,10 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
 - **`.torrent` multi-fichiers avec sous-dossiers** réel (le fixture actuel a des `path` à un
   seul segment ; le cas multi-segments n'est testé qu'avec des données construites à la
   main dans `torrentFile.test.js`).
-- **Maintenant que #10 sait assembler un fichier complet réel** : comparer la signature de
-  `Sintel.mp4` obtenu via `downloadTorrent()` à une signature de référence calculée
-  indépendamment (même principe que `reference-video/`, jamais fait pour Sintel jusqu'ici
-  — seul l'archive.org fixture a une signature JSON committée). C'est la vraie validation
-  croisée que `referenceVideo.test.js` n'anticipe encore que pour l'archive.org fixture
-  (voir note ci-dessous).
+- **Même comparaison de signature pour Sintel** — faite pour l'archive.org fixture en #12
+  (`downloadTorrent.webseed.integration.test.js` contre le JSON de `reference-video/`), mais
+  jamais faite pour Sintel : pas de signature de référence committée pour `Sintel.mp4`, donc
+  pas de validation croisée équivalente pour le chemin peer-wire pur.
 - **Tracker qui répond mais avec un `failure reason` légitime** (mauvais info_hash,
   tracker privé qui refuse) — aujourd'hui `httpTracker.test.js` le couvre en unitaire
   avec une réponse construite à la main, mais pas contre un vrai tracker qui refuse pour
@@ -249,6 +289,11 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
   avec des fakes, mais pas le vrai comportement de `fetchImpl` contre une URL qui 404 ou
   timeout (couvert indirectement par `downloadManager.test.js` avec un fake, jamais en
   réel).
+- **Un mirroir `url-list` down, les autres up** — `downloadPieceFromWebSeed` ne prend qu'une
+  seule `baseUrl` à la fois ; `downloadTorrent()` ne traite chaque entrée de `webSeedUrls`
+  que comme une source de plus dans la rotation (donc un mirroir mort échoue et fait
+  simplement retenter la pièce ailleurs), mais rien ne teste spécifiquement le cas à 3
+  mirroirs réels dont 1 ou 2 indisponibles.
 
 ### Tests à supprimer/réviser lors des prochaines évolutions
 

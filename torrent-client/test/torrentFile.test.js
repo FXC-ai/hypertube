@@ -39,6 +39,31 @@ test('parses announce and announce-list', () => {
   ]);
 });
 
+test('parses url-list (BEP19) as a list of strings', () => {
+  const buffer = encode({
+    announce: 'http://tracker.example/announce',
+    'url-list': ['https://mirror-a.example/download/', 'https://mirror-b.example/download/'],
+    info: { name: 'sample.mp4', 'piece length': 16384, pieces: Buffer.alloc(20, 1), length: 100 },
+  });
+  const parsed = parseTorrentFile(buffer);
+  assert.deepEqual(parsed.urlList, ['https://mirror-a.example/download/', 'https://mirror-b.example/download/']);
+});
+
+test('parses url-list given as a single string (BEP19 allows either form)', () => {
+  const buffer = encode({
+    announce: 'http://tracker.example/announce',
+    'url-list': 'https://mirror-a.example/download/',
+    info: { name: 'sample.mp4', 'piece length': 16384, pieces: Buffer.alloc(20, 1), length: 100 },
+  });
+  const parsed = parseTorrentFile(buffer);
+  assert.deepEqual(parsed.urlList, ['https://mirror-a.example/download/']);
+});
+
+test('urlList is an empty array when the torrent has no url-list', () => {
+  const parsed = parseTorrentFile(minimalSingleFileTorrent());
+  assert.deepEqual(parsed.urlList, []);
+});
+
 test('parses a single-file torrent into one file entry', () => {
   const buffer = minimalSingleFileTorrent();
   const parsed = parseTorrentFile(buffer);

@@ -49,10 +49,12 @@ export function parseTorrentFile(buffer) {
     : parseSingleFile(info, name);
 
   const announceList = top.has('announce-list') ? parseAnnounceList(top.get('announce-list')) : undefined;
+  const urlList = top.has('url-list') ? parseUrlList(top.get('url-list')) : [];
 
   return {
     announce,
     announceList,
+    urlList,
     name,
     pieceLength,
     pieces,
@@ -147,6 +149,22 @@ function parseAnnounceList(raw) {
       }
       return url.toString('utf8');
     });
+  });
+}
+
+// BEP19: url-list is either a single byte string or a list of them.
+function parseUrlList(raw) {
+  if (Buffer.isBuffer(raw)) {
+    return [raw.toString('utf8')];
+  }
+  if (!Array.isArray(raw)) {
+    throw new TorrentFileError('Malformed .torrent file: "url-list" is not a byte string or a list');
+  }
+  return raw.map((url, index) => {
+    if (!Buffer.isBuffer(url)) {
+      throw new TorrentFileError(`Malformed .torrent file: url-list[${index}] is not a byte string`);
+    }
+    return url.toString('utf8');
   });
 }
 

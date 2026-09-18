@@ -81,14 +81,20 @@ export function createDownloadManager({
       }, { fetchImpl });
 
       if (job.controller.signal.aborted) throw new CancelledError();
-      if (!announceResult.peers || announceResult.peers.length === 0) {
-        throw new DownloadManagerError('Tracker announce returned no peers');
+      const peers = announceResult.peers ?? [];
+      const webSeedUrls = torrent.urlList ?? [];
+      if (peers.length === 0 && webSeedUrls.length === 0) {
+        // No P2P peers is expected and fine for sources like archive.org
+        // (see #12) as long as the torrent provides BEP19 web-seed URLs --
+        // only genuinely fail when there's no way to get bytes at all.
+        throw new DownloadManagerError('Tracker announce returned no peers and the torrent has no web-seed URLs');
       }
 
-      await downloadTorrentFn(torrent, announceResult.peers, {
+      await downloadTorrentFn(torrent, peers, {
         infoHash,
         peerId,
         outputDir: job.outputDir,
+        webSeedUrls,
         signal: job.controller.signal,
         onProgress: ({ completed, pieceIndex }) => {
           job.piecesCompleted = completed;
