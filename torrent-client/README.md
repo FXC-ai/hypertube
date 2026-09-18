@@ -16,31 +16,31 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 
 ## Ce qui est couvert aujourd'hui
 
+La suite a été volontairement réduite (10 tests unitaires au lieu d'une centaine) pour
+garder les PR reviewables — chaque module garde **un** test unitaire ciblé sur son point
+le plus subtil, et les tests **réseau réel** (non touchés par cet élagage) restent la
+vraie preuve que chaque brique marche de bout en bout contre de vraies infrastructures.
+L'historique git de cette branche garde la couverture exhaustive d'origine si besoin de la
+retrouver.
+
 | Fichier | Ce qui est testé |
 |---|---|
-| `test/bencode.test.js` | Décodeur bencode (`src/bencode.js`) : entiers, byte strings, listes, dictionnaires, cas malformés |
-| `test/torrentFile.test.js` | Parsing `.torrent` + calcul d'info-hash (`src/torrentFile.js`), contre des fixtures construites à la main. Inclut `url-list` (BEP19, forme liste et forme chaîne unique) |
-| `test/torrentLayout.test.js` | Calculs d'offsets partagés (`src/torrentLayout.js`) : découpage en fichiers, en pièces, chevauchement d'une plage d'octets sur plusieurs fichiers |
-| `test/fixtures.test.js` | Le parser contre un **vrai** `.torrent` archive.org, info-hash comparé au `btih` publié par archive.org lui-même |
-| `test/videoSignature.test.js` | Détection de format conteneur + calcul de signature (`src/videoSignature.js`) sur des buffers synthétiques |
-| `test/referenceVideo.test.js` | La signature du fichier vidéo de référence reste synchronisée avec le JSON de comparaison committé |
-| `test/trackers/compactPeers.test.js`, `peerId.test.js` | Primitives partagées HTTP/UDP (format de pair compact BEP23, génération de peer id) |
-| `test/trackers/httpTracker.test.js` | Annonce HTTP (BEP3) : construction de la query, parsing bencode de la réponse, `failure reason`, erreurs HTTP — `fetch` injecté, pas de réseau réel |
-| `test/trackers/udpTracker.test.js` | Annonce UDP (BEP15) : handshake connect+announce contre un **faux tracker UDP local** (`dgram` dans le test), format des paquets vérifié octet par octet, timeout |
-| `test/trackers/announce.test.js` | Orchestrateur multi-tracker (`src/trackers/announce.js`) : ordre d'essai, agrégation des échecs, schémas non supportés (`wss://`) ignorés — annonceurs injectés, pas de réseau réel |
+| `test/fixtures.test.js` | Le parser (`src/torrentFile.js`) contre un **vrai** `.torrent` archive.org, info-hash comparé au `btih` publié par archive.org lui-même |
+| `test/torrentLayout.test.js` | `computeOverlaps` : une plage d'octets qui chevauche deux fichiers — la classe de bug trouvée deux fois pendant le développement (#10 et #12) |
+| `test/trackers/httpTracker.test.js` | Annonce HTTP (BEP3) : encodage correct de `info_hash`/`peer_id` en octets bruts dans la query — `fetch` injecté |
+| `test/trackers/udpTracker.test.js` | Annonce UDP (BEP15) : format exact de la requête `announce` (98 octets, tous les champs), contre un faux tracker UDP local |
+| `test/trackers/announce.test.js` | Orchestrateur multi-tracker : bascule vers le tracker suivant si le premier échoue |
 | `test/trackers/announce.integration.test.js` | **Réseau réel** : annonce contre `tracker.opentrackr.org` (Sintel, swarm réellement peuplé), contre le tracker HTTP archive.org, fallback multi-tracker, timeouts bornés contre une adresse injoignable |
-| `test/peer/handshake.test.js` | Construction/parsing de la poignée de main peer wire (BEP3), y compris la détection de la longueur exacte consommée (un pair envoie souvent son premier message juste après, dans le même paquet TCP) |
-| `test/peer/messages.test.js` | Framing des messages peer wire (préfixe de longueur + id), y compris message coupé en deux morceaux TCP puis recollé |
-| `test/peer/downloadPiece.test.js` | Téléchargement d'une pièce complète contre un **faux pair TCP local** scriptable : cas nominal, pièce corrompue rejetée et re-téléchargée (pas acceptée silencieusement), pair qui ne débloque jamais, handshake avec mauvais info-hash, port fermé, keep-alives ignorés |
-| `test/peer/downloadPiece.integration.test.js` | **Réseau réel** : télécharge une vraie pièce de 128 Ko depuis un vrai pair du swarm Sintel et vérifie son SHA-1. Essaie ~30 pairs en parallèle (`Promise.any`) et garde le premier qui répond — la plupart des pairs annoncés par un tracker sont injoignables à un instant donné (NAT/hors ligne), c'est normal en P2P |
-| `test/swarm/downloadTorrent.test.js` | Orchestration multi-source (`src/swarm/downloadTorrent.js`) contre des **faux pairs TCP locaux** et un **faux web-seed HTTP local** : plusieurs pairs en parallèle, retry sur une autre source si l'une échoue, pairs qui refusent la connexion ignorés, échec définitif si personne ne sert jamais une pièce, callback de progression, **pièce qui chevauche deux fichiers**, **fichiers de longueur zéro créés même sans pièce**, **téléchargement 100% web-seed sans aucun pair**, et **combinaison réelle pair+web-seed dans le même téléchargement** (pièces paires servies par le pair, impaires par le web-seed) |
-| `test/swarm/downloadTorrent.integration.test.js` | **Réseau réel, téléchargement complet** : télécharge l'intégralité du torrent Sintel (~129 Mo, 987 pièces, 11 fichiers) via le vrai swarm, vérifie la taille finale et que `Sintel.mp4` est ouvrable par `ffprobe` avec un vrai flux vidéo. ~47s en pratique |
-| `test/webseed/downloadPieceFromWebSeed.test.js` | Téléchargement d'une pièce via BEP19 (`src/webseed/downloadPieceFromWebSeed.js`) : requêtes Range, pièce chevauchant deux fichiers, hash invalide, statut HTTP non-206/200, réponse tronquée, encodage URL des chemins — `fetch` injecté, pas de réseau réel |
-| `test/webseed/downloadPieceFromWebSeed.integration.test.js` | **Réseau réel** : télécharge une vraie pièce (qui chevauche plusieurs fichiers) depuis le vrai serveur web-seed archive.org et vérifie son hash |
-| `test/swarm/downloadTorrent.webseed.integration.test.js` | **Réseau réel, téléchargement complet, zéro pair** : télécharge l'intégralité du torrent archive.org (12 fichiers, dont des fichiers vides) uniquement via web-seeding, vérifie la taille totale et compare la signature du `.mp4` obtenu au JSON de référence committé en #7 (même fichier, deux chemins de téléchargement différents) |
-| `test/server/downloadManager.test.js` | Cycle de vie d'un job (`src/server/downloadManager.js`) : succès, échec de parsing/annonce/téléchargement, annulation, id inconnu — dépendances (parse/announce/download) injectées, pas de réseau réel |
-| `test/server/httpServer.test.js` | Contrat HTTP (`src/server/httpServer.js`) : codes de statut, routing, décodage `torrentBase64`, JSON invalide — manager injecté (faux), pas de vrai téléchargement |
-| `test/server/httpServer.integration.test.js` | **Réseau réel, bout en bout via HTTP** : POST démarre un vrai téléchargement (fetch du `.torrent` Sintel depuis webtorrent.io, annonce tracker réelle), poll jusqu'à observer une vraie progression, DELETE annule, vérifie qu'aucune pièce ne progresse plus ensuite. ~19s en pratique |
+| `test/peer/downloadPiece.test.js` | Pièce corrompue rejetée et re-téléchargée (jamais acceptée silencieusement) ; annulation (`AbortSignal`) qui stoppe promptement un téléchargement en vol — contre un faux pair TCP local |
+| `test/peer/downloadPiece.integration.test.js` | **Réseau réel** : télécharge une vraie pièce de 128 Ko depuis un vrai pair du swarm Sintel et vérifie son SHA-1 |
+| `test/swarm/downloadTorrent.test.js` | Fichiers de longueur zéro créés même sans pièce qui les recouvre ; combinaison réelle pair+web-seed dans le même téléchargement (pièces paires servies par le pair, impaires par le web-seed) — les deux bugs/exigences les plus subtils de #10/#12 |
+| `test/swarm/downloadTorrent.integration.test.js` | **Réseau réel, téléchargement complet** : l'intégralité du torrent Sintel (~129 Mo, 987 pièces, 11 fichiers) via le vrai swarm, `Sintel.mp4` ouvrable par `ffprobe`. ~47s |
+| `test/swarm/downloadTorrent.webseed.integration.test.js` | **Réseau réel, téléchargement complet, zéro pair** : l'item archive.org (12 fichiers, dont des vides) uniquement via web-seeding, signature du `.mp4` comparée au JSON de référence de #7 |
+| `test/webseed/downloadPieceFromWebSeed.integration.test.js` | **Réseau réel** : télécharge une vraie pièce (qui chevauche plusieurs fichiers) depuis le vrai serveur web-seed archive.org |
+| `test/server/downloadManager.test.js` | `cancelDownload` arrête un job en cours et son statut se stabilise sur `cancelled` |
+| `test/server/httpServer.integration.test.js` | **Réseau réel, bout en bout via HTTP** : `POST` démarre un vrai téléchargement, poll jusqu'à progression réelle, `DELETE` annule, vérifie qu'aucune pièce ne progresse plus ensuite. ~19s |
+
+Voir [API.md](API.md) pour le contrat de l'API HTTP (`POST`/`GET`/`DELETE /downloads`).
 
 ## Pour le pipeline encodage/transcodage/streaming
 
@@ -290,17 +290,17 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
 - **Fixture MKV/webm** pour couvrir `detectContainerFormat` sur un vrai fichier (aujourd'hui
   testé uniquement sur un buffer synthétique avec l'en-tête EBML).
 - **Fixture mp4 sans fast-start** (`moov` après `mdat`) pour #14 — voir constat ci-dessus.
-- **`.torrent` multi-fichiers avec sous-dossiers** réel (le fixture actuel a des `path` à un
-  seul segment ; le cas multi-segments n'est testé qu'avec des données construites à la
-  main dans `torrentFile.test.js`).
+- **`.torrent` multi-fichiers avec sous-dossiers** réel (aucun fixture committé n'a de
+  `path` à plusieurs segments ; le cas multi-segments n'est plus testé du tout depuis
+  l'élagage de la suite — c'était couvert dans `torrentFile.test.js`, supprimé).
 - **Même comparaison de signature pour Sintel** — faite pour l'archive.org fixture en #12
   (`downloadTorrent.webseed.integration.test.js` contre le JSON de `reference-video/`), mais
   jamais faite pour Sintel : pas de signature de référence committée pour `Sintel.mp4`, donc
   pas de validation croisée équivalente pour le chemin peer-wire pur.
 - **Tracker qui répond mais avec un `failure reason` légitime** (mauvais info_hash,
-  tracker privé qui refuse) — aujourd'hui `httpTracker.test.js` le couvre en unitaire
-  avec une réponse construite à la main, mais pas contre un vrai tracker qui refuse pour
-  de vraies raisons.
+  tracker privé qui refuse) — `httpTracker.test.js` le couvrait en unitaire avec une
+  réponse construite à la main avant l'élagage de la suite ; pas testé du tout aujourd'hui,
+  ni en unitaire ni contre un vrai tracker qui refuse pour de vraies raisons.
 - **`announce()` avec agrégation de plusieurs vrais pairs** (fusionner les résultats de
   plusieurs trackers au lieu de s'arrêter au premier succès) — utile pour agrandir le pool
   de candidats que `downloadTorrent()` reçoit, plutôt que de dépendre d'un seul tracker.
@@ -326,10 +326,10 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
   du conteneur perd l'état de tout téléchargement en cours. Pas un problème pour #11 en
   tant que tel, mais #13/#14 (Laravel qui interroge `GET /downloads/:id`) devront décider
   quoi faire si le Client Torrent redémarre pendant qu'un film télécharge.
-- **`torrentUrl` invalide ou inaccessible** — `httpServer.test.js` couvre le contrat HTTP
-  avec des fakes, mais pas le vrai comportement de `fetchImpl` contre une URL qui 404 ou
-  timeout (couvert indirectement par `downloadManager.test.js` avec un fake, jamais en
-  réel).
+- **`torrentUrl` invalide ou inaccessible** — plus du tout testé depuis l'élagage de la
+  suite (ni le contrat HTTP avec des fakes, ni le vrai comportement de `fetchImpl` contre
+  une URL qui 404 ou timeout). Voir [API.md](API.md) pour le comportement attendu
+  (`400`).
 - **Un mirroir `url-list` down, les autres up** — `downloadPieceFromWebSeed` ne prend qu'une
   seule `baseUrl` à la fois ; `downloadTorrent()` ne traite chaque entrée de `webSeedUrls`
   que comme une source de plus dans la rotation (donc un mirroir mort échoue et fait
@@ -338,27 +338,18 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
 
 ### Tests à supprimer/réviser lors des prochaines évolutions
 
-- **`test/referenceVideo.test.js`** : aujourd'hui, ce test compare le fichier vidéo au JSON
-  généré *depuis ce même fichier* — c'est surtout un garde-fou anti-corruption de fixture,
-  pas encore une vraie validation croisée. #10 rend ce remplacement possible (le client
-  sait maintenant télécharger un fichier complet réel) mais ce n'est pas encore fait : le
-  test utile serait « signature(fichier téléchargé par le vrai client) == JSON de
-  référence », qui rendrait celui-ci redondant.
 - **`test/helpers/bencodeEncode.js`** : encodeur bencode écrit uniquement pour construire
   des fixtures de test, séparé exprès de `src/bencode.js` pour ne pas tester le décodeur
-  contre lui-même. Si un encodeur bencode de production apparaît un jour dans `src/`
-  (par ex. pour construire une requête d'annonce tracker), supprimer ce helper et faire
-  pointer les tests dessus à la place — pas deux encodeurs à maintenir en parallèle.
-- Les assertions par octets exacts dans `referenceVideo.test.js` (taille/SHA-256/hex en
-  dur) sont fragiles si archive.org régénère un jour ce dérivé (l'ADR-0005 et
-  `docs/testing-torrent-sources.md` documentent déjà que les torrents archive.org sont
-  régénérés). Si ce test casse un jour sans changement de code, régénérer le JSON de
-  comparaison plutôt que de chercher un bug.
-- **`test/trackers/announce.integration.test.js`** dépend d'infrastructure externe qu'on
-  ne contrôle pas (`tracker.opentrackr.org` up, Sintel toujours bien seedé, trackers
-  archive.org toujours en HTTP). C'est assumé et voulu pour #8 (l'acceptance criteria
-  demande explicitement un vrai tracker), mais si ce fichier devient une source
-  d'instabilité en CI, le séparer du run par défaut (`npm test`) plutôt que le supprimer
-  — les tests unitaires avec annonceurs/fetch injectés (`httpTracker.test.js`,
-  `udpTracker.test.js` avec son faux tracker local, `announce.test.js`) couvrent déjà la
-  correction du protocole indépendamment du réseau.
+  contre lui-même. N'est plus utilisé que par `httpTracker.test.js` depuis l'élagage de la
+  suite. Si un encodeur bencode de production apparaît un jour dans `src/` (par ex. pour
+  construire une requête d'annonce tracker), supprimer ce helper et faire pointer les
+  tests dessus à la place.
+- Les tests **réseau réel** (`*.integration.test.js`) dépendent d'infrastructure externe
+  qu'on ne contrôle pas (`tracker.opentrackr.org` up, Sintel toujours bien seedé, trackers
+  et web-seed archive.org toujours disponibles, webtorrent.io joignable). C'est assumé et
+  voulu — l'acceptance criteria de #8/#10/#11/#12 demande explicitement une preuve contre
+  de vraies infrastructures, et depuis l'élagage de la suite ce sont ces tests qui portent
+  l'essentiel de la couverture. Si l'un d'eux devient une source d'instabilité en CI, le
+  séparer du run par défaut (`npm test`) plutôt que le supprimer purement et simplement —
+  la couverture unitaire restante est volontairement mince (10 tests) et ne suffit pas à
+  elle seule.
