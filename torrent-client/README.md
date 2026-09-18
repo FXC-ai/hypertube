@@ -32,6 +32,8 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 | `test/peer/messages.test.js` | Framing des messages peer wire (préfixe de longueur + id), y compris message coupé en deux morceaux TCP puis recollé |
 | `test/peer/downloadPiece.test.js` | Téléchargement d'une pièce complète contre un **faux pair TCP local** scriptable : cas nominal, pièce corrompue rejetée et re-téléchargée (pas acceptée silencieusement), pair qui ne débloque jamais, handshake avec mauvais info-hash, port fermé, keep-alives ignorés |
 | `test/peer/downloadPiece.integration.test.js` | **Réseau réel** : télécharge une vraie pièce de 128 Ko depuis un vrai pair du swarm Sintel et vérifie son SHA-1. Essaie ~30 pairs en parallèle (`Promise.any`) et garde le premier qui répond — la plupart des pairs annoncés par un tracker sont injoignables à un instant donné (NAT/hors ligne), c'est normal en P2P |
+| `test/swarm/downloadTorrent.test.js` | Orchestration multi-pairs (`src/swarm/downloadTorrent.js`) contre des **faux pairs TCP locaux** : plusieurs pairs en parallèle, retry sur un autre pair si l'un échoue, pairs qui refusent la connexion ignorés, échec définitif si personne ne sert jamais une pièce, callback de progression — et surtout **pièce qui chevauche deux fichiers** dans un torrent multi-fichiers |
+| `test/swarm/downloadTorrent.integration.test.js` | **Réseau réel, téléchargement complet** : télécharge l'intégralité du torrent Sintel (~129 Mo, 987 pièces, 11 fichiers) via le vrai swarm, vérifie la taille finale et que `Sintel.mp4` est ouvrable par `ffprobe` avec un vrai flux vidéo. ~47s en pratique |
 
 ## Pour le pipeline encodage/transcodage/streaming
 
@@ -106,6 +108,36 @@ et garde la première qui aboutit, exactement ce que fait
 `downloadPiece.integration.test.js` avec `Promise.any()`. Prévoir la même stratégie pour
 #10 (assemblage multi-pairs), pas une boucle séquentielle pair par pair.
 
+## Assemblage multi-pairs (#10)
+
+`src/swarm/downloadTorrent.js` orchestre le téléchargement complet : un pool de workers
+concurrents (`concurrency`) tire les pièces manquantes d'une file partagée, chacune
+demandée à un pair différent (rotation simple sur la liste de candidats). Une pièce qui
+échoue est remise en file pour retry contre un autre pair, jusqu'à `maxAttemptsPerPiece` —
+au-delà, tout le téléchargement échoue avec `SwarmDownloadError` plutôt que de produire un
+fichier silencieusement incomplet.
+
+**Piège réel rencontré en écrivant le test d'intégration** : Sintel est un torrent
+**multi-fichiers** (5 sous-titres + `Sintel.mp4` + poster), et la pièce 0 contenait en fait
+du texte de sous-titre allemand, pas des octets vidéo — BitTorrent concatène tous les
+fichiers d'un torrent dans l'ordre avant de découper en pièces, donc une pièce peut
+chevaucher la frontière entre deux fichiers. La première version écrivait tout dans un seul
+blob plat ; `ffprobe` ne pouvait évidemment pas y trouver un flux vidéo propre. Corrigé :
+`downloadTorrent()` calcule le layout des fichiers (`computeFileLayout`) et, pour chaque
+pièce téléchargée, écrit le bon segment dans le ou les fichiers qu'elle recouvre
+(`piecesToFileWrites`) — testé explicitement dans `downloadTorrent.test.js` avec un
+découpage volontairement pas aligné sur une frontière de pièce.
+
+**Deuxième piège, trouvé par les tests eux-mêmes** : deux workers demandant le handle du
+même fichier au même tick pouvaient chacun lancer leur propre `open(path, 'w')` — la
+seconde ouverture tronque le fichier et efface ce que la première venait d'écrire. Corrigé
+en mémorisant une **promesse** d'ouverture par fichier (pas le handle résolu), pour que les
+appels concurrents attendent la même ouverture au lieu d'en déclencher une chacun.
+
+Le téléchargement complet et réel du torrent Sintel (129 Mo, 987 pièces, 11 fichiers) prend
+~47s en pratique dans `downloadTorrent.integration.test.js`, `Sintel.mp4` extrait
+correctement et validé par `ffprobe`.
+
 ## Fixtures
 
 - `test/fixtures/1953_movie_trailers_starting_monday.archive.org.torrent` — vrai `.torrent`
@@ -147,35 +179,43 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
 - **`.torrent` multi-fichiers avec sous-dossiers** réel (le fixture actuel a des `path` à un
   seul segment ; le cas multi-segments n'est testé qu'avec des données construites à la
   main dans `torrentFile.test.js`).
-- Une fois #10 posé (assemblage multi-pairs, fichier complet), un test d'intégration qui
-  compare la signature du fichier assemblé par le client torrent réel au JSON de
-  `reference-video/` — c'est la vraie validation croisée que `referenceVideo.test.js` ne
-  fait qu'anticiper pour l'instant (voir note ci-dessous).
+- **Maintenant que #10 sait assembler un fichier complet réel** : comparer la signature de
+  `Sintel.mp4` obtenu via `downloadTorrent()` à une signature de référence calculée
+  indépendamment (même principe que `reference-video/`, jamais fait pour Sintel jusqu'ici
+  — seul l'archive.org fixture a une signature JSON committée). C'est la vraie validation
+  croisée que `referenceVideo.test.js` n'anticipe encore que pour l'archive.org fixture
+  (voir note ci-dessous).
 - **Tracker qui répond mais avec un `failure reason` légitime** (mauvais info_hash,
   tracker privé qui refuse) — aujourd'hui `httpTracker.test.js` le couvre en unitaire
   avec une réponse construite à la main, mais pas contre un vrai tracker qui refuse pour
   de vraies raisons.
 - **`announce()` avec agrégation de plusieurs vrais pairs** (fusionner les résultats de
-  plusieurs trackers au lieu de s'arrêter au premier succès) — pertinent pour #10 quand
-  il faudra maximiser le nombre de pairs disponibles plutôt que se contenter du premier
-  tracker qui répond.
+  plusieurs trackers au lieu de s'arrêter au premier succès) — utile pour agrandir le pool
+  de candidats que `downloadTorrent()` reçoit, plutôt que de dépendre d'un seul tracker.
 - **Téléchargement de plusieurs pièces d'affilée depuis le même pair** (réutiliser la
   connexion TCP déjà établie au lieu d'en ouvrir une par pièce) — `downloadPieceFromPeer`
-  ferme la connexion après chaque pièce ; #10 voudra probablement une variante qui garde
-  la connexion ouverte pour enchaîner plusieurs pièces avec le même pair.
+  ferme la connexion après chaque pièce, et `downloadTorrent()` en hérite (une connexion
+  par tentative de pièce, même vers le même pair). Fonctionne (47s pour 129 Mo sur le vrai
+  swarm Sintel) mais gaspille des handshakes ; une vraie session de pair persistante serait
+  plus efficace à plus grande échelle.
 - **Peer choke après avoir déjà unchoke** en cours de téléchargement (le code gère l'état
   mais ce n'est testé qu'implicitement) — un faux pair qui unchoke, envoie un bloc, puis
   rechoke avant la fin de la pièce, pour vérifier qu'on arrête proprement les requêtes au
   lieu de continuer à en empiler.
+- **Sélection de pièces "rarest first"** — `downloadTorrent()` prend les pièces dans l'ordre
+  (0, 1, 2…) et les pairs en rotation simple, pas la stratégie "pièce la plus rare
+  d'abord" des vrais clients BitTorrent (qui maximise la disponibilité globale du swarm).
+  Suffisant pour un swarm de la taille testée ici, mais à reconsidérer si la volumétrie
+  réelle du produit final le justifie.
 
 ### Tests à supprimer/réviser lors des prochaines évolutions
 
 - **`test/referenceVideo.test.js`** : aujourd'hui, ce test compare le fichier vidéo au JSON
   généré *depuis ce même fichier* — c'est surtout un garde-fou anti-corruption de fixture,
-  pas encore une vraie validation croisée. À remplacer (pas juste compléter) une fois que
-  #10 permet de télécharger le même fichier en entier via BitTorrent : à ce moment, le
-  test utile est « signature(fichier téléchargé par le vrai client) == JSON de
-  référence », et celui-ci devient redondant.
+  pas encore une vraie validation croisée. #10 rend ce remplacement possible (le client
+  sait maintenant télécharger un fichier complet réel) mais ce n'est pas encore fait : le
+  test utile serait « signature(fichier téléchargé par le vrai client) == JSON de
+  référence », qui rendrait celui-ci redondant.
 - **`test/helpers/bencodeEncode.js`** : encodeur bencode écrit uniquement pour construire
   des fixtures de test, séparé exprès de `src/bencode.js` pour ne pas tester le décodeur
   contre lui-même. Si un encodeur bencode de production apparaît un jour dans `src/`
