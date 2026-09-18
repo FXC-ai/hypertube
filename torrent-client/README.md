@@ -211,6 +211,41 @@ si le tracker ne renvoie aucun pair tant que le `.torrent` fournit au moins une 
 web-seed — sinon #12 aurait été inaccessible depuis l'API HTTP alors même qu'il marche en
 appel direct.
 
+## Conteneur Docker (#17)
+
+```bash
+make up      # docker compose up -d --build (app + client-torrent)
+make down
+make logs
+```
+
+`torrent-client/Dockerfile` : `node:20-alpine`, pas de `npm install` (zéro dépendance), juste
+`COPY package.json src` puis `node src/index.js`. Le service `client-torrent` dans
+`docker-compose.yml` racine partage le volume `laravel-storage` avec `app`, **au même point
+de montage** (`/var/www/html/storage`) — un fichier écrit par le Client Torrent à
+`movies/{id}/{filename}` atterrit exactement là où
+`Storage::disk('public')->path("movies/{id}/{filename}")` va le chercher côté Laravel
+(`app/Jobs/ConvertMovie.php`, `app/Http/Controllers/MovieController.php`). `GET /health`
+ajouté à `httpServer.js` uniquement pour le healthcheck Docker (`app` a un `depends_on:
+condition: service_healthy` sur `client-torrent`).
+
+**Les 3 critères d'acceptation validés en conditions réelles**, pas juste en lisant le
+compose file :
+
+1. `client-torrent` build et démarre healthy sans erreur. `app` build et démarre correctement
+   aussi — sa tentative de `make up` a échoué dans **cet environnement de dev précis**
+   uniquement à cause d'un conflit de port (5173) avec un *autre* projet Docker sans rapport
+   déjà lancé sur la machine (pas un défaut de cette config) ; confirmé en démarrant `app`
+   via `docker compose run` (même image, même réseau, mêmes volumes, sans bind de port) — il
+   boot sans erreur.
+2. Depuis un conteneur `app`, `curl http://client-torrent:7881/health` répond
+   `{"status":"ok"}` — résolution DNS et réseau Docker interne fonctionnels par nom de
+   service.
+3. Vrai téléchargement déclenché via `POST http://localhost:7881/downloads` avec
+   `outputDir: "/var/www/html/storage/app/public/movies/999"` (fixture archive.org réelle,
+   #7) : une fois `completed`, les 12 fichiers sont visibles et de la bonne taille depuis un
+   conteneur `app` séparé, au chemin exact que le pipeline de conversion attend.
+
 ## Fixtures
 
 - `test/fixtures/1953_movie_trailers_starting_monday.archive.org.torrent` — vrai `.torrent`
@@ -246,6 +281,12 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
 
 ### Tests intéressants à ajouter
 
+- **Validation Docker automatisée** — les 3 critères de #17 (build sans erreur, réseau interne,
+  volume partagé) ont été vérifiés manuellement en conditions réelles pendant le
+  développement (build + run + curl + téléchargement réel + vérification croisée depuis
+  `app`), mais rien de tout ça n'est rejoué automatiquement. Un script (`docker compose up`
+  + `docker compose run app curl ...` + assertions sur les fichiers) mériterait sa place en
+  CI pour éviter une régression silencieuse sur le compose file.
 - **Fixture MKV/webm** pour couvrir `detectContainerFormat` sur un vrai fichier (aujourd'hui
   testé uniquement sur un buffer synthétique avec l'en-tête EBML).
 - **Fixture mp4 sans fast-start** (`moov` après `mdat`) pour #14 — voir constat ci-dessus.

@@ -23,6 +23,16 @@ async function withServer(manager, fn) {
   }
 }
 
+test('GET /health returns 200 without touching the manager', async () => {
+  const manager = fakeManager();
+  await withServer(manager, async (base) => {
+    const res = await fetch(`${base}/health`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.status, 'ok');
+  });
+});
+
 test('POST /downloads with a torrentUrl starts a download and returns 202 + id', async () => {
   let captured;
   const manager = fakeManager({

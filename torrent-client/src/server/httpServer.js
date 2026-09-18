@@ -15,6 +15,11 @@ export function createServer({ manager = createDownloadManager() } = {}) {
 }
 
 async function handleRequest(req, res, manager) {
+  if (req.method === 'GET' && req.url === '/health') {
+    sendJson(res, 200, { status: 'ok' });
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/downloads') {
     await handleStart(req, res, manager);
     return;
