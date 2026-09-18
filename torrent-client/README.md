@@ -28,6 +28,10 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 | `test/trackers/udpTracker.test.js` | Annonce UDP (BEP15) : handshake connect+announce contre un **faux tracker UDP local** (`dgram` dans le test), format des paquets vérifié octet par octet, timeout |
 | `test/trackers/announce.test.js` | Orchestrateur multi-tracker (`src/trackers/announce.js`) : ordre d'essai, agrégation des échecs, schémas non supportés (`wss://`) ignorés — annonceurs injectés, pas de réseau réel |
 | `test/trackers/announce.integration.test.js` | **Réseau réel** : annonce contre `tracker.opentrackr.org` (Sintel, swarm réellement peuplé), contre le tracker HTTP archive.org, fallback multi-tracker, timeouts bornés contre une adresse injoignable |
+| `test/peer/handshake.test.js` | Construction/parsing de la poignée de main peer wire (BEP3), y compris la détection de la longueur exacte consommée (un pair envoie souvent son premier message juste après, dans le même paquet TCP) |
+| `test/peer/messages.test.js` | Framing des messages peer wire (préfixe de longueur + id), y compris message coupé en deux morceaux TCP puis recollé |
+| `test/peer/downloadPiece.test.js` | Téléchargement d'une pièce complète contre un **faux pair TCP local** scriptable : cas nominal, pièce corrompue rejetée et re-téléchargée (pas acceptée silencieusement), pair qui ne débloque jamais, handshake avec mauvais info-hash, port fermé, keep-alives ignorés |
+| `test/peer/downloadPiece.integration.test.js` | **Réseau réel** : télécharge une vraie pièce de 128 Ko depuis un vrai pair du swarm Sintel et vérifie son SHA-1. Essaie ~30 pairs en parallèle (`Promise.any`) et garde le premier qui répond — la plupart des pairs annoncés par un tracker sont injoignables à un instant donné (NAT/hors ligne), c'est normal en P2P |
 
 ## Pour le pipeline encodage/transcodage/streaming
 
@@ -83,6 +87,25 @@ notre propre annonce échoée par le tracker, pas un second client — cohérent
 swarm P2P quasi vide déjà documenté pour cette source. La vraie récupération de contenu
 pour archive.org passera par le web-seeding (#12), pas ce tracker.
 
+## Protocole peer wire (#9)
+
+`src/peer/` implémente la poignée de main (`handshake.js`), le framing des messages
+(`messages.js`) et le téléchargement d'une pièce depuis un seul pair
+(`downloadPiece.js`, `node:net`) : intéressé → attente d'unchoke → requêtes pipelinées
+par blocs de 16 Ko → assemblage → vérification SHA-1 contre le hash de la pièce dans le
+`.torrent`. Une pièce dont le hash ne correspond pas n'est jamais acceptée : elle est
+effacée et re-demandée au même pair (jusqu'à `maxAttempts`), testé explicitement dans
+`downloadPiece.test.js` avec un faux pair qui envoie d'abord des données corrompues puis
+correctes.
+
+Point pratique découvert en testant en réel : sur ~130 pairs annoncés par le tracker pour
+Sintel, seuls 2 acceptaient une connexion TCP dans un essai typique (les autres : NAT,
+hors ligne, ou refusent la connexion). C'est le comportement normal d'un swarm BitTorrent,
+pas un problème d'environnement — un vrai client tourne plusieurs tentatives en parallèle
+et garde la première qui aboutit, exactement ce que fait
+`downloadPiece.integration.test.js` avec `Promise.any()`. Prévoir la même stratégie pour
+#10 (assemblage multi-pairs), pas une boucle séquentielle pair par pair.
+
 ## Fixtures
 
 - `test/fixtures/1953_movie_trailers_starting_monday.archive.org.torrent` — vrai `.torrent`
@@ -96,10 +119,10 @@ pour archive.org passera par le web-seeding (#12), pas ce tracker.
   téléchargé en HTTP direct (pas via BitTorrent — ça n'existe pas encore côté client).
   Sert de vérité terrain.
 - `test/fixtures/reference-video/*.reference.signature.json` — signature de ce fichier
-  (`computeVideoSignature`) committée à part. Le but : une fois #9/#10 capables de
-  télécharger via peer-wire, calculer la signature du fichier obtenu par le vrai client
-  torrent et la diff contre ce JSON pour confirmer que les deux chemins produisent des
-  octets identiques.
+  (`computeVideoSignature`) committée à part. Le but : une fois #10 capable d'assembler
+  un fichier complet (pas juste une pièce, ce que fait déjà #9), calculer la signature du
+  fichier obtenu par le vrai client torrent et la diff contre ce JSON pour confirmer que
+  les deux chemins produisent des octets identiques.
 
 Pour ajouter une nouvelle fixture torrent depuis archive.org :
 
@@ -124,8 +147,8 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
 - **`.torrent` multi-fichiers avec sous-dossiers** réel (le fixture actuel a des `path` à un
   seul segment ; le cas multi-segments n'est testé qu'avec des données construites à la
   main dans `torrentFile.test.js`).
-- Une fois #9 posé (vérification de hash par pièce), un test d'intégration qui compare la
-  signature du fichier assemblé par le client torrent réel au JSON de
+- Une fois #10 posé (assemblage multi-pairs, fichier complet), un test d'intégration qui
+  compare la signature du fichier assemblé par le client torrent réel au JSON de
   `reference-video/` — c'est la vraie validation croisée que `referenceVideo.test.js` ne
   fait qu'anticiper pour l'instant (voir note ci-dessous).
 - **Tracker qui répond mais avec un `failure reason` légitime** (mauvais info_hash,
@@ -136,15 +159,23 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
   plusieurs trackers au lieu de s'arrêter au premier succès) — pertinent pour #10 quand
   il faudra maximiser le nombre de pairs disponibles plutôt que se contenter du premier
   tracker qui répond.
+- **Téléchargement de plusieurs pièces d'affilée depuis le même pair** (réutiliser la
+  connexion TCP déjà établie au lieu d'en ouvrir une par pièce) — `downloadPieceFromPeer`
+  ferme la connexion après chaque pièce ; #10 voudra probablement une variante qui garde
+  la connexion ouverte pour enchaîner plusieurs pièces avec le même pair.
+- **Peer choke après avoir déjà unchoke** en cours de téléchargement (le code gère l'état
+  mais ce n'est testé qu'implicitement) — un faux pair qui unchoke, envoie un bloc, puis
+  rechoke avant la fin de la pièce, pour vérifier qu'on arrête proprement les requêtes au
+  lieu de continuer à en empiler.
 
 ### Tests à supprimer/réviser lors des prochaines évolutions
 
 - **`test/referenceVideo.test.js`** : aujourd'hui, ce test compare le fichier vidéo au JSON
   généré *depuis ce même fichier* — c'est surtout un garde-fou anti-corruption de fixture,
   pas encore une vraie validation croisée. À remplacer (pas juste compléter) une fois que
-  #9/#10 permettent de télécharger le même fichier via BitTorrent : à ce moment, le test
-  utile est « signature(fichier téléchargé par le vrai client) == JSON de référence », et
-  celui-ci devient redondant.
+  #10 permet de télécharger le même fichier en entier via BitTorrent : à ce moment, le
+  test utile est « signature(fichier téléchargé par le vrai client) == JSON de
+  référence », et celui-ci devient redondant.
 - **`test/helpers/bencodeEncode.js`** : encodeur bencode écrit uniquement pour construire
   des fixtures de test, séparé exprès de `src/bencode.js` pour ne pas tester le décodeur
   contre lui-même. Si un encodeur bencode de production apparaît un jour dans `src/`
