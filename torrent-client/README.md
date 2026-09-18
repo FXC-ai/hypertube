@@ -23,6 +23,11 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 | `test/fixtures.test.js` | Le parser contre un **vrai** `.torrent` archive.org, info-hash comparé au `btih` publié par archive.org lui-même |
 | `test/videoSignature.test.js` | Détection de format conteneur + calcul de signature (`src/videoSignature.js`) sur des buffers synthétiques |
 | `test/referenceVideo.test.js` | La signature du fichier vidéo de référence reste synchronisée avec le JSON de comparaison committé |
+| `test/trackers/compactPeers.test.js`, `peerId.test.js` | Primitives partagées HTTP/UDP (format de pair compact BEP23, génération de peer id) |
+| `test/trackers/httpTracker.test.js` | Annonce HTTP (BEP3) : construction de la query, parsing bencode de la réponse, `failure reason`, erreurs HTTP — `fetch` injecté, pas de réseau réel |
+| `test/trackers/udpTracker.test.js` | Annonce UDP (BEP15) : handshake connect+announce contre un **faux tracker UDP local** (`dgram` dans le test), format des paquets vérifié octet par octet, timeout |
+| `test/trackers/announce.test.js` | Orchestrateur multi-tracker (`src/trackers/announce.js`) : ordre d'essai, agrégation des échecs, schémas non supportés (`wss://`) ignorés — annonceurs injectés, pas de réseau réel |
+| `test/trackers/announce.integration.test.js` | **Réseau réel** : annonce contre `tracker.opentrackr.org` (Sintel, swarm réellement peuplé), contre le tracker HTTP archive.org, fallback multi-tracker, timeouts bornés contre une adresse injoignable |
 
 ## Pour le pipeline encodage/transcodage/streaming
 
@@ -57,10 +62,36 @@ Deux choses ici sont probablement utiles pour ce qui touche à `ConvertMovie` /
   faudra une fixture différente — un fichier encodé sans `-movflags +faststart` côté
   ffmpeg reproduit facilement ce cas si aucune source réelle n'en fournit un.
 
+## Trackers HTTP et UDP (#8)
+
+`src/trackers/` implémente les deux protocoles, choisis par schéma d'URL dans
+`announce()` :
+
+- **HTTP (BEP3)** — `src/trackers/httpTracker.js`. Nécessaire pour archive.org, dont
+  les deux trackers (`bt1`/`bt2.archive.org:6969`) sont HTTP uniquement.
+- **UDP (BEP15)** — `src/trackers/udpTracker.js`, via `node:dgram`. Nécessaire parce
+  que **tous** les trackers publics bien peuplés (ceux des torrents webtorrent.io type
+  Sintel) sont UDP ou WebSocket, jamais HTTP — sans UDP, impossible d'obtenir une vraie
+  liste de pairs non vide pour valider le client contre un swarm actif.
+- Les trackers `wss://`/`ws://` (WebSocket, pour swarms navigateur-à-navigateur) sont
+  délibérément ignorés par `announce()` — non pertinents pour un client serveur, déjà
+  noté dans `docs/testing-torrent-sources.md`.
+
+Point notable découvert en testant contre archive.org en réel : le tracker répond bien
+(bencode valide, `complete`/`incomplete`/`peers`), mais le pair renvoyé est en pratique
+notre propre annonce échoée par le tracker, pas un second client — cohérent avec le
+swarm P2P quasi vide déjà documenté pour cette source. La vraie récupération de contenu
+pour archive.org passera par le web-seeding (#12), pas ce tracker.
+
 ## Fixtures
 
 - `test/fixtures/1953_movie_trailers_starting_monday.archive.org.torrent` — vrai `.torrent`
   archive.org, ~3,8 Ko. Item choisi pour sa petite taille (§ testing-torrent-sources.md).
+- `test/fixtures/sintel.webtorrent.io.torrent` — vrai `.torrent` Sintel (Blender
+  Foundation, webtorrent.io/free-torrents), ~20 Ko. Swarm massivement actif (>100
+  seeders observés via `tracker.opentrackr.org`) — utilisé spécifiquement pour prouver
+  qu'on récupère une vraie liste de pairs non vide, ce que le fixture archive.org seul
+  ne permet pas de garantir.
 - `test/fixtures/reference-video/*.reference.mp4` — le `.mp4` listé dans ce torrent,
   téléchargé en HTTP direct (pas via BitTorrent — ça n'existe pas encore côté client).
   Sert de vérité terrain.
@@ -97,6 +128,14 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
   signature du fichier assemblé par le client torrent réel au JSON de
   `reference-video/` — c'est la vraie validation croisée que `referenceVideo.test.js` ne
   fait qu'anticiper pour l'instant (voir note ci-dessous).
+- **Tracker qui répond mais avec un `failure reason` légitime** (mauvais info_hash,
+  tracker privé qui refuse) — aujourd'hui `httpTracker.test.js` le couvre en unitaire
+  avec une réponse construite à la main, mais pas contre un vrai tracker qui refuse pour
+  de vraies raisons.
+- **`announce()` avec agrégation de plusieurs vrais pairs** (fusionner les résultats de
+  plusieurs trackers au lieu de s'arrêter au premier succès) — pertinent pour #10 quand
+  il faudra maximiser le nombre de pairs disponibles plutôt que se contenter du premier
+  tracker qui répond.
 
 ### Tests à supprimer/réviser lors des prochaines évolutions
 
@@ -116,3 +155,11 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
   `docs/testing-torrent-sources.md` documentent déjà que les torrents archive.org sont
   régénérés). Si ce test casse un jour sans changement de code, régénérer le JSON de
   comparaison plutôt que de chercher un bug.
+- **`test/trackers/announce.integration.test.js`** dépend d'infrastructure externe qu'on
+  ne contrôle pas (`tracker.opentrackr.org` up, Sintel toujours bien seedé, trackers
+  archive.org toujours en HTTP). C'est assumé et voulu pour #8 (l'acceptance criteria
+  demande explicitement un vrai tracker), mais si ce fichier devient une source
+  d'instabilité en CI, le séparer du run par défaut (`npm test`) plutôt que le supprimer
+  — les tests unitaires avec annonceurs/fetch injectés (`httpTracker.test.js`,
+  `udpTracker.test.js` avec son faux tracker local, `announce.test.js`) couvrent déjà la
+  correction du protocole indépendamment du réseau.
