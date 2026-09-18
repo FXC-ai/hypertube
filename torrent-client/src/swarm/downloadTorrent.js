@@ -2,6 +2,7 @@ import { open, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { downloadPieceFromPeer } from '../peer/downloadPiece.js';
 import { CancelledError } from '../cancelledError.js';
+import { computeFileLayout, computePieceRanges, computeOverlaps } from '../torrentLayout.js';
 
 export class SwarmDownloadError extends Error {
   constructor(message) {
@@ -38,7 +39,7 @@ export async function downloadTorrent(torrent, peers, options) {
   }
 
   const fileLayout = computeFileLayout(torrent);
-  const pieceOffsets = computePieceOffsets(torrent);
+  const pieceOffsets = computePieceRanges(torrent);
   const numPieces = torrent.pieces.length;
   const queue = [...Array(numPieces).keys()];
   const attempts = new Array(numPieces).fill(0);
@@ -92,9 +93,10 @@ export async function downloadTorrent(torrent, peers, options) {
             overallTimeoutMs: pieceTimeoutMs,
             signal,
           });
-          for (const write of piecesToFileWrites(fileLayout, offset, buffer)) {
-            const handle = await handleFor(write.file);
-            await handle.write(write.data, 0, write.data.length, write.fileOffset);
+          for (const overlap of computeOverlaps(fileLayout, offset, buffer.length)) {
+            const handle = await handleFor(overlap.file);
+            const data = buffer.subarray(overlap.rangeOffset, overlap.rangeOffset + overlap.length);
+            await handle.write(data, 0, data.length, overlap.fileOffset);
           }
           completed += 1;
           onProgress?.({ completed, total: numPieces, pieceIndex });
@@ -133,46 +135,3 @@ export async function downloadTorrent(torrent, peers, options) {
   }
 }
 
-function computePieceOffsets(torrent) {
-  const offsets = [];
-  let offset = 0;
-  for (let i = 0; i < torrent.pieces.length; i += 1) {
-    const length = Math.min(torrent.pieceLength, torrent.totalLength - offset);
-    offsets.push({ offset, length });
-    offset += length;
-  }
-  return offsets;
-}
-
-// Where each file starts within the concatenated piece stream (BitTorrent
-// lays out a multi-file torrent's pieces as if every file were
-// concatenated back to back, in `files` order).
-function computeFileLayout(torrent) {
-  let offset = 0;
-  return torrent.files.map((file) => {
-    const entry = { path: file.path, length: file.length, torrentOffset: offset };
-    offset += file.length;
-    return entry;
-  });
-}
-
-// A piece can straddle a file boundary (e.g. the last bytes of one file and
-// the first bytes of the next end up in the same piece). Splits `buffer`
-// (which spans [pieceOffset, pieceOffset + buffer.length) in the
-// concatenated stream) into one write per file it actually overlaps.
-function piecesToFileWrites(fileLayout, pieceOffset, buffer) {
-  const pieceEnd = pieceOffset + buffer.length;
-  const writes = [];
-  for (const file of fileLayout) {
-    const fileEnd = file.torrentOffset + file.length;
-    const overlapStart = Math.max(pieceOffset, file.torrentOffset);
-    const overlapEnd = Math.min(pieceEnd, fileEnd);
-    if (overlapStart >= overlapEnd) continue;
-    writes.push({
-      file,
-      data: buffer.subarray(overlapStart - pieceOffset, overlapEnd - pieceOffset),
-      fileOffset: overlapStart - file.torrentOffset,
-    });
-  }
-  return writes;
-}
