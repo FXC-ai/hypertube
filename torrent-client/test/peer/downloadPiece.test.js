@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { downloadPieceFromPeer, PeerError } from '../../src/peer/downloadPiece.js';
 import { buildHandshake } from '../../src/peer/handshake.js';
 import { encodeMessage, encodeKeepAlive, extractMessages, MESSAGE_ID } from '../../src/peer/messages.js';
+import { CancelledError } from '../../src/cancelledError.js';
 
 const INFO_HASH = Buffer.from('0102030405060708090a0b0c0d0e0f1011121314', 'hex');
 const CLIENT_PEER_ID = Buffer.from('-HT0001-abcdefghijkl', 'ascii');
@@ -144,6 +145,60 @@ test('rejects when the peer handshake reports a different info_hash', async () =
   } finally {
     server.close();
   }
+});
+
+test('rejects with CancelledError and stops promptly when the signal is aborted mid-download', async () => {
+  const { block0, block1 } = correctPieceBytes();
+  const server = await startFakePeer((index, begin, length) => {
+    // answer the first block only, then go silent -- forces the download to
+    // still be in flight when we abort
+    if (begin === 0) return block0.subarray(0, length);
+    return null;
+  });
+  const { port } = server.address();
+  const controller = new AbortController();
+  const start = Date.now();
+
+  try {
+    setTimeout(() => controller.abort(), 100);
+    await assert.rejects(
+      () => downloadPieceFromPeer(
+        { ip: '127.0.0.1', port },
+        {
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          pieceIndex: PIECE_INDEX,
+          pieceLength: PIECE_LENGTH,
+          pieceHash: sha1Hex(Buffer.concat([block0, block1])),
+          overallTimeoutMs: 10000,
+          signal: controller.signal,
+        },
+      ),
+      CancelledError,
+    );
+    assert.ok(Date.now() - start < 3000, 'should reject promptly on abort, not wait for the overall timeout');
+  } finally {
+    server.close();
+  }
+});
+
+test('rejects immediately if the signal is already aborted before connecting', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    () => downloadPieceFromPeer(
+      { ip: '127.0.0.1', port: 1 },
+      {
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        pieceIndex: PIECE_INDEX,
+        pieceLength: PIECE_LENGTH,
+        pieceHash: sha1Hex(Buffer.alloc(1)),
+        signal: controller.signal,
+      },
+    ),
+    CancelledError,
+  );
 });
 
 test('rejects without hanging when the peer never unchokes', async () => {

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { downloadTorrent, SwarmDownloadError } from '../../src/swarm/downloadTorrent.js';
 import { buildHandshake } from '../../src/peer/handshake.js';
 import { encodeMessage, extractMessages, MESSAGE_ID } from '../../src/peer/messages.js';
+import { CancelledError } from '../../src/cancelledError.js';
 
 const INFO_HASH = Buffer.from('0102030405060708090a0b0c0d0e0f1011121314', 'hex');
 const CLIENT_PEER_ID = Buffer.from('-HT0001-abcdefghijkl', 'ascii');
@@ -53,7 +54,7 @@ function multiFileTorrentFor(pieces, splitAt, fileNames = ['a.bin', 'b.bin']) {
 
 // A fake peer that serves real piece bytes for whichever piece index is
 // requested, with optional flakiness knobs for testing retry behaviour.
-function startFakePeer(pieces, { refuseAfterHandshake = false, failPieceIndexes = new Set() } = {}) {
+function startFakePeer(pieces, { refuseAfterHandshake = false, failPieceIndexes = new Set(), responseDelayMs = 0 } = {}) {
   const server = createServer((socket) => {
     if (refuseAfterHandshake) {
       socket.destroy();
@@ -83,7 +84,11 @@ function startFakePeer(pieces, { refuseAfterHandshake = false, failPieceIndexes 
         const header = Buffer.alloc(8);
         header.writeUInt32BE(index, 0);
         header.writeUInt32BE(begin, 4);
-        socket.write(encodeMessage(MESSAGE_ID.PIECE, Buffer.concat([header, block])));
+        const send = () => {
+          if (!socket.destroyed) socket.write(encodeMessage(MESSAGE_ID.PIECE, Buffer.concat([header, block])));
+        };
+        if (responseDelayMs > 0) setTimeout(send, responseDelayMs);
+        else send();
       }
     });
   });
@@ -295,4 +300,34 @@ test('reports progress as pieces complete', async () => {
   assert.equal(progressUpdates.length, 3);
   assert.deepEqual(progressUpdates.map((u) => u.completed), [1, 2, 3]);
   assert.ok(progressUpdates.every((u) => u.total === 3));
+});
+
+test('rejects with CancelledError and stops downloading once the signal is aborted', async () => {
+  const pieces = buildPieces(20);
+  const torrent = torrentFor(pieces);
+  const server = await startFakePeer(pieces, { responseDelayMs: 100 });
+  const controller = new AbortController();
+  const progressUpdates = [];
+
+  try {
+    await withTempDir(async (outputDir) => {
+      setTimeout(() => controller.abort(), 150);
+      const start = Date.now();
+      await assert.rejects(
+        () => downloadTorrent(torrent, [{ ip: '127.0.0.1', port: server.address().port }], {
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+          concurrency: 1,
+          signal: controller.signal,
+          onProgress: (update) => progressUpdates.push({ ...update }),
+        }),
+        CancelledError,
+      );
+      assert.ok(Date.now() - start < 3000, 'should stop promptly on abort, not download all 20 pieces');
+      assert.ok(progressUpdates.length < 20, 'should not have completed every piece before cancelling');
+    });
+  } finally {
+    server.close();
+  }
 });

@@ -2,6 +2,7 @@ import { connect } from 'node:net';
 import { createHash } from 'node:crypto';
 import { buildHandshake, parseHandshake } from './handshake.js';
 import { extractMessages, encodeInterested, encodeRequest, parsePiece, MESSAGE_ID, KEEP_ALIVE } from './messages.js';
+import { CancelledError } from '../cancelledError.js';
 
 const BLOCK_SIZE = 16384;
 const MAX_PIPELINED_REQUESTS = 5;
@@ -29,9 +30,15 @@ export function downloadPieceFromPeer(peer, options) {
     maxAttempts = 2,
     connectTimeoutMs = 5000,
     overallTimeoutMs = 20000,
+    signal,
   } = options;
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new CancelledError());
+      return;
+    }
+
     const socket = connect({ host: peer.ip, port: peer.port, timeout: connectTimeoutMs });
 
     let buffer = Buffer.alloc(0);
@@ -47,6 +54,7 @@ export function downloadPieceFromPeer(peer, options) {
 
     function cleanup() {
       clearTimeout(overallTimer);
+      signal?.removeEventListener('abort', onAbort);
       socket.removeAllListeners();
       socket.destroy();
     }
@@ -64,6 +72,11 @@ export function downloadPieceFromPeer(peer, options) {
       cleanup();
       resolve(pieceBuffer);
     }
+
+    function onAbort() {
+      fail(new CancelledError());
+    }
+    signal?.addEventListener('abort', onAbort);
 
     socket.on('connect', () => {
       socket.setTimeout(0);

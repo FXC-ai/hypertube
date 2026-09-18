@@ -1,6 +1,7 @@
 import { open, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { downloadPieceFromPeer } from '../peer/downloadPiece.js';
+import { CancelledError } from '../cancelledError.js';
 
 export class SwarmDownloadError extends Error {
   constructor(message) {
@@ -29,6 +30,7 @@ export async function downloadTorrent(torrent, peers, options) {
     connectTimeoutMs = 5000,
     maxAttemptsPerPiece = Math.max(4, peers.length * 2),
     onProgress,
+    signal,
   } = options;
 
   if (peers.length === 0) {
@@ -73,7 +75,7 @@ export async function downloadTorrent(torrent, peers, options) {
   try {
     async function worker() {
       for (;;) {
-        if (failure) return;
+        if (failure || signal?.aborted) return;
         const pieceIndex = queue.shift();
         if (pieceIndex === undefined) return;
 
@@ -88,6 +90,7 @@ export async function downloadTorrent(torrent, peers, options) {
             pieceHash: torrent.pieces[pieceIndex],
             connectTimeoutMs,
             overallTimeoutMs: pieceTimeoutMs,
+            signal,
           });
           for (const write of piecesToFileWrites(fileLayout, offset, buffer)) {
             const handle = await handleFor(write.file);
@@ -96,6 +99,9 @@ export async function downloadTorrent(torrent, peers, options) {
           completed += 1;
           onProgress?.({ completed, total: numPieces, pieceIndex });
         } catch (err) {
+          if (err instanceof CancelledError) {
+            return; // cancelled, not failed -- don't requeue, don't count as an attempt
+          }
           attempts[pieceIndex] += 1;
           if (attempts[pieceIndex] >= maxAttemptsPerPiece) {
             failure = new SwarmDownloadError(
@@ -111,6 +117,9 @@ export async function downloadTorrent(torrent, peers, options) {
     const workerCount = Math.max(1, Math.min(concurrency, numPieces));
     await Promise.all(Array.from({ length: workerCount }, worker));
 
+    if (signal?.aborted) {
+      throw new CancelledError();
+    }
     if (failure) {
       throw failure;
     }

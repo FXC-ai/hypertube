@@ -34,6 +34,9 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 | `test/peer/downloadPiece.integration.test.js` | **Réseau réel** : télécharge une vraie pièce de 128 Ko depuis un vrai pair du swarm Sintel et vérifie son SHA-1. Essaie ~30 pairs en parallèle (`Promise.any`) et garde le premier qui répond — la plupart des pairs annoncés par un tracker sont injoignables à un instant donné (NAT/hors ligne), c'est normal en P2P |
 | `test/swarm/downloadTorrent.test.js` | Orchestration multi-pairs (`src/swarm/downloadTorrent.js`) contre des **faux pairs TCP locaux** : plusieurs pairs en parallèle, retry sur un autre pair si l'un échoue, pairs qui refusent la connexion ignorés, échec définitif si personne ne sert jamais une pièce, callback de progression — et surtout **pièce qui chevauche deux fichiers** dans un torrent multi-fichiers |
 | `test/swarm/downloadTorrent.integration.test.js` | **Réseau réel, téléchargement complet** : télécharge l'intégralité du torrent Sintel (~129 Mo, 987 pièces, 11 fichiers) via le vrai swarm, vérifie la taille finale et que `Sintel.mp4` est ouvrable par `ffprobe` avec un vrai flux vidéo. ~47s en pratique |
+| `test/server/downloadManager.test.js` | Cycle de vie d'un job (`src/server/downloadManager.js`) : succès, échec de parsing/annonce/téléchargement, annulation, id inconnu — dépendances (parse/announce/download) injectées, pas de réseau réel |
+| `test/server/httpServer.test.js` | Contrat HTTP (`src/server/httpServer.js`) : codes de statut, routing, décodage `torrentBase64`, JSON invalide — manager injecté (faux), pas de vrai téléchargement |
+| `test/server/httpServer.integration.test.js` | **Réseau réel, bout en bout via HTTP** : POST démarre un vrai téléchargement (fetch du `.torrent` Sintel depuis webtorrent.io, annonce tracker réelle), poll jusqu'à observer une vraie progression, DELETE annule, vérifie qu'aucune pièce ne progresse plus ensuite. ~19s en pratique |
 
 ## Pour le pipeline encodage/transcodage/streaming
 
@@ -138,6 +141,34 @@ Le téléchargement complet et réel du torrent Sintel (129 Mo, 987 pièces, 11 
 ~47s en pratique dans `downloadTorrent.integration.test.js`, `Sintel.mp4` extrait
 correctement et validé par `ffprobe`.
 
+## Enveloppe HTTP start/status/cancel (#11)
+
+Le service s'expose en HTTP via `node:http` (`src/server/httpServer.js`, zéro framework) :
+lancer `npm start` (ou `node src/index.js`, port `7881` par défaut, override via `PORT`).
+
+| Route | Rôle |
+|---|---|
+| `POST /downloads` | Démarre un téléchargement en arrière-plan. Corps JSON : `{ "outputDir": "...", "torrentUrl": "https://..." }` (le service télécharge le `.torrent` lui-même) **ou** `{ "outputDir": "...", "torrentBase64": "..." }` (octets du `.torrent` envoyés directement). Répond `202` + `{ "id": "..." }` immédiatement — le parsing, l'annonce tracker et le téléchargement se font après, en tâche de fond |
+| `GET /downloads/:id` | `{ "status": "downloading"\|"completed"\|"failed"\|"cancelled", "downloadedBytes", "totalBytes", "piecesCompleted", "totalPieces", "error" }`. `404` si l'id est inconnu |
+| `DELETE /downloads/:id` | Déclenche l'arrêt (`AbortController`) et renvoie le statut courant — qui peut encore afficher `downloading` un court instant, le temps que les opérations en vol se terminent ; `GET` ensuite confirme `cancelled`. `404` si l'id est inconnu |
+
+`src/server/downloadManager.js` fait le lien entre les 3 couches déjà construites : parse le
+`.torrent` (`torrentFile.js`) → résout les trackers (`flattenTrackerUrls` + `announce()`) →
+lance `downloadTorrent()`. Toutes les dépendances réelles (`parseTorrentFileFn`,
+`announceFn`, `downloadTorrentFn`, `fetchImpl`) sont injectables, même pattern que le reste
+du repo — les tests unitaires du manager et du serveur HTTP n'ouvrent aucune connexion
+réseau, seul `httpServer.integration.test.js` le fait, en vrai, de bout en bout.
+
+**Annulation propagée sur toute la chaîne** (nécessaire pour que `DELETE` arrête vraiment
+quelque chose) : `downloadPieceFromPeer` (#9) et `downloadTorrent` (#10) n'avaient aucun
+mécanisme d'arrêt avant #11 — ajouté a posteriori via un `AbortSignal` standard traversant
+les trois couches, avec une nouvelle classe partagée `CancelledError`
+(`src/cancelledError.js`) pour que le manager distingue « annulé » de « a échoué pour de
+vrai » sans avoir à inspecter des messages d'erreur.
+
+Aucune connexion base de données nulle part dans ce service (exigence de l'issue #6) — il
+ne connaît même pas l'existence de SQLite.
+
 ## Fixtures
 
 - `test/fixtures/1953_movie_trailers_starting_monday.archive.org.torrent` — vrai `.torrent`
@@ -207,6 +238,17 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
   d'abord" des vrais clients BitTorrent (qui maximise la disponibilité globale du swarm).
   Suffisant pour un swarm de la taille testée ici, mais à reconsidérer si la volumétrie
   réelle du produit final le justifie.
+- **Plusieurs jobs simultanés dans `downloadManager`** — testé aujourd'hui un à la fois ;
+  vérifier qu'un `outputDir` par job reste isolé et qu'annuler l'un n'affecte pas les
+  autres serait rassurant avant que #13 déclenche plusieurs films en parallèle.
+- **Persistance des jobs** — `downloadManager` garde tout en mémoire (`Map`) ; un redémarrage
+  du conteneur perd l'état de tout téléchargement en cours. Pas un problème pour #11 en
+  tant que tel, mais #13/#14 (Laravel qui interroge `GET /downloads/:id`) devront décider
+  quoi faire si le Client Torrent redémarre pendant qu'un film télécharge.
+- **`torrentUrl` invalide ou inaccessible** — `httpServer.test.js` couvre le contrat HTTP
+  avec des fakes, mais pas le vrai comportement de `fetchImpl` contre une URL qui 404 ou
+  timeout (couvert indirectement par `downloadManager.test.js` avec un fake, jamais en
+  réel).
 
 ### Tests à supprimer/réviser lors des prochaines évolutions
 
