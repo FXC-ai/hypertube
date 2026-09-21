@@ -49,11 +49,16 @@ const conversionStatusLabel: Record<ConversionStatus, string> = {
     failed: 'Preparation failed',
 };
 
-function HlsPlayer({ src, preferredlanguage }: { src: string, preferredlanguage: string }) {
-
+function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage: string }) {
+    console.log('elshgkjfdshgkjhfdgkjhdkgjdskfhgskdfgkfdsgkdsjgksdjgk');
     const videoRef = useRef<HTMLVideoElement>(null);
 
-    const languages: { [language: string]: string } = { "french": "fr", "german": "de", "english": "en", "italian": "it" }
+    const languages: { [language: string]: string } = {
+        french: 'fr',
+        german: 'de',
+        english: 'en',
+        italian: 'it',
+    };
 
     useEffect(() => {
         const video = videoRef.current;
@@ -62,7 +67,10 @@ function HlsPlayer({ src, preferredlanguage }: { src: string, preferredlanguage:
             return;
         }
 
-        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        const supportsMediaSource = Hls.isSupported();
+        const supportsNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
+
+        if (!supportsMediaSource && supportsNativeHls) {
             video.src = src;
 
             return () => {
@@ -71,73 +79,90 @@ function HlsPlayer({ src, preferredlanguage }: { src: string, preferredlanguage:
             };
         }
 
-        if (!Hls.isSupported()) {
+        if (!supportsMediaSource) {
+            console.error('HLS is not supported by this browser');
             return;
         }
 
-        const hls = new Hls({
-            subtitlePreference: {
-                lang: languages[preferredlanguage],
-            },
+        const hls = new Hls(
+            {
+                autoStartLoad: false,
+                subtitlePreference: {
+                    lang: languages[preferredlanguage],
+                },
+                lowLatencyMode: false,
+                startPosition: 0,
+            }
+        );
+
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+            hls.loadSource(src);
+            hls.startLoad(0);
         });
-        hls.loadSource(src);
-        hls.attachMedia(video);
 
-        /*         hls.on(Hls.Events.MANIFEST_PARSED, function (_, data) {
-        
-                    const tracks = data.subtitleTracks;
-                    console.log("SUBTITLE TRACKS = ", tracks);
-        
-                    const defaultTrackIndex = tracks.findIndex(track => track.lang === 'fr');
-                    console.log("SUBTITLE TRACKS = ", defaultTrackIndex);
-        
-                    if (defaultTrackIndex !== -1) {
-                        console.log("je rentre dans la condition")
-                        hls.subtitleTrack = 1;
-                    }
-                    console.log(hls.subtitleTrack)
-                }); */
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+            console.log('HLS media attached');
+        });
 
-        // 1. Attendre que les pistes de sous-titres soient chargées
-        /*         hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, function (event, data) {
-        
-                    // data.subtitleTracks contient la liste de tous les sous-titres disponibles
-                    const tracks = data.subtitleTracks;
-        
-                    console.log("SUBTITLE TRACKS = ", tracks);
-                    // 2. Trouver l'index de la langue souhaitée (ex: 'fr' pour le Français)
-                    const defaultTrackIndex = tracks.findIndex(track => track.lang === 'fr');
-        
-                    console.log("SUBTITLE TRACKS = ", defaultTrackIndex);
-        
-        
-                    console.log("defaulttrackIndex = ", defaultTrackIndex);
-                    // 3. Activer la piste si elle existe
-                    if (defaultTrackIndex !== -1) {
-                        hls.subtitleDisplay = true;
-                        hls.subtitleTrack = defaultTrackIndex;
-                    }
-                    console.log("defaulttrackIndex = ", hls.subtitleTrack);
-        
-        
-                }); */
+        hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
+            console.log('HLS manifest parsed', data);
+        });
 
+        hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+            console.log('HLS playlist loaded', {
+                live: data.details.live,
+                endSN: data.details.endSN,
+                totalduration: data.details.totalduration,
+                hasEndList: data.details.live === false,
+            });
+        });
+
+        hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+            console.log('HLS fragment loaded', data.frag.sn);
+        });
 
         hls.on(Hls.Events.ERROR, (_event, data) => {
             console.error('HLS error', {
                 type: data.type,
                 details: data.details,
                 fatal: data.fatal,
-                reason: data.reason,
-                response: data.response,
                 url: data.url,
+                status: data.response?.code,
+                text: data.response?.text,
+            });
+
+            if (data.fatal && data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                hls.recoverMediaError();
+            }
+        });
+
+        hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+            console.log('Playlist HLS chargée', {
+                live: data.details.live,
+                segments: data.details.fragments.length,
+                firstSegment: data.details.fragments[0]?.sn,
+                lastSegment: data.details.fragments.at(-1)?.sn,
+                duration: data.details.totalduration,
             });
         });
+
+        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => {
+            const subtitleIndex = hls.subtitleTracks.findIndex(
+                (track) => track.lang === languages[preferredlanguage],
+            );
+
+            if (subtitleIndex !== -1) {
+                hls.subtitleDisplay = true;
+                hls.subtitleTrack = subtitleIndex;
+            }
+        });
+
+        hls.attachMedia(video);
 
         return () => {
             hls.destroy();
         };
-    }, [src]);
+    }, [preferredlanguage, src]);
 
     return (
         <video
@@ -158,10 +183,13 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
     const statusLabel = conversionStatusLabel[moviePageData.conversion_status];
 
     useEffect(() => {
-        if (moviePageData.playable) {
+        if (
+            moviePageData.conversion_status === 'converted' ||
+            moviePageData.conversion_status === 'failed'
+        ) {
             stop();
         }
-    }, [moviePageData.playable, stop]);
+    }, [moviePageData.conversion_status, stop]);
 
     const startConversion = (): void => {
         conversionForm.post(conversionStore.url(moviePageData.id), {
@@ -172,7 +200,7 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
     return (
         <>
             <Head title={moviePageData.title} />
-            <main className="min-h-full bg-background">
+            <div className="w-full bg-background">
                 <section className="border-b px-4 py-8 sm:px-6 lg:px-8">
                     <div className="mx-auto max-w-4xl">
                         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -192,7 +220,9 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
                                         moviePageData.conversion_attempt,
                                 })}
 
-                                preferredlanguage={moviePageData.preferredlanguage}
+                                preferredlanguage={
+                                    moviePageData.preferredlanguage
+                                }
                             />
                         ) : (
                             <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
@@ -315,10 +345,8 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
                             </div>
                         </CardContent>
                     </Card>
-
-
                 </div>
-            </main>
+            </div>
         </>
     );
 }
