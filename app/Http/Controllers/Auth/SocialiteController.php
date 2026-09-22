@@ -195,7 +195,6 @@ class SocialiteController extends Controller
             ]);
         }
 
-
         $user = $this->findOrCreateUser($provider, $socialUser);
 
         Auth::login($user, remember: true);

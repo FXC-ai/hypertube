@@ -15,11 +15,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
 
         User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+            'username' => 'bsolo',
+            'firstname' => 'Ben',
+            'lastname' => 'Solo',
+            'email' => 'ben.solo@starwars.com',
+            'password' => 'poirepoire',
         ]);
+
+        $this->call([MovieSeeder::class, UserSeeder::class]);
     }
 }

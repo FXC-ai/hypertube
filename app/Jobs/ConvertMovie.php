@@ -137,14 +137,20 @@ final class ConvertMovie implements ShouldQueue
 
             Log::channel("my_debug")->debug("ConverMovie", ["handle ended, la conversion est terminée."]);
         } catch (Throwable $exception) {
-            Log::channel("my_debug")->debug("ConvertMovie", ["exception : ", $exception]);
+            Log::channel("my_debug")->error("ConvertMovie", ["exception : ", $exception]);
 
+            Movie::query()
+                ->whereKey($movie->id)
+                ->where('conversion_attempt', $attempt)
+                ->update(['conversion_status' => ConversionStatus::Failed->value]);
 
             Log::error('Échec de conversion HLS.', [
                 'movie_id' => $movie->id,
                 'attempt' => $attempt,
                 'exception' => $exception,
             ]);
+
+            throw ($exception);
         }
     }
 }

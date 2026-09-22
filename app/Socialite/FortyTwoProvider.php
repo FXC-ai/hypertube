@@ -17,7 +17,7 @@ class FortyTwoProvider extends AbstractProvider implements ProviderInterface
 
     protected function getAuthUrl($state)
     {
-        Log::channel('my_debug')->debug('getAuthUrl state = ', [$state]);
+        Log::channel('my_debug')->debug('getAuthUrl state = ', [$this->buildAuthUrlFromBase('https://api.intra.42.fr/oauth/authorize', $state)]);
 
         return $this->buildAuthUrlFromBase('https://api.intra.42.fr/oauth/authorize', $state);
     }

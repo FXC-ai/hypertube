@@ -32,7 +32,11 @@ final class MovieConversionController extends Controller
                 'conversion_completed_at' => null,
             ]);
 
+        Log::channel("my_debug")->debug("MovieConversionController : ", ["method" => "store", "queued = " => $queued]);
+
         if ($queued === 1) {
+            Log::channel("my_debug")->debug("MovieConversionController : ", ["method" => "store", "queueud = " => $queued]);
+
             ConvertMovie::dispatch($movie->id)->afterCommit();
         }
 

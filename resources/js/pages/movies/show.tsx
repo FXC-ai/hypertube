@@ -50,7 +50,7 @@ const conversionStatusLabel: Record<ConversionStatus, string> = {
 };
 
 function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage: string }) {
-    console.log('elshgkjfdshgkjhfdgkjhdkgjdskfhgskdfgkfdsgkdsjgksdjgk');
+
     const videoRef = useRef<HTMLVideoElement>(null);
 
     const languages: { [language: string]: string } = {
@@ -175,6 +175,7 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
 }
 
 export default function MovieShow({ moviePageData }: MovieShowProps) {
+
     const conversionForm = useForm({});
     const { stop } = usePoll(2000, {});
     const isPreparing = ['queued', 'converting'].includes(
@@ -184,19 +185,16 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
 
     useEffect(() => {
         if (
-            moviePageData.conversion_status === 'converted' ||
+            moviePageData.conversion_status === 'playable' ||
             moviePageData.conversion_status === 'failed'
         ) {
             stop();
         }
     }, [moviePageData.conversion_status, stop]);
 
-    const startConversion = (): void => {
-        conversionForm.post(conversionStore.url(moviePageData.id), {
-            preserveScroll: true,
-        });
-    };
+    const startConversion = (): void => { conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true }); };
 
+    console.log("moviePageData.conversion_attempt = ", moviePageData.conversion_attempt);
     return (
         <>
             <Head title={moviePageData.title} />
@@ -211,40 +209,39 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
 
                 <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
                     <Card className="overflow-hidden border-border/60 bg-black p-0 shadow-xl">
-                        {moviePageData.playable &&
-                            moviePageData.conversion_attempt !== null ? (
-                            <HlsPlayer
-                                src={manifest.url({
-                                    movie: moviePageData.id,
-                                    conversion_attempt:
-                                        moviePageData.conversion_attempt,
-                                })}
+                        {moviePageData.playable && moviePageData.conversion_attempt !== null ?
+                            (
+                                <HlsPlayer
+                                    /*                                 src={manifest.url({
+                                                                        movie: moviePageData.id,
+                                                                        conversion_attempt: moviePageData.conversion_attempt
+                                                                    })} */
 
-                                preferredlanguage={
-                                    moviePageData.preferredlanguage
-                                }
-                            />
-                        ) : (
-                            <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
-                                {isPreparing ? (
-                                    <LoaderCircle className="size-8 animate-spin" />
-                                ) : (
-                                    <Film className="size-8" />
-                                )}
-                                <div>
-                                    <p className="font-medium text-foreground">
-                                        {isPreparing
-                                            ? 'The video is being prepared'
-                                            : 'The video is not available yet'}
-                                    </p>
-                                    <p className="mt-1 text-sm">
-                                        {isPreparing
-                                            ? 'This page will update automatically.'
-                                            : 'Prepare the video to start watching.'}
-                                    </p>
+
+                                    src={`http://hypertube.test/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
+                                    preferredlanguage={moviePageData.preferredlanguage}
+                                />
+                            ) : (
+                                <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
+                                    {isPreparing ? (
+                                        <LoaderCircle className="size-8 animate-spin" />
+                                    ) : (
+                                        <Film className="size-8" />
+                                    )}
+                                    <div>
+                                        <p className="font-medium text-foreground">
+                                            {isPreparing
+                                                ? 'The video is being prepared'
+                                                : 'The video is not available yet'}
+                                        </p>
+                                        <p className="mt-1 text-sm">
+                                            {isPreparing
+                                                ? 'This page will update automatically.'
+                                                : 'Prepare the video to start watching.'}
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
                     </Card>
 
                     <Card className="border-border/60 shadow-sm">
@@ -286,25 +283,16 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
                                     {moviePageData.conversion_error}
                                 </p>
                             )}
-                            {(moviePageData.conversion_status === 'pending' ||
-                                moviePageData.conversion_status ===
-                                'failed') && (
+                            {(moviePageData.conversion_status === 'pending' || moviePageData.conversion_status === 'failed') &&
+                                (
                                     <Button
                                         type="button"
                                         className="w-full"
                                         disabled={conversionForm.processing}
                                         onClick={startConversion}
                                     >
-                                        {moviePageData.conversion_status ===
-                                            'failed' ? (
-                                            <RotateCcw />
-                                        ) : (
-                                            <Play />
-                                        )}
-                                        {moviePageData.conversion_status ===
-                                            'failed'
-                                            ? 'Retry'
-                                            : 'Prepare video'}
+                                        {moviePageData.conversion_status === 'failed' ? (<RotateCcw />) : (<Play />)}
+                                        {moviePageData.conversion_status === 'failed' ? 'Retry' : 'Prepare video'}
                                     </Button>
                                 )}
                         </CardContent>
