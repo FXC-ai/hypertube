@@ -44,18 +44,6 @@ test('the track selector keeps the video, preferred audio, and supported subtitl
         ))->toBe(['eng', 'fra', 'deu', 'ita']);
 });
 
-
-test('the track selector keeps the video, preferred audio, and supported subtitles', function () {
-    $tracks = (new TrackSelector)->select(mediaInfoFixture());
-
-    expect($tracks->video->index)->toBe(0)
-        ->and($tracks->audio?->index)->toBe(1)
-        ->and(array_map(
-            fn(MediaStream $subtitle): string => $subtitle->language,
-            $tracks->subtitles,
-        ))->toBe(['eng', 'fra', 'deu', 'ita']);
-});
-
 test('the track selector rejects media without a video track', function () {
     $media = new MediaInfo([new MediaStream(1, 'audio', 'aac', 'eng', '', [])]);
 
