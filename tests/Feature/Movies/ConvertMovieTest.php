@@ -15,10 +15,6 @@ use App\Services\Media\HlsMasterPlaylistBuilder;
 use App\Services\Media\HlsConverter;
 use Illuminate\Support\Facades\Storage;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-
-
 test('a pending movie is queued and a conversion job is dispatched', function () {
     Queue::fake();
 
