@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/card';
 import { show } from '@/routes/movies';
 import { store as conversionStore } from '@/routes/movies/conversion';
-import { manifest } from '@/routes/movies/hls';
 
 type ConversionStatus =
     'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
@@ -72,7 +71,6 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
 
         if (!supportsMediaSource && supportsNativeHls) {
             video.src = src;
-
             return () => {
                 video.removeAttribute('src');
                 video.load();
@@ -100,20 +98,20 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
             hls.startLoad(0);
         });
 
-        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-            console.log('HLS media attached');
-        });
-
         hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
             console.log('HLS manifest parsed', data);
         });
 
         hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-            console.log('HLS playlist loaded', {
+            console.log('Playlist HLS chargée', {
                 live: data.details.live,
+                segments: data.details.fragments.length,
+                firstSegment: data.details.fragments[0]?.sn,
+                lastSegment: data.details.fragments.at(-1)?.sn,
+                duration: data.details.totalduration,
                 endSN: data.details.endSN,
                 totalduration: data.details.totalduration,
-                hasEndList: data.details.live === false,
+                hasEndList: data.details.live === false
             });
         });
 
@@ -134,16 +132,6 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
             if (data.fatal && data.type === Hls.ErrorTypes.MEDIA_ERROR) {
                 hls.recoverMediaError();
             }
-        });
-
-        hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-            console.log('Playlist HLS chargée', {
-                live: data.details.live,
-                segments: data.details.fragments.length,
-                firstSegment: data.details.fragments[0]?.sn,
-                lastSegment: data.details.fragments.at(-1)?.sn,
-                duration: data.details.totalduration,
-            });
         });
 
         hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () => {
@@ -218,7 +206,7 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
                                                                     })} */
 
 
-                                    src={`http://hypertube.test/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
+                                    src={`/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
                                     preferredlanguage={moviePageData.preferredlanguage}
                                 />
                             ) : (

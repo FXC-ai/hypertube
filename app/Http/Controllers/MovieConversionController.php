@@ -19,18 +19,18 @@ final class MovieConversionController extends Controller
 
         $queued = Movie::query()
             ->whereKey($movie->id)
-            ->whereIn('conversion_status', [
-                ConversionStatus::Pending->value,
-                ConversionStatus::Failed->value,
-            ])
-            ->update([
-                'conversion_status' => ConversionStatus::Queued->value,
-                'conversion_attempt' => null,
-                'conversion_error' => null,
-                'conversion_started_at' => null,
-                'conversion_playable_at' => null,
-                'conversion_completed_at' => null,
-            ]);
+            ->whereIn('conversion_status', [ConversionStatus::Pending->value, ConversionStatus::Failed->value,])
+            ->update(
+                [
+                    'conversion_status' => ConversionStatus::Queued->value,
+                    'conversion_attempt' => null,
+                    'conversion_error' => null,
+                    'conversion_started_at' => null,
+                    'conversion_playable_at' => null,
+                    'conversion_completed_at' => null,
+                ]
+
+            );
 
         Log::channel("my_debug")->debug("MovieConversionController : ", ["method" => "store", "queued = " => $queued]);
 

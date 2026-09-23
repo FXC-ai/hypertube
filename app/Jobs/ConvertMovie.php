@@ -68,13 +68,13 @@ final class ConvertMovie implements ShouldQueue
         try {
 
             if (preg_match('/[\\\\\/]/', $movie->filename) === 1 || $movie->filename !== basename($movie->filename)) {
-                throw new \RuntimeException('Nom de fichier source invalide.');
+                throw new \RuntimeException('Invalid file name.');
             }
 
             $inputPath = Storage::disk('public')->path("movies/{$movie->id}/{$movie->filename}");
             $outputDirectory = Storage::disk('public')->path("movies/{$movie->id}/hls/{$attempt}");
 
-            if (! is_dir($outputDirectory) && ! mkdir($outputDirectory, 0755, true) && ! is_dir($outputDirectory)) {
+            if (! is_dir($outputDirectory) && ! mkdir($outputDirectory, 0755, true)) {
                 throw new \RuntimeException('Can not create hls directory.');
             }
 
@@ -123,7 +123,8 @@ final class ConvertMovie implements ShouldQueue
             $publishWhenReady();
 
             if (! $published) {
-                throw new \RuntimeException('FFmpeg a terminé sans produire de flux HLS lisible.');
+                throw new \RuntimeException('FFmpeg finished without producing avaible hls segment
+                .');
             }
 
             Movie::query()
