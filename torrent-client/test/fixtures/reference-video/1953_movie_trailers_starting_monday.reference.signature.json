@@ -1,0 +1,12 @@
+{
+  "$comment": "Signature de reference du fichier video obtenu en HTTP direct (pas via BitTorrent). A comparer avec la signature du meme fichier une fois telecharge par le Client Torrent (#9/#10) pour valider que les deux chemins produisent des octets identiques.",
+  "source": "https://archive.org/download/1953_Movie_Trailers_Starting_Monday/1953_Movie_Trailers_Starting_Monday_00_35_40_28_3mb.mp4",
+  "torrentInfoHash": "2e25fe743c733513a548bfdf8db48fe8f2c5f590",
+  "downloadedVia": "http-direct",
+  "signature": {
+    "size": 2384112,
+    "sha256": "c7fbf329df5d5c6ce2db18b41c1152a4706427fc2f5933e070420bbb974818f1",
+    "firstBytesHex": "00000018667479706d703432000000016d7034326d703431000012a06d6f6f760000006c6d76686400000000cbb5db30cbb5db3100000bb500005cf800010000",
+    "format": "mp4"
+  }
+}

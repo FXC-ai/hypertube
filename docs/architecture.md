@@ -38,7 +38,7 @@ flowchart TB
     classDef target fill:#fef3c7,stroke:#d97706,stroke-dasharray: 4 3;
 ```
 
-Un seul conteneur fait tourner PHP (serveur intégré, pas de nginx/php-fpm actif malgré la présence de `docker/nginx/conf.d/default.conf` — ce fichier n'est référencé par aucun service dans `docker-compose.yml` actuellement), le worker de queue et Vite en parallèle via `composer dev` (`concurrently`). SQLite et le stockage des films sont sur des volumes Docker nommés (`laravel-storage`, `laravel-bootstrap`).
+Un seul conteneur fait tourner PHP (serveur intégré, pas de nginx/php-fpm actif malgré la présence de `docker/nginx/conf.d/default.conf` - ce fichier n'est référencé par aucun service dans `docker-compose.yml` actuellement), le worker de queue et Vite en parallèle via `composer dev` (`concurrently`). SQLite et le stockage des films sont sur des volumes Docker nommés (`laravel-storage`, `laravel-bootstrap`).
 
 ## Pipeline de conversion vidéo (existant)
 
@@ -75,7 +75,7 @@ sequenceDiagram
     MC-->>U: playlist HLS (streaming pendant que la conversion continue)
 ```
 
-Le point clé déjà en place : `HlsReadinessChecker` + `HlsMasterPlaylistBuilder` permettent de publier une playlist HLS lisible **avant** la fin complète de la conversion — la lecture progressive fonctionne. Ce que `ConvertMovie` suppose encore : le fichier source (`movies/{id}/{filename}`) est **déjà entièrement présent** sur disque au moment du dispatch ; rien ne le nourrit pendant un téléchargement en cours.
+Le point clé déjà en place : `HlsReadinessChecker` + `HlsMasterPlaylistBuilder` permettent de publier une playlist HLS lisible **avant** la fin complète de la conversion - la lecture progressive fonctionne. Ce que `ConvertMovie` suppose encore : le fichier source (`movies/{id}/{filename}`) est **déjà entièrement présent** sur disque au moment du dispatch ; rien ne le nourrit pendant un téléchargement en cours.
 
 ## Authentification
 
@@ -112,7 +112,7 @@ flowchart TB
     end
 
     SharedFS[("Filesystem partagé\nmovies/{id}/{filename}")]
-    SQLite[("SQLite — écrivain unique")]
+    SQLite[("SQLite - écrivain unique")]
 
     Sources -->|Source Reference stable| Laravel
     Laravel -->|POST start| TC
@@ -129,10 +129,10 @@ flowchart TB
 
 Décisions actées (voir [ADR-0005](adr/0005-oauth2-passport-for-rest-api.md) et les issues [#6](https://github.com/FXC-ai/hypertube/issues/6)–[#18](https://github.com/FXC-ai/hypertube/issues/18)) :
 
-- Le Client Torrent est un service HTTP **séparé**, dans son propre conteneur, qui n'écrit jamais directement en base — seul Laravel lit/écrit en SQLite.
-- Corrélation `Movie` ↔ `Source` via une **Source Reference** stable (ex. l'`identifier` archive.org), jamais un info-hash ou magnet link — ceux-ci changent quand une source régénère son torrent.
+- Le Client Torrent est un service HTTP **séparé**, dans son propre conteneur, qui n'écrit jamais directement en base - seul Laravel lit/écrit en SQLite.
+- Corrélation `Movie` ↔ `Source` via une **Source Reference** stable (ex. l'`identifier` archive.org), jamais un info-hash ou magnet link - ceux-ci changent quand une source régénère son torrent.
 - `archive.org` ne seed pas lui-même en pair-à-pair : le repli web-seeding (BEP19) est le chemin principal pour cette source, pas un simple filet de sécurité.
-- Le pont de conversion déclenche `ConvertMovie` sur un seuil de progression (interrogé via l'API `status` du Client Torrent), `ffmpeg` lisant directement le fichier partagé pendant qu'il grossit — risque connu et non résolu : `moov atom`/`Cues` parfois en fin de fichier, à valider tôt.
+- Le pont de conversion déclenche `ConvertMovie` sur un seuil de progression (interrogé via l'API `status` du Client Torrent), `ffmpeg` lisant directement le fichier partagé pendant qu'il grossit - risque connu et non résolu : `moov atom`/`Cues` parfois en fin de fichier, à valider tôt.
 
 ## Modules principaux (état actuel)
 
@@ -148,8 +148,8 @@ Décisions actées (voir [ADR-0005](adr/0005-oauth2-passport-for-rest-api.md) et
 
 ## Ce qui n'existe pas encore
 
-- Client Torrent (aucun code — protocole BitTorrent, BEP19, API HTTP)
+- Client Torrent (aucun code - protocole BitTorrent, BEP19, API HTTP)
 - Recherche/scraping des sources externes (archive.org, publicdomaintorrents.info)
-- Commentaires (modèle, endpoints — [issue #3](https://github.com/FXC-ai/hypertube/issues/3))
-- API REST OAuth2 (Passport — [issue #5](https://github.com/FXC-ai/hypertube/issues/5))
+- Commentaires (modèle, endpoints - [issue #3](https://github.com/FXC-ai/hypertube/issues/3))
+- API REST OAuth2 (Passport - [issue #5](https://github.com/FXC-ai/hypertube/issues/5))
 - Nettoyage automatique des films non visionnés depuis un mois
