@@ -1,13 +1,12 @@
 <?php
 
-use App\Http\Controllers\Settings\ProfilePictureController;
-use App\Http\Controllers\UserController;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\SocialiteController;
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\MovieController;
 use App\Http\Controllers\MovieConversionController;
-
+use App\Http\Controllers\Settings\ProfilePictureController;
+use App\Http\Controllers\UserController;
+use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
 
@@ -26,6 +25,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::post('/movies/{movie}/conversion', [MovieConversionController::class, 'store'])->name('movies.conversion.store');
     Route::get('/movies/{movie}/conversion', [MovieConversionController::class, 'show'])->name('movies.conversion.show');
+
+    Route::get('/movies/{movie}/comments', [CommentController::class, 'index'])->name('movies.comments.index');
+    Route::post('/movies/{movie}/comments', [CommentController::class, 'store'])->name('movies.comments.store');
+
+    Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
 });
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';
