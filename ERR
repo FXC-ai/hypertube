@@ -1,4 +1,1439 @@
 resume 01a0c4bf-07cd-7960-9eec-803c571bef15
 
+codex resume 01a0cdb7-4075-7583-b6d1-0a1e9f10f965 de
 
 http://hypertube.test/auth/fortytwo/callback?code=5a2c34c77503b28097ae9c38a912b90bc31206565e6ab044e98d1bb2f28bf535&state=5OAaKKRcjgiBLG57rHzxqMK0OnrNAe2CAJ5iDPZQ
+
+
+ ## Architecture recommandée pour Hypertube
+
+  Pour commencer, je partirais sur ceci :
+
+  Internet
+     │
+     ▼
+  [Nginx]
+     │
+     ├── fichiers statiques / HLS / vidéos converties
+     │
+     └── requêtes PHP
+             │
+             ▼
+        [PHP-FPM Laravel]
+             │
+             ├── SQLite
+             ├── fichiers média
+             └── jobs en attente
+                      │
+                      ▼
+                [Worker Laravel]
+                queue:work + FFmpeg
+
+  Conteneurs nécessaires :
+
+  1. nginx
+  2. app avec PHP-FPM et Laravel
+  3. worker avec le même code Laravel et php artisan queue:work
+
+  Optionnellement :
+
+  4. scheduler si tu utilises php artisan schedule:work
+  5. redis plus tard, si la charge le justifie
+
+  Il n’y a pas besoin de conteneur frontend.
+
+  ## À quoi sert PHP-FPM ?
+
+  PHP-FPM est le processus qui exécute PHP en permanence.
+
+  Nginx sait très bien :
+
+  - servir des fichiers comme app.js, style.css, images ou vidéos ;
+  - gérer les connexions HTTP ;
+  - envoyer des fichiers efficacement.
+
+  Mais Nginx ne sait pas exécuter Laravel. Lorsqu’une requête concerne /films, /login ou une autre route Laravel, Nginx la transmet à
+  PHP-FPM.
+
+  Le fonctionnement est donc :
+
+  Navigateur
+     │
+     ▼
+  Nginx : "Cette requête concerne Laravel"
+     │
+     ▼
+  PHP-FPM : exécute public/index.php
+     │
+     ▼
+  Laravel répond
+
+  PHP-FPM ne sert pas directement les fichiers et ne remplace pas Nginx. Les deux ont des rôles complémentaires.
+
+  ## Le frontend ne doit pas être un conteneur séparé
+
+  Ton application utilise Laravel avec Inertia et React. Le frontend React n’est pas une application indépendante comme un frontend
+  React séparé avec une API REST.
+
+  En production :
+
+  npm run build
+
+  compile React, TypeScript, Tailwind et les fichiers Inertia dans public/build.
+
+  Ensuite, Nginx sert ces fichiers statiques, tandis que Laravel génère les pages Inertia et les données.
+
+  Donc en production :
+
+  Navigateur → Nginx → Laravel/PHP-FPM
+                      └── public/build/app.js
+
+  Il n’y a pas de serveur Node permanent.
+
+  ### Différence entre npm run dev et Vite
+
+  npm run dev lance le serveur de développement Vite. Il fournit notamment :
+
+  - le Hot Module Replacement ;
+  - la compilation à la volée ;
+  - des messages d’erreur pratiques ;
+  - le rechargement automatique du navigateur.
+
+  C’est utile uniquement pendant le développement.
+
+  En production, on utilise :
+
+  npm run build
+
+  Vite produit des fichiers statiques versionnés. Le serveur Vite n’est ensuite plus nécessaire.
+
+  Dans ton projet, le script composer dev lance actuellement :
+
+  - Laravel ;
+  - la queue ;
+  - Vite.
+
+  C’est une configuration de développement, pas une architecture de production.
+
+  ## Et Wayfinder ?
+
+  Wayfinder ne crée pas une connexion réseau entre deux conteneurs.
+
+  Wayfinder génère du code TypeScript correspondant aux routes Laravel, par exemple des fonctions permettant d’appeler correctement
+  une route ou un contrôleur.
+
+  La génération se fait pendant le build frontend :
+
+  Routes Laravel
+        │
+        ▼
+  Wayfinder génère du TypeScript
+        │
+        ▼
+  Vite compile le frontend
+
+  En production, Wayfinder n’a pas besoin de contacter un conteneur backend. Les fonctions générées utilisent simplement les URLs
+  normales de ton application.
+
+  Avec une architecture monolithique, frontend et backend restent naturellement servis depuis le même domaine :
+
+  https://hypertube.example
+
+  Cela évite beaucoup de problèmes de CORS, de cookies et d’authentification.
+
+  ## Le conteneur app
+
+  Ce conteneur contient :
+
+  - PHP ;
+  - PHP-FPM ;
+  - Laravel ;
+  - Composer ;
+  - FFmpeg si Laravel doit l’appeler directement ;
+  - les dépendances PHP ;
+  - le code de l’application.
+
+  Il expose généralement PHP-FPM sur le port interne 9000, mais ce port n’est pas exposé directement sur Internet.
+
+  Nginx communique avec lui sur le réseau Docker :
+
+  fastcgi_pass app:9000;
+
+  Ton Dockerfile est déjà basé sur php:8.5-fpm, donc l’intention est bonne. En revanche, ton entrypoint.sh actuel est orienté
+  développement : il lance composer dev, installe les dépendances au démarrage et démarre Vite.
+
+  En production, le conteneur app devrait plutôt lancer directement PHP-FPM.
+
+  ## Le conteneur worker
+
+  Le worker utilise généralement exactement la même image que app, mais avec une commande différente :
+
+  php artisan queue:work --tries=3 --timeout=0
+
+  Il ne reçoit pas les requêtes HTTP. Il attend les jobs Laravel et les traite en arrière-plan.
+
+  Par exemple :
+
+  Utilisateur demande une conversion
+          │
+          ▼
+  Laravel crée un job
+          │
+          ▼
+  Le worker récupère le job
+          │
+          ▼
+  FFmpeg convertit la vidéo
+
+  Le worker doit être lancé automatiquement par Docker Compose et redémarré s’il tombe.
+
+  Il n’est donc pas nécessaire de lancer manuellement php artisan queue:work en production.
+
+  ## FFmpeg : conteneur séparé ou non ?
+
+  Je ne créerais pas immédiatement un conteneur FFmpeg séparé.
+
+  Le plus simple est d’avoir FFmpeg installé dans l’image utilisée par app et worker. Le worker pourra alors appeler FFmpeg.
+
+  Tu pourrais séparer FFmpeg plus tard si :
+
+  - les conversions sont très lourdes ;
+  - tu veux plusieurs workers spécialisés ;
+  - tu veux limiter précisément les ressources CPU ;
+  - tu veux exécuter les conversions sur une machine différente.
+
+  Pour démarrer, un seul conteneur worker suffit.
+
+  ## Ton idée de Nginx pour partager le stream
+
+  L’idée est pertinente, mais il faut distinguer Nginx et FFmpeg.
+
+  Nginx ne convertit pas la vidéo et ne partage pas à lui seul un processus FFmpeg. Son rôle idéal est de servir les fichiers générés
+  par FFmpeg.
+
+  Une architecture HLS typique serait :
+
+  FFmpeg
+    │
+    ├── playlist.m3u8
+    ├── segment-001.ts
+    ├── segment-002.ts
+    └── segment-003.ts
+            │
+            ▼
+        stockage partagé
+            │
+            ▼
+            Nginx
+            │
+            ▼
+        plusieurs utilisateurs
+
+  Tous les utilisateurs demandent ensuite les mêmes fichiers HLS à Nginx.
+
+  Cela évite de lancer une conversion FFmpeg par utilisateur.
+
+  Il faut toutefois gérer la création du job pour éviter ceci :
+
+  Utilisateur A → conversion 1
+  Utilisateur B → conversion 2
+  Utilisateur C → conversion 3
+
+  Il faut identifier une conversion avec une clé stable, par exemple :
+
+  movie-{id}-{quality}
+
+  Puis vérifier si une conversion existe déjà ou est déjà en cours avant d’en lancer une nouvelle.
+
+  ## SQLite
+
+  SQLite peut fonctionner pour une première version, mais il impose quelques limites importantes :
+
+  - il faut un volume Docker persistant ;
+  - l’application ne doit pas être répliquée sur plusieurs machines ;
+  - les accès concurrents sont moins adaptés à une forte charge ;
+  - le worker et l’application doivent accéder au même fichier SQLite ;
+  - les fichiers vidéo et les segments HLS doivent également être persistants.
+
+  Avec SQLite, je limiterais donc l’architecture à une seule instance app et une ou plusieurs instances worker.
+
+  Il ne faudrait pas lancer plusieurs conteneurs Laravel indépendants avec chacun son propre volume SQLite.
+
+  ## Redis est-il nécessaire ?
+
+  Pas immédiatement.
+
+  Ton projet utilise actuellement :
+
+  QUEUE_CONNECTION=database
+  CACHE_STORE=database
+  SESSION_DRIVER=database
+
+  Cela signifie que les jobs, le cache et les sessions utilisent SQLite.
+
+  Pour un premier déploiement, tu peux garder cette configuration.
+
+  Redis devient intéressant lorsque :
+
+  - les queues deviennent nombreuses ;
+  - les conversions sont fréquentes ;
+  - le cache doit être très rapide ;
+  - plusieurs instances Laravel doivent partager cache et sessions ;
+  - tu veux surveiller et traiter les queues plus efficacement.
+
+  Une architecture future pourrait être :
+
+  Laravel ──┬── SQLite pour les données
+            ├── Redis pour queue/cache/sessions
+            └── stockage partagé pour les vidéos
+
+  Mais Redis ne résout pas le partage des fichiers vidéo. Il remplace surtout certains usages de SQLite en mémoire.
+
+  ## Architecture minimale recommandée
+
+  Pour ton premier déploiement :
+
+  nginx
+  app       PHP-FPM + Laravel
+  worker    queue:work + FFmpeg
+
+  Avec :
+
+  - SQLite dans un volume persistant ;
+  - storage/ dans un volume persistant ;
+  - le dossier contenant les conversions dans un volume persistant ;
+  - npm run build exécuté lors de la construction de l’image ;
+  - aucune instance Vite en production ;
+  - aucun conteneur frontend ;
+  - redémarrage automatique des conteneurs.
+
+  Le scheduler, si nécessaire, peut être ajouté comme quatrième conteneur :
+
+  scheduler → php artisan schedule:work
+
+  ## Ce que je changerais dans ton Docker actuel
+
+  Ton projet contient déjà une base Docker, mais elle est hybride et ressemble surtout à un environnement de développement :
+
+  - docker-compose.yml ne démarre pas Nginx ;
+  - le Dockerfile prépare PHP-FPM mais l’entrypoint lance composer dev ;
+  - Vite et Laravel dev server sont démarrés dans le conteneur ;
+  - npm install et composer install sont exécutés à chaque démarrage ;
+  - le port 5173 est exposé alors qu’il ne devrait pas l’être en production.
+
+  Pour la production, il faudrait séparer les responsabilités :
+
+  app       → php-fpm
+  worker    → queue:work
+  nginx     → HTTP et fichiers statiques
+  build     → composer install + npm run build
+
+  Le frontend et le backend ne sont donc pas séparés fonctionnellement. Ils sont simplement construits et servis dans des rôles
+  différents.
+
+  La décision importante pour toi est plutôt celle-ci :
+
+  > garder SQLite et un stockage local pour commencer, avec un seul conteneur Laravel, puis ajouter Redis et une base serveur lorsque
+  > la charge réelle le nécessitera.
+
+  C’est une architecture raisonnable pour apprendre le déploiement sans introduire immédiatement trop de services.
+______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+   ## Réponse directe : faut-il un conteneur worker ?
+
+  - En développement : pas forcément.
+  - Dans une architecture de déploiement : oui.
+
+  Le worker peut utiliser exactement la même image Docker que Laravel, mais il doit être lancé dans un conteneur séparé.
+
+  Une image est une recette :
+
+  Image Laravel
+     ├── conteneur app
+     └── conteneur worker
+
+  Les deux conteneurs contiennent le même code, mais exécutent des commandes différentes :
+
+  app    → php-fpm
+  worker → php artisan queue:work
+
+  Le worker est donc bien un conteneur supplémentaire dans l’architecture de déploiement.
+
+  # Architecture 1 : développement local avec Herd
+
+  Pour le développement, tu n’as pas besoin de Docker.
+
+  Navigateur
+      │
+      ▼
+  Herd / Nginx
+      │
+      ▼
+  Laravel / PHP
+      │
+      ├── SQLite
+      ├── fichiers vidéo
+      └── fichiers HLS
+
+  À côté, tu lances deux processus de développement :
+
+  Vite                         php artisan queue:work
+  │                            │
+  ├── compile React à la volée  └── lance FFmpeg
+  └── HMR / rechargement auto
+
+  Concrètement :
+
+  Herd
+   └── sert Laravel et les fichiers HLS
+
+  npm run dev
+   └── serveur Vite de développement
+
+  php artisan queue:work
+   └── conversion vidéo via FFmpeg
+
+  Dans cette architecture, il n’y a aucun conteneur worker. Le worker est simplement un processus lancé sur ta machine.
+
+  C’est probablement la meilleure architecture pour développer :
+
+  - Herd s’occupe de PHP et de Nginx ;
+  - Vite s’occupe du frontend en mode développement ;
+  - le worker s’exécute dans un terminal ;
+  - SQLite et les fichiers restent directement accessibles.
+
+  Ton script composer dev automatise déjà presque cette architecture en lançant Laravel, la queue et Vite en parallèle.
+
+  ## Schéma plus précis du développement
+
+  Navigateur
+      │
+      ├── requêtes Laravel ───────► Herd / PHP
+      │                                  │
+      │                                  ├── SQLite
+      │                                  └── crée un job
+      │
+      ├── fichiers JS en développement ► Vite
+      │
+      └── segments HLS ───────────► Herd / Nginx
+                                         ▲
+                                         │
+                                php artisan queue:work
+                                         │
+                                        FFmpeg
+
+  Le navigateur ne parle pas directement au worker. Il demande simplement :
+
+  - des pages et données à Laravel ;
+  - des fichiers JavaScript à Vite ;
+  - des segments HLS à Nginx.
+
+  # Architecture 2 : déploiement local pour la démonstration
+
+  Pour simuler un vrai déploiement avec Docker, je recommande ceci :
+
+  [nginx]
+     │
+     ├── fichiers statiques React
+     ├── fichiers HLS
+     └── requêtes Laravel
+             │
+             ▼
+          [app]
+        PHP-FPM
+             │
+             ├── SQLite
+             └── crée des jobs
+                      │
+                      ▼
+                   [worker]
+            php artisan queue:work
+                      │
+                    FFmpeg
+
+  Il y a donc trois conteneurs :
+
+  nginx
+  app
+  worker
+
+  ## Rôle de chaque conteneur
+
+  ### nginx
+
+  Il reçoit les requêtes du navigateur.
+
+  Il sert :
+
+  - les fichiers compilés par Vite dans public/build ;
+  - les fichiers HLS ;
+  - les éventuels fichiers vidéo ;
+  - les requêtes dynamiques en les transmettant à PHP-FPM.
+
+  ### app
+
+  Il exécute Laravel avec PHP-FPM.
+
+  Il s’occupe de :
+
+  - l’authentification ;
+  - les routes ;
+  - Inertia ;
+  - la base SQLite ;
+  - la création des jobs ;
+  - les réponses HTTP.
+
+  Il ne lance pas Vite en production.
+
+  ### worker
+
+  Il exécute en permanence :
+
+  php artisan queue:work
+
+  Il récupère les jobs en attente, lance FFmpeg et produit les fichiers HLS.
+
+  Il utilise la même image Docker que app, mais avec une commande différente.
+
+  Même image
+     ├── app    → PHP-FPM
+     └── worker → queue:work
+
+  # Le frontend dans cette architecture
+
+  Il n’y a toujours pas de conteneur frontend.
+
+  Lors de la construction de l’application :
+
+  npm run build
+
+  Vite génère les fichiers dans public/build.
+
+  Ces fichiers sont ensuite servis par Nginx :
+
+  resources/js
+        │
+        ▼
+     Vite build
+        │
+        ▼
+  public/build
+        │
+        ▼
+     Nginx
+
+  Vite n’est donc pas un serveur permanent dans cette architecture. Il intervient uniquement pendant la construction de l’image.
+
+  Wayfinder fonctionne également pendant cette étape. Il génère les fonctions TypeScript à partir des routes Laravel, puis ces
+  fonctions sont incluses dans le build frontend.
+
+  Il n’existe pas de communication spéciale entre un conteneur frontend et un conteneur backend, car il n’y a pas de conteneur
+  frontend.
+
+  # Comment partager les fichiers HLS ?
+
+  Ton worker et Nginx doivent voir les mêmes fichiers.
+
+  Il faut donc un volume partagé :
+
+  volume media
+     ├── app
+     ├── worker
+     └── nginx
+
+  Le worker écrit :
+
+  segment-001.ts
+  segment-002.ts
+  playlist.m3u8
+
+  Nginx lit ensuite ces mêmes fichiers et les transmet aux lecteurs.
+
+  C’est le point important de ton architecture : le worker ne transmet pas le stream à Nginx. Il produit les fichiers dans un
+  stockage partagé, et Nginx les sert.
+
+  # Que faire de SQLite ?
+
+  Pour une démonstration locale, SQLite convient parfaitement.
+
+  Il faut simplement conserver le fichier dans un volume persistant partagé par app et worker :
+
+  volume sqlite
+     ├── app
+     └── worker
+
+  Il n’est pas nécessaire d’ajouter un conteneur de base de données.
+
+  # Que faire de Redis ?
+
+  Pour cette démonstration, je ne l’ajouterais pas.
+
+  Tu utilises actuellement :
+
+  QUEUE_CONNECTION=database
+  CACHE_STORE=database
+  SESSION_DRIVER=database
+
+  Le worker peut donc récupérer les jobs dans SQLite.
+
+  Redis serait utile plus tard pour :
+
+  - accélérer les queues ;
+  - gérer beaucoup de jobs ;
+  - partager le cache ;
+  - partager les sessions entre plusieurs instances Laravel.
+
+  Mais il ajouterait un conteneur et une dépendance supplémentaires sans bénéfice important pour ta démonstration.
+
+  # Comparaison finale
+
+   Élément     Développement avec Herd    Déploiement Docker local
+  ━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Laravel     Herd / PHP local           conteneur app
+  ──────────  ─────────────────────────  ────────────────────────────────────
+   Nginx       fourni par Herd            conteneur nginx
+  ──────────  ─────────────────────────  ────────────────────────────────────
+   Frontend    serveur Vite               fichiers générés par npm run build
+  ──────────  ─────────────────────────  ────────────────────────────────────
+   Queue       processus manuel           conteneur worker
+  ──────────  ─────────────────────────  ────────────────────────────────────
+   FFmpeg      installé localement        installé dans l’image Laravel
+  ──────────  ─────────────────────────  ────────────────────────────────────
+   SQLite      fichier local              volume Docker
+  ──────────  ─────────────────────────  ────────────────────────────────────
+   HLS         fichiers locaux            volume partagé
+  ──────────  ─────────────────────────  ────────────────────────────────────
+   Redis       inutile                    inutile pour l’instant
+
+  La distinction essentielle est donc :
+
+  Développement :
+  Herd + Vite + worker manuel
+
+  Déploiement local :
+  Nginx + app PHP-FPM + worker
+
+  Pour ton cas, je construirais l’architecture Docker de démonstration avec exactement trois conteneurs : nginx, app et worker.
+  __________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+    Il faut distinguer :
+
+  1. la séparation architecturale frontend/backend ;
+  2. le conteneur technique qui exécute Vite pendant le développement.
+
+  ## Il n’y a pas de séparation frontend/backend
+
+  Ton application reste un monolithe :
+
+  Laravel + Inertia + React
+
+  Laravel fournit :
+
+  - les routes ;
+  - l’authentification ;
+  - les données ;
+  - les pages Inertia.
+
+  React fournit l’interface utilisateur.
+
+  Ils appartiennent au même projet et au même déploiement. Il n’y a pas de frontend indépendant qui communiquerait avec une API
+  backend séparée.
+
+  Le conteneur vite existe uniquement parce que Vite est un outil de développement Node.js. Ce n’est pas un conteneur frontend
+  autonome.
+
+  En production, il disparaît :
+
+  Développement Docker :
+  nginx + app + worker + vite
+
+  Déploiement :
+  nginx + app + worker
+
+  # Communication en développement Docker
+
+  Voici les quatre conteneurs :
+
+  ________________________
+  | nginx                |
+  | commande: nginx      |
+  | port hôte: 8080      |
+  | reçoit les requêtes  |
+  |______________________|
+
+  ________________________
+  | app                  |
+  | commande: php-fpm -F |
+  | port Docker: 9000    |
+  | exécute Laravel      |
+  |______________________|
+
+  ________________________
+  | worker               |
+  | commande: queue:work |
+  | exécute FFmpeg       |
+  |______________________|
+
+  ________________________
+  | vite                 |
+  | commande: npm run dev|
+  | port hôte: 5173      |
+  | HMR et compilation   |
+  |______________________|
+
+  Tous les conteneurs sont sur le même réseau Docker Compose, par exemple :
+
+  réseau Docker : hypertube
+
+  Dans ce réseau, les noms des services deviennent des noms DNS :
+
+  app
+  worker
+  vite
+  nginx
+
+  ## 1. Navigateur vers Nginx
+
+  Le navigateur accède à :
+
+  http://localhost:8080
+
+  Docker redirige ce port vers Nginx :
+
+  Navigateur
+      │
+      │ localhost:8080
+      ▼
+  ________________________
+  | nginx                |
+  | port interne: 80     |
+  |______________________|
+
+  ## 2. Nginx vers PHP-FPM
+
+  Lorsqu’une requête concerne Laravel, Nginx l’envoie à app:9000.
+
+  ________________________        ________________________
+  | nginx                |        | app                  |
+  |______________________|        | php-fpm:9000         |
+            │                     |______________________|
+            │ FastCGI
+            └──────────────────► app:9000
+
+  app est le nom du service Docker. Il ne faut pas utiliser localhost:9000, car dans le conteneur Nginx, localhost désigne Nginx lui-
+  même.
+
+  Nginx utilise donc :
+
+  fastcgi_pass app:9000;
+
+  ## 3. Navigateur vers Vite
+
+  Pendant le développement, Laravel indique au navigateur que les fichiers frontend sont fournis par Vite.
+
+  Le navigateur contacte alors directement Vite :
+
+  Navigateur
+      │
+      │ localhost:5173
+      ▼
+  ________________________
+  | vite                 |
+  | serveur dev          |
+  |______________________|
+
+  Vite fournit :
+
+  - les fichiers JavaScript ;
+  - le CSS ;
+  - le Hot Module Replacement ;
+  - la connexion WebSocket de rechargement.
+
+  Nginx et Laravel ne servent donc pas les fichiers frontend compilés pendant le développement.
+
+  Le chemin est :
+
+  Navigateur ─────► Vite
+       │
+       └───────────► Nginx ─────► app
+
+  Ce n’est pas une communication « frontend vers backend » au sens d’une application séparée. Le navigateur utilise simplement deux
+  serveurs pendant le développement :
+
+  - Nginx pour Laravel ;
+  - Vite pour les assets de développement.
+
+  ## 4. Laravel vers la queue
+
+  Lorsque Laravel crée un job, il l’écrit dans SQLite :
+
+  ________________________
+  | app                  |
+  | Laravel              |
+  |______________________|
+            │
+            │ écrit dans database.sqlite
+            ▼
+  ________________________
+  | volume SQLite        |
+  | jobs                 |
+  |______________________|
+            ▲
+            │ lit les jobs
+            │
+  ________________________
+  | worker               |
+  | queue:work           |
+  |______________________|
+
+  Il n’y a pas forcément de communication réseau entre app et worker.
+
+  Avec :
+
+  QUEUE_CONNECTION=database
+
+  ils communiquent indirectement grâce au fichier SQLite partagé.
+
+  ## 5. Worker vers FFmpeg
+
+  FFmpeg n’a pas besoin d’un conteneur séparé :
+
+  ________________________
+  | worker               |
+  | queue:work           |
+  | FFmpeg installé      |
+  |______________________|
+            │
+            │ lance un processus local
+            ▼
+         FFmpeg
+
+  ## 6. Worker vers Nginx
+
+  Le worker écrit les fichiers HLS dans un volume partagé :
+
+  ________________________
+  | worker               |
+  | écrit les fichiers   |
+  | HLS                  |
+  |______________________|
+            │
+            ▼
+  ________________________
+  | volume media         |
+  | playlist.m3u8        |
+  | segment-001.ts       |
+  | segment-002.ts       |
+  |______________________|
+            ▲
+            │ lecture
+            │
+  ________________________
+  | nginx                |
+  | sert les fichiers HLS|
+  |______________________|
+
+  Nginx et le worker ne s’envoient pas directement les segments. Ils accèdent au même volume Docker.
+
+  # Communication pendant le déploiement local
+
+  En déploiement, le conteneur Vite disparaît.
+
+  ________________________
+  | nginx                |
+  | port hôte: 8080      |
+  | Laravel + HLS        |
+  |______________________|
+            │
+            │ FastCGI: app:9000
+            ▼
+  ________________________
+  | app                  |
+  | php-fpm -F           |
+  | Laravel              |
+  |______________________|
+            │
+            │ SQLite partagé
+            ▼
+  ________________________
+  | volume SQLite        |
+  |______________________|
+            ▲
+            │
+  ________________________
+  | worker               |
+  | queue:work           |
+  | FFmpeg               |
+  |______________________|
+
+  Les fichiers React sont déjà construits :
+
+  npm run build
+         │
+         ▼
+  public/build
+
+  Nginx les sert directement :
+
+  Navigateur
+      │
+      ▼
+  ________________________
+  | nginx                |
+  |______________________|
+      │
+      ├──► public/build/app.js
+      ├──► public/build/app.css
+      └──► fichiers HLS
+
+  Il n’y a donc plus aucune connexion vers Vite.
+
+  ## Résumé très concret
+
+  ### Développement Docker
+
+  Navigateur
+   ├──► nginx:8080 ───► app:9000
+   │                       │
+   │                       └──► SQLite
+   │
+   ├──► vite:5173
+   │
+   └──► nginx ───► fichiers HLS
+
+  worker ───► SQLite
+  worker ───► FFmpeg
+  worker ───► volume HLS
+  nginx  ───► volume HLS
+
+  ### Déploiement local
+
+  Navigateur
+      │
+      ▼
+  nginx:8080
+      │
+      ├──► app:9000
+      ├──► public/build
+      └──► volume HLS
+
+  app ───► volume SQLite
+  worker ─► volume SQLite
+  worker ─► FFmpeg
+  worker ─► volume HLS
+  nginx  ─► volume HLS
+
+  La différence fondamentale est donc :
+
+  > En développement, le conteneur vite est un serveur d’outillage temporaire. Il ne représente pas un frontend séparé.
+
+  > En déploiement, le frontend React est devenu un ensemble de fichiers statiques dans public/build, servis par Nginx.
+
+  _________________________________________________________________________________________________________________________________________________________________________________________________________
+
+    ## Développement
+
+  Le dossier du projet sur ta machine est monté dans plusieurs conteneurs :
+
+  C:\...\hypertube
+          │
+          ├──────────────► app:/var/www/html
+          ├──────────────► worker:/var/www/html
+          ├──────────────► vite:/var/www/html
+          └──────────────► nginx:/var/www/html
+
+  Une modification de :
+
+  resources/js/app.tsx
+
+  est donc immédiatement visible dans les conteneurs qui montent ce dossier.
+
+  ________________________
+  | app                  |
+  | voit le code Laravel |
+  |______________________|
+
+  ________________________
+  | worker               |
+  | voit le code Laravel |
+  |______________________|
+
+  ________________________
+  | vite                 |
+  | voit le code React   |
+  |______________________|
+
+  Le comportement dépend ensuite du processus :
+
+  - Vite détecte les modifications et recharge le navigateur ;
+  - Laravel relit généralement le code à la requête suivante ;
+  - Nginx voit immédiatement les fichiers statiques ;
+  - un worker déjà lancé peut devoir être redémarré, car queue:work est un processus long-lived qui garde du code en mémoire.
+
+  Le conteneur Nginx n’a pas besoin de tout le code PHP pour fonctionner. En développement, on peut toutefois lui monter le projet
+  complet par simplicité.
+
+  ## Ce qui est réellement partagé
+
+  Il y a généralement trois types de montages différents.
+
+  ### Code source
+
+  bind mount :
+  projet local → /var/www/html
+
+  Utilisé en développement par :
+
+  - app ;
+  - worker ;
+  - vite ;
+  - éventuellement nginx.
+
+  ### Dépendances
+
+  On peut utiliser des volumes séparés pour éviter que les dépendances locales écrasent celles du conteneur :
+
+  ________________________
+  | volume vendor         |
+  | dépendances Composer  |
+  |_______________________|
+
+  ________________________
+  | volume node_modules   |
+  | dépendances npm      |
+  |_______________________|
+
+  ### Données persistantes
+
+  Les données produites par l’application doivent survivre au redémarrage :
+
+  ________________________
+  | volume SQLite         |
+  | database.sqlite       |
+  |_______________________|
+
+  ________________________
+  | volume media          |
+  | vidéos + fichiers HLS |
+  |_______________________|
+
+  app, worker et parfois nginx doivent monter les volumes nécessaires.
+
+  ## Déploiement
+
+  En déploiement, on ne monte généralement plus le code local.
+
+  Le code est copié dans l’image lors du build :
+
+  Dockerfile
+      │
+      ▼
+  ________________________
+  | image laravel         |
+  | code Laravel          |
+  | vendor                |
+  | public/build          |
+  |_______________________|
+
+  Puis cette même image sert à créer plusieurs conteneurs :
+
+  ________________________
+  | app                  |
+  | image laravel        |
+  | php-fpm -F           |
+  |______________________|
+
+  ________________________
+  | worker               |
+  | image laravel        |
+  | queue:work           |
+  |______________________|
+
+  Les deux conteneurs ont le même code parce qu’ils utilisent la même image, pas parce qu’ils partagent un volume de code.
+
+  En revanche, ils partagent toujours les données dynamiques :
+
+  app    ─────┐
+              ├──► volume SQLite
+  worker ─────┘
+
+  worker ─────┐
+              ├──► volume HLS
+  nginx  ─────┘
+
+  ## Résumé
+
+  Développement :
+  code local monté dans les conteneurs
+  → les modifications sont visibles immédiatement
+
+  Déploiement :
+  code intégré dans une image immuable
+  → pas de partage du code par volume
+  → seuls SQLite, médias et HLS sont persistants
+
+  Donc pour ton environnement Docker de développement, app, worker et vite monteront probablement le même dossier source. Mais pour
+  le déploiement, ils utiliseront surtout la même image, tandis que les volumes seront réservés aux données générées.
+
+
+_____________________________________________________________________________________________________________________________________________________________________________________
+
+    Une configuration propre pourrait donc être :
+
+    ________________________
+    | nginx                |
+    | public/              |
+    | storage/app/public/  |
+    |______________________|
+
+    Alors que app, worker et frontend ont besoin du projet complet :
+
+    ________________________
+    | app                  |
+    | projet complet       |
+    |______________________|
+
+    ________________________
+    | worker               |
+    | projet complet       |
+    |______________________|
+
+    ________________________
+    | frontend             |
+    | projet complet       |
+    |______________________|
+
+  ET TU ME REEXPLIQUE POUT LA PRODUCTION PARCEQUE J AI REIN COMPRIS !!!!
+
+
+• D’accord. On garde exactement cette architecture pour le développement, puis on construit la production à partir de cette base.
+
+  # 1. Développement Docker
+
+  ## Conteneur Nginx
+
+  ________________________
+  | nginx                |
+  | public/              |
+  | storage/app/public/  |
+  |______________________|
+
+  Nginx reçoit :
+
+  http://localhost:8000
+
+  Il possède uniquement les fichiers dont il a besoin :
+
+  public/
+  storage/app/public/
+
+  Il ne possède pas :
+
+  app/
+  routes/
+  resources/
+  database/
+  vendor/
+
+  Nginx :
+
+  - sert directement les fichiers présents dans public/ ;
+  - sert les fichiers HLS présents dans storage/app/public/ ;
+  - transmet les requêtes Laravel à app:9000.
+
+  ## Conteneurs Laravel
+
+  ________________________
+  | app                  |
+  | projet complet       |
+  | php-fpm -F           |
+  |______________________|
+
+  ________________________
+  | worker               |
+  | projet complet       |
+  | queue:work           |
+  |______________________|
+
+  ________________________
+  | frontend             |
+  | projet complet       |
+  | npm run dev          |
+  |______________________|
+
+  Ces trois conteneurs montent le dossier complet du projet :
+
+  C:\...\hypertube
+          │
+          ├──► app:/var/www/html
+          ├──► worker:/var/www/html
+          └──► frontend:/var/www/html
+
+  Ils voient donc :
+
+  app/
+  routes/
+  resources/
+  database/database.sqlite
+  storage/
+  vendor/
+
+  ## Les montages de Nginx
+
+  Nginx reçoit seulement deux parties du projet :
+
+  C:\...\hypertube\public
+          │
+          ▼
+  nginx:/var/www/html/public
+
+  et :
+
+  C:\...\hypertube\storage\app\public
+          │
+          ▼
+  nginx:/var/www/html/storage/app/public
+
+  Pour servir les HLS, Nginx doit avoir une règle qui associe l’URL publique au dossier monté :
+
+  URL demandée :
+  /storage/movies/12/hls/3/index.m3u8
+
+  Fichier lu par Nginx :
+  /var/www/html/storage/app/public/movies/12/hls/3/index.m3u8
+
+  Dans cette architecture, Nginx n’utilise pas le lien symbolique Laravel public/storage. Il utilise directement le dossier storage/
+  app/public avec une règle Nginx alias.
+
+  ## Communication en développement
+
+  Navigateur
+      │
+      │ http://localhost:8000
+      ▼
+  ________________________
+  | nginx                |
+  | port 80             |
+  |______________________|
+      │
+      │ FastCGI vers app:9000
+      ▼
+  ________________________
+  | app                  |
+  | PHP-FPM + Laravel    |
+  |______________________|
+
+  Pour le frontend :
+
+  Navigateur
+      │
+      │ http://localhost:5173
+      ▼
+  ________________________
+  | frontend             |
+  | Vite                 |
+  |______________________|
+
+  Pour une conversion :
+
+  app
+      │
+      │ écrit le job dans SQLite
+      ▼
+  database/database.sqlite
+      ▲
+      │ lit le job
+      │
+  worker
+      │
+      │ lance FFmpeg
+      ▼
+  storage/app/public/
+      ▲
+      │ lit les fichiers HLS
+      │
+  nginx
+
+  # 2. Production locale
+
+  En production, le dossier local du projet n’est plus monté dans les conteneurs.
+
+  Le code est intégré dans une image pendant la construction.
+
+  ## Image Laravel
+
+  On construit une image qui contient :
+
+  ________________________
+  | image laravel        |
+  | code Laravel         |
+  | vendor/              |
+  | PHP                  |
+  | FFmpeg               |
+  |______________________|
+
+  Cette image sert à créer deux conteneurs :
+
+  ________________________
+  | app                  |
+  | image laravel        |
+  | php-fpm -F           |
+  |______________________|
+
+  ________________________
+  | worker               |
+  | image laravel        |
+  | queue:work           |
+  |______________________|
+
+  Ils possèdent le même code parce qu’ils utilisent la même image.
+
+  Ils ne possèdent pas chacun une copie modifiable du projet.
+
+  ## Compilation du frontend
+
+  Avant de construire l’image finale :
+
+  npm run build
+
+  Vite compile React et produit :
+
+  public/build/
+
+  Wayfinder s’exécute pendant cette étape et génère les fichiers TypeScript nécessaires.
+
+  Après cette étape :
+
+  - Vite ne tourne plus ;
+  - Wayfinder ne tourne plus ;
+  - il n’y a plus de conteneur frontend.
+
+  ## Image Nginx
+
+  On construit une image Nginx contenant :
+
+  ________________________
+  | image nginx          |
+  | configuration nginx  |
+  | public/              |
+  | public/build/        |
+  |______________________|
+
+  Nginx sert les fichiers compilés et transmet les requêtes Laravel à app:9000.
+
+  Navigateur
+      │
+      ▼
+  ________________________
+  | nginx                |
+  | fichiers statiques   |
+  | fichiers HLS         |
+  |______________________|
+      │
+      │ requêtes Laravel
+      ▼
+  ________________________
+  | app                  |
+  | PHP-FPM + Laravel    |
+  |______________________|
+
+  ## Données persistantes en production
+
+  Le code n’est pas placé dans un volume modifiable.
+
+  Les données sont placées dans des volumes séparés :
+
+  ________________________
+  | volume sqlite        |
+  | database.sqlite      |
+  |______________________|
+          ▲          ▲
+          │          │
+         app        worker
+
+  ________________________
+  | volume storage       |
+  | vidéos originales    |
+  | fichiers HLS         |
+  | logs et données      |
+  |______________________|
+         ▲       ▲       ▲
+         │       │       │
+        app    worker   nginx
+
+  Les montages sont donc :
+
+  app :
+  - image contenant le code
+  - volume SQLite
+  - volume storage
+
+  worker :
+  - même image contenant le code
+  - volume SQLite
+  - volume storage
+
+  nginx :
+  - image Nginx contenant public/build
+  - volume storage en lecture seule
+
+  ## Différence principale
+
+  ### Développement
+
+  Code local monté dans :
+  - app
+  - worker
+  - frontend
+
+  Nginx reçoit :
+  - public/
+  - storage/app/public/
+
+  ### Production
+
+  Code intégré dans :
+  - image app/worker
+  - image nginx pour les fichiers publics
+
+  Données conservées dans :
+  - volume SQLite
+  - volume storage
+
+  Conteneurs :
+  - nginx
+  - app
+  - worker
+
+  Le conteneur frontend existe uniquement en développement parce qu’il exécute le serveur Vite. En production, le frontend est devenu
+  public/build, contenu dans l’image Nginx.
+_____________________________________________________________________________________________________________________________________________________________________________________
+1. La containeurisation en développement :
+
+Il nous faut :
+- une image contenant le code laravel. Cette image pourra être lancée avec une commande differente en fonction des besoins du conteneur. 
+
+Les conteneurs : 
+- un conteneur nginx qui ouvre un port vers l'extereur (port 8000) qui permet de recueillir les requêtes du navigateur. Nginx sert ces fichiers statiques directement et demande à laravel de générer les pages Inertia et les données.
+- un conteneur app qui fait tourner php-fpm qui répond aux requêtes http en provenance du container nginx
+- un conteneur worker qui assure l'execution des jobs ajoutés à la base de données par le containeur app. Le but est de lancer les conversions longues sans bloquer le site
+- un conteneur frontend qui fait tourner un serveur vite. Ce serveur permet de mettre à jour en temps réel le frontend ainsi que le code produit par wayfinder en cas d'ouverture de nouvelles routes laravel.
+
+Concernant les volumes :
+
+Les conteneurs ont besoins de volumes. Pour simplifier l'environnement de developpement on peut monter tout le code du prjet dans les containeurs app, worker et frontend. En revanche containeur nginx n'a pas besoin de tout le projet. Il a seulement besoin des dossiers qui contiennent les fichiers qu'il doit servir directement : index.php qui se trouve à la racine du projet et qui permet de faire les requête eu pres du container php-fpm (app), il a besoin du contenu du dossier public, qui contient les fichiers statiques du build et il a besoin de C:\...\hypertube\storage\app\public pour servir les manifests et segments hls des videos
+
+
+Concernant les images :
+- il nous faut une image nginx 
+- il nous faut une image qui contient le code de l'application qui sera utilisé pour vite, pour php-fpm et pour le worker
+
+Comment les conteneurs fonctionnent entre eux ?
+
+Le navigateur demande d’abord la page Laravel à Nginx. Laravel va répondre par une page app.balde.php qui est la single page de l'application. Le code "@vite" dans app.blade.php ajoute l’adresse du serveur Vite dans le HTML. Le navigateur sait donc qu’il doit charger les fichiers frontend depuis localhost:5173. Nginx communique avec PHP-FPM via le nom Docker app:9000.
+
+Imaginons que l'utilisateur se connecte au site http://localhost:8000 -> nginx demande au containeur app ce qu'il doit renvoyer -> le containeur app lui envoie une page html qu'il a produit grâce à app.blade.php. Il contient le point de montage inertia et les balises générées par vite. Le code react chargé par Vite prend le contrôle de l'interface.
+Ensuite l'utilisateur clique sur le lien pour se connecter -> La fonction générée par wayfinder est éxécutée par le navigateur et transmet une requête à Nginx -> Nginx fait appel à app pour avoir la réponse inertia. app lui fournit et nginx la renvoie au navigateur. 
+
+Imaginons que l'utilisateur veuille lancer la conversion d'un film. Même chose, le navigateur envoie à nginx qui demamnde à app. App ajoute un job dans la table des jobs et le container worker va lancer la conversion dans un autre processus afin de na pas bloquer laravel. Si l'utilisateur désire voir le film pendant sa conversion, nginx se charge de lui envoyer le manifest et les segments hls disponibles. Lorsque l'utilisateur clique sur le bouton play du lecteur video, cela appelle une requete http du type /storage/ qui possede un lien symbolique vers storage/app/public qui st le disque qui contient les fichiers vidéos et les segments hls. 
+
+
