@@ -16,8 +16,10 @@ export function detectContainerFormat(buffer) {
   if (buffer.length >= 8 && buffer.toString('ascii', 4, 8) === 'ftyp') {
     return 'mp4';
   }
+
   if (buffer.length >= 4 && buffer.readUInt32BE(0) === EBML_HEADER) {
     return 'webm/mkv';
   }
+
   return 'unknown';
 }

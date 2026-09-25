@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { computeOverlaps } from '../torrentLayout.js';
 import { CancelledError } from '../cancelledError.js';
+import { computeOverlaps } from '../torrentLayout.js';
 
 export class WebSeedError extends Error {
   constructor(message) {
@@ -18,14 +18,24 @@ const DEFAULT_TIMEOUT_MS = 20000;
 // BEP19 generally) uses for multi-file torrents. The assembled piece is
 // verified against pieceHash exactly like a peer-wire piece (#9) -- same
 // integrity guarantee no matter where the bytes came from.
-export async function downloadPieceFromWebSeed(baseUrl, torrent, fileLayout, pieceIndex, pieceOffset, pieceLength, options = {}) {
+export async function downloadPieceFromWebSeed(
+  baseUrl,
+  torrent,
+  fileLayout,
+  pieceIndex,
+  pieceOffset,
+  pieceLength,
+  options = {},
+) {
   const { pieceHash, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl = fetch, signal } = options;
 
   if (signal?.aborted) {
     throw new CancelledError();
   }
 
-  const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+    : AbortSignal.timeout(timeoutMs);
   const overlaps = computeOverlaps(fileLayout, pieceOffset, pieceLength);
   const chunks = new Array(overlaps.length);
 
@@ -36,13 +46,17 @@ export async function downloadPieceFromWebSeed(baseUrl, torrent, fileLayout, pie
       const rangeEnd = overlap.fileOffset + overlap.length - 1;
 
       let response;
+
       try {
         response = await fetchImpl(url, {
           headers: { Range: `bytes=${rangeStart}-${rangeEnd}` },
           signal: requestSignal,
         });
       } catch (err) {
-        if (signal?.aborted) throw new CancelledError();
+        if (signal?.aborted) {
+          throw new CancelledError();
+        }
+
         throw new WebSeedError(`Web-seed request failed for ${url}: ${err.message}`);
       }
 
@@ -51,11 +65,13 @@ export async function downloadPieceFromWebSeed(baseUrl, torrent, fileLayout, pie
       }
 
       const buffer = Buffer.from(await response.arrayBuffer());
+
       if (buffer.length !== overlap.length) {
         throw new WebSeedError(
           `Web-seed returned ${buffer.length} bytes, expected ${overlap.length}, for ${url} (range ${rangeStart}-${rangeEnd})`,
         );
       }
+
       chunks[i] = buffer;
     }),
   );
@@ -64,8 +80,11 @@ export async function downloadPieceFromWebSeed(baseUrl, torrent, fileLayout, pie
 
   if (pieceHash) {
     const actualHash = createHash('sha1').update(pieceBuffer).digest('hex');
+
     if (actualHash !== pieceHash) {
-      throw new WebSeedError(`Piece ${pieceIndex} hash mismatch via web-seed: expected ${pieceHash}, got ${actualHash}`);
+      throw new WebSeedError(
+        `Piece ${pieceIndex} hash mismatch via web-seed: expected ${pieceHash}, got ${actualHash}`,
+      );
     }
   }
 
@@ -75,5 +94,6 @@ export async function downloadPieceFromWebSeed(baseUrl, torrent, fileLayout, pie
 function buildFileUrl(baseUrl, torrentName, filePath) {
   const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const segments = [torrentName, ...filePath.split('/')].map(encodeURIComponent);
+
   return normalizedBase + segments.join('/');
 }

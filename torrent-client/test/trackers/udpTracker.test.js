@@ -1,6 +1,6 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSocket } from 'node:dgram';
+import { test } from 'node:test';
 import { announceUdpTracker } from '../../src/trackers/udpTracker.js';
 
 function baseParams(overrides = {}) {
@@ -21,6 +21,7 @@ function startFakeUdpTracker({ connectionId = 0x0102030405060708n, onAnnounce } 
   socket.on('message', (msg, rinfo) => {
     const action = msg.readUInt32BE(8);
     const transactionId = msg.readUInt32BE(12);
+
     if (action === 0) {
       const response = Buffer.alloc(16);
       response.writeUInt32BE(0, 0);
@@ -28,7 +29,10 @@ function startFakeUdpTracker({ connectionId = 0x0102030405060708n, onAnnounce } 
       response.writeBigUInt64BE(connectionId, 8);
       socket.send(response, rinfo.port, rinfo.address);
     } else if (action === 1) {
-      if (onAnnounce) onAnnounce(msg);
+      if (onAnnounce) {
+        onAnnounce(msg);
+      }
+
       const response = Buffer.alloc(20);
       response.writeUInt32BE(1, 0);
       response.writeUInt32BE(transactionId, 4);
@@ -38,6 +42,7 @@ function startFakeUdpTracker({ connectionId = 0x0102030405060708n, onAnnounce } 
       socket.send(response, rinfo.port, rinfo.address);
     }
   });
+
   return new Promise((resolve) => {
     socket.bind(0, '127.0.0.1', () => resolve(socket));
   });
@@ -52,6 +57,7 @@ test('sends a well-formed BEP15 announce request using the connection id', async
   });
   const { port } = socket.address();
   const params = baseParams({ left: 424242, port: 6882 });
+
   try {
     await announceUdpTracker(`udp://127.0.0.1:${port}`, params, { timeoutMs: 3000 });
   } finally {

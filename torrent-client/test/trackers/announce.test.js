@@ -1,5 +1,5 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import { announce } from '../../src/trackers/announce.js';
 import { TrackerError } from '../../src/trackers/errors.js';
 
@@ -17,10 +17,12 @@ test('tries trackers in order and returns the first success', async () => {
   const calls = [];
   const httpAnnouncer = async (url) => {
     calls.push(url);
+
     throw new TrackerError('first tracker down', { trackerUrl: url });
   };
   const udpAnnouncer = async (url) => {
     calls.push(url);
+
     return { interval: 60, seeders: 1, leechers: 0, peers: [{ ip: '1.2.3.4', port: 1 }] };
   };
 

@@ -1,6 +1,6 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseTorrentFile } from '../src/torrentFile.js';
 
@@ -31,6 +31,10 @@ test('parses a real archive.org reference .torrent and matches its known info-ha
   assert.equal(parsed.totalLength, 3020385);
   assert.equal(parsed.files.length, 12);
   assert.ok(
-    parsed.files.some((f) => f.path === '1953_Movie_Trailers_Starting_Monday_00_35_40_28_3mb.mp4' && f.length === 2384112),
+    parsed.files.some(
+      (f) =>
+        f.path === '1953_Movie_Trailers_Starting_Monday_00_35_40_28_3mb.mp4' &&
+        f.length === 2384112,
+    ),
   );
 });

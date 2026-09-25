@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { CancelledError } from '../cancelledError.js';
+import { downloadTorrent as defaultDownloadTorrent } from '../swarm/downloadTorrent.js';
 import { parseTorrentFile } from '../torrentFile.js';
 import { announce as defaultAnnounce, flattenTrackerUrls } from '../trackers/announce.js';
 import { generatePeerId } from '../trackers/peerId.js';
-import { downloadTorrent as defaultDownloadTorrent } from '../swarm/downloadTorrent.js';
-import { CancelledError } from '../cancelledError.js';
 
 export class DownloadManagerError extends Error {
   constructor(message) {
@@ -33,6 +33,7 @@ export function createDownloadManager({
     if (!torrentBytes && !torrentUrl) {
       throw new DownloadManagerError('Provide either torrentBytes or torrentUrl');
     }
+
     if (!outputDir) {
       throw new DownloadManagerError('outputDir is required');
     }
@@ -63,7 +64,10 @@ export function createDownloadManager({
   async function run(job, { torrentBytes, torrentUrl }) {
     try {
       const bytes = torrentBytes ?? (await fetchTorrentBytes(torrentUrl));
-      if (job.controller.signal.aborted) throw new CancelledError();
+
+      if (job.controller.signal.aborted) {
+        throw new CancelledError();
+      }
 
       const torrent = parseTorrentFileFn(bytes);
       job.totalBytes = torrent.totalLength;
@@ -72,22 +76,32 @@ export function createDownloadManager({
       const infoHash = Buffer.from(torrent.infoHash, 'hex');
       const peerId = generatePeerIdFn();
       const trackerUrls = flattenTrackerUrls(torrent);
-      const announceResult = await announceFn(trackerUrls, {
-        infoHash,
-        peerId,
-        port: trackerPort,
-        left: torrent.totalLength,
-        event: 'started',
-      }, { fetchImpl });
+      const announceResult = await announceFn(
+        trackerUrls,
+        {
+          infoHash,
+          peerId,
+          port: trackerPort,
+          left: torrent.totalLength,
+          event: 'started',
+        },
+        { fetchImpl },
+      );
 
-      if (job.controller.signal.aborted) throw new CancelledError();
+      if (job.controller.signal.aborted) {
+        throw new CancelledError();
+      }
+
       const peers = announceResult.peers ?? [];
       const webSeedUrls = torrent.urlList ?? [];
+
       if (peers.length === 0 && webSeedUrls.length === 0) {
         // No P2P peers is expected and fine for sources like archive.org
         // (see #12) as long as the torrent provides BEP19 web-seed URLs --
         // only genuinely fail when there's no way to get bytes at all.
-        throw new DownloadManagerError('Tracker announce returned no peers and the torrent has no web-seed URLs');
+        throw new DownloadManagerError(
+          'Tracker announce returned no peers and the torrent has no web-seed URLs',
+        );
       }
 
       await downloadTorrentFn(torrent, peers, {
@@ -98,7 +112,10 @@ export function createDownloadManager({
         signal: job.controller.signal,
         onProgress: ({ completed, pieceIndex }) => {
           job.piecesCompleted = completed;
-          job.downloadedBytes = Math.min(job.totalBytes, job.downloadedBytes + pieceByteLength(torrent, pieceIndex));
+          job.downloadedBytes = Math.min(
+            job.totalBytes,
+            job.downloadedBytes + pieceByteLength(torrent, pieceIndex),
+          );
         },
       });
 
@@ -116,30 +133,47 @@ export function createDownloadManager({
 
   async function fetchTorrentBytes(torrentUrl) {
     let response;
+
     try {
       response = await fetchImpl(torrentUrl);
     } catch (err) {
       throw new DownloadManagerError(`Failed to fetch torrent from ${torrentUrl}: ${err.message}`);
     }
+
     if (!response.ok) {
-      throw new DownloadManagerError(`Failed to fetch torrent from ${torrentUrl}: HTTP ${response.status}`);
+      throw new DownloadManagerError(
+        `Failed to fetch torrent from ${torrentUrl}: HTTP ${response.status}`,
+      );
     }
+
     return Buffer.from(await response.arrayBuffer());
   }
 
   function getStatus(id) {
     const job = jobs.get(id);
-    if (!job) return null;
-    const { controller, ...status } = job;
+
+    if (!job) {
+      return null;
+    }
+
+    const status = { ...job };
+
+    delete status.controller;
+
     return status;
   }
 
   function cancelDownload(id) {
     const job = jobs.get(id);
-    if (!job) return null;
+
+    if (!job) {
+      return null;
+    }
+
     if (job.status === 'downloading') {
       job.controller.abort();
     }
+
     return getStatus(id);
   }
 
@@ -148,5 +182,8 @@ export function createDownloadManager({
 
 function pieceByteLength(torrent, pieceIndex) {
   const isLast = pieceIndex === torrent.pieces.length - 1;
-  return isLast ? torrent.totalLength - torrent.pieceLength * (torrent.pieces.length - 1) : torrent.pieceLength;
+
+  return isLast
+    ? torrent.totalLength - torrent.pieceLength * (torrent.pieces.length - 1)
+    : torrent.pieceLength;
 }

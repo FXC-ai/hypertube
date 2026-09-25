@@ -21,6 +21,7 @@ export function encodeMessage(id, payload = Buffer.alloc(0)) {
   buf.writeUInt32BE(length, 0);
   buf.writeUInt8(id, 4);
   payload.copy(buf, 5);
+
   return buf;
 }
 
@@ -37,6 +38,7 @@ export function encodeRequest(index, begin, length) {
   payload.writeUInt32BE(index, 0);
   payload.writeUInt32BE(begin, 4);
   payload.writeUInt32BE(length, 8);
+
   return encodeMessage(MESSAGE_ID.REQUEST, payload);
 }
 
@@ -48,21 +50,26 @@ export function encodeRequest(index, begin, length) {
 export function extractMessages(buffer) {
   const messages = [];
   let offset = 0;
+
   while (offset + 4 <= buffer.length) {
     const length = buffer.readUInt32BE(offset);
+
     if (length === 0) {
       messages.push({ id: KEEP_ALIVE, payload: Buffer.alloc(0) });
       offset += 4;
       continue;
     }
+
     if (offset + 4 + length > buffer.length) {
       break;
     }
+
     const id = buffer.readUInt8(offset + 4);
     const payload = buffer.subarray(offset + 5, offset + 4 + length);
     messages.push({ id, payload });
     offset += 4 + length;
   }
+
   return { messages, remaining: buffer.subarray(offset) };
 }
 

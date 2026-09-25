@@ -1,9 +1,9 @@
 import { open, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { downloadPieceFromPeer } from '../peer/downloadPiece.js';
-import { downloadPieceFromWebSeed } from '../webseed/downloadPieceFromWebSeed.js';
 import { CancelledError } from '../cancelledError.js';
+import { downloadPieceFromPeer } from '../peer/downloadPiece.js';
 import { computeFileLayout, computePieceRanges, computeOverlaps } from '../torrentLayout.js';
+import { downloadPieceFromWebSeed } from '../webseed/downloadPieceFromWebSeed.js';
 
 export class SwarmDownloadError extends Error {
   constructor(message) {
@@ -62,6 +62,7 @@ export async function downloadTorrent(torrent, peers, options) {
   function nextSource() {
     const source = sources[sourceCursor % sources.length];
     sourceCursor += 1;
+
     return source;
   }
 
@@ -74,61 +75,86 @@ export async function downloadTorrent(torrent, peers, options) {
   const fileHandlePromises = new Map();
   function handleFor(file) {
     let promise = fileHandlePromises.get(file.path);
+
     if (!promise) {
       promise = (async () => {
         const fullPath = join(outputDir, file.path);
         await mkdir(dirname(fullPath), { recursive: true });
+
         return open(fullPath, 'w');
       })();
       fileHandlePromises.set(file.path, promise);
     }
+
     return promise;
   }
 
   try {
     async function worker() {
       for (;;) {
-        if (failure || signal?.aborted) return;
+        if (failure || signal?.aborted) {
+          return;
+        }
+
         const pieceIndex = queue.shift();
-        if (pieceIndex === undefined) return;
+
+        if (pieceIndex === undefined) {
+          return;
+        }
 
         const { offset, length } = pieceOffsets[pieceIndex];
         const source = nextSource();
+
         try {
-          const buffer = source.kind === 'webseed'
-            ? await downloadPieceFromWebSeed(source.baseUrl, torrent, fileLayout, pieceIndex, offset, length, {
-              pieceHash: torrent.pieces[pieceIndex],
-              timeoutMs: pieceTimeoutMs,
-              signal,
-            })
-            : await downloadPieceFromPeer(source.peer, {
-              infoHash,
-              peerId,
-              pieceIndex,
-              pieceLength: length,
-              pieceHash: torrent.pieces[pieceIndex],
-              connectTimeoutMs,
-              overallTimeoutMs: pieceTimeoutMs,
-              signal,
-            });
+          const buffer =
+            source.kind === 'webseed'
+              ? await downloadPieceFromWebSeed(
+                  source.baseUrl,
+                  torrent,
+                  fileLayout,
+                  pieceIndex,
+                  offset,
+                  length,
+                  {
+                    pieceHash: torrent.pieces[pieceIndex],
+                    timeoutMs: pieceTimeoutMs,
+                    signal,
+                  },
+                )
+              : await downloadPieceFromPeer(source.peer, {
+                  infoHash,
+                  peerId,
+                  pieceIndex,
+                  pieceLength: length,
+                  pieceHash: torrent.pieces[pieceIndex],
+                  connectTimeoutMs,
+                  overallTimeoutMs: pieceTimeoutMs,
+                  signal,
+                });
+
           for (const overlap of computeOverlaps(fileLayout, offset, buffer.length)) {
             const handle = await handleFor(overlap.file);
             const data = buffer.subarray(overlap.rangeOffset, overlap.rangeOffset + overlap.length);
             await handle.write(data, 0, data.length, overlap.fileOffset);
           }
+
           completed += 1;
           onProgress?.({ completed, total: numPieces, pieceIndex });
         } catch (err) {
           if (err instanceof CancelledError) {
             return; // cancelled, not failed -- don't requeue, don't count as an attempt
           }
+
           attempts[pieceIndex] += 1;
+
           if (attempts[pieceIndex] >= maxAttemptsPerPiece) {
             failure = new SwarmDownloadError(
               `Piece ${pieceIndex} failed after ${attempts[pieceIndex]} attempt(s) across the source pool: ${err.message}`,
             );
+
             return;
           }
+
           queue.push(pieceIndex);
         }
       }
@@ -140,9 +166,11 @@ export async function downloadTorrent(torrent, peers, options) {
     if (signal?.aborted) {
       throw new CancelledError();
     }
+
     if (failure) {
       throw failure;
     }
+
     if (completed !== numPieces) {
       throw new SwarmDownloadError(`Download incomplete: ${completed}/${numPieces} pieces`);
     }
@@ -156,7 +184,8 @@ export async function downloadTorrent(torrent, peers, options) {
 
     return { outputDir, piecesDownloaded: completed, files: fileLayout.map((f) => f.path) };
   } finally {
-    await Promise.all([...fileHandlePromises.values()].map((promise) => promise.then((handle) => handle.close())));
+    await Promise.all(
+      [...fileHandlePromises.values()].map((promise) => promise.then((handle) => handle.close())),
+    );
   }
 }
-

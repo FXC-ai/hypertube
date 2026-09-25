@@ -1,7 +1,7 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encode } from '../helpers/bencodeEncode.js';
+import { test } from 'node:test';
 import { announceHttpTracker } from '../../src/trackers/httpTracker.js';
+import { encode } from '../helpers/bencodeEncode.js';
 
 function baseParams(overrides = {}) {
   return {
@@ -18,9 +18,11 @@ function fakeFetch(response) {
   const calls = [];
   const impl = async (url, init) => {
     calls.push({ url, init });
+
     return response;
   };
   impl.calls = calls;
+
   return impl;
 }
 
@@ -28,7 +30,8 @@ function okResponse(bodyBuffer) {
   return {
     ok: true,
     status: 200,
-    arrayBuffer: async () => bodyBuffer.buffer.slice(bodyBuffer.byteOffset, bodyBuffer.byteOffset + bodyBuffer.byteLength),
+    arrayBuffer: async () =>
+      bodyBuffer.buffer.slice(bodyBuffer.byteOffset, bodyBuffer.byteOffset + bodyBuffer.byteLength),
   };
 }
 
@@ -39,8 +42,12 @@ test('percent-encodes raw info_hash and peer_id bytes in the query string', asyn
 
   const requestedUrl = fetchImpl.calls[0].url;
   assert.ok(requestedUrl.startsWith('http://tracker.example/announce?'));
-  assert.ok(requestedUrl.includes('info_hash=%01%02%03%04%05%06%07%08%09%0a%0b%0c%0d%0e%0f%10%11%12%13%14'));
-  assert.ok(requestedUrl.includes('peer_id=%2d%48%54%30%30%30%31%2d%61%62%63%64%65%66%67%68%69%6a%6b%6c'));
+  assert.ok(
+    requestedUrl.includes('info_hash=%01%02%03%04%05%06%07%08%09%0a%0b%0c%0d%0e%0f%10%11%12%13%14'),
+  );
+  assert.ok(
+    requestedUrl.includes('peer_id=%2d%48%54%30%30%30%31%2d%61%62%63%64%65%66%67%68%69%6a%6b%6c'),
+  );
   assert.ok(requestedUrl.includes('port=6881'));
   assert.ok(requestedUrl.includes('left=1000'));
   assert.ok(requestedUrl.includes('event=started'));

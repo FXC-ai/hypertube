@@ -5,5 +5,8 @@ import { randomBytes } from 'node:crypto';
 const CLIENT_PREFIX = '-HT0001-';
 
 export function generatePeerId() {
-  return Buffer.concat([Buffer.from(CLIENT_PREFIX, 'ascii'), randomBytes(20 - CLIENT_PREFIX.length)]);
+  return Buffer.concat([
+    Buffer.from(CLIENT_PREFIX, 'ascii'),
+    randomBytes(20 - CLIENT_PREFIX.length),
+  ]);
 }

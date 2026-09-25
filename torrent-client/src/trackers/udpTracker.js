@@ -1,5 +1,5 @@
-import { createSocket } from 'node:dgram';
 import { randomBytes } from 'node:crypto';
+import { createSocket } from 'node:dgram';
 import { parseCompactPeers } from './compactPeers.js';
 import { TrackerError } from './errors.js';
 
@@ -17,8 +17,10 @@ export async function announceUdpTracker(announceUrl, params, options = {}) {
   const port = Number(url.port);
 
   const socket = createSocket('udp4');
+
   try {
     const connectionId = await connect(socket, host, port, timeoutMs, announceUrl);
+
     return await sendAnnounce(socket, host, port, connectionId, params, timeoutMs, announceUrl);
   } finally {
     socket.close();
@@ -36,14 +38,21 @@ function connect(socket, host, port, timeoutMs, announceUrl) {
     if (response.length < 16) {
       return undefined; // too short to be a real reply; ignore and keep waiting
     }
+
     const receivedTransactionId = response.readUInt32BE(4);
+
     if (receivedTransactionId !== transactionId) {
       return undefined;
     }
+
     const action = response.readUInt32BE(0);
+
     if (action !== ACTION_CONNECT) {
-      throw new TrackerError(`Unexpected action ${action} in connect response`, { trackerUrl: announceUrl });
+      throw new TrackerError(`Unexpected action ${action} in connect response`, {
+        trackerUrl: announceUrl,
+      });
     }
+
     return response.readBigUInt64BE(8);
   });
 }
@@ -69,21 +78,35 @@ function sendAnnounce(socket, host, port, connectionId, params, timeoutMs, annou
     if (response.length < 8) {
       return undefined;
     }
+
     const receivedTransactionId = response.readUInt32BE(4);
+
     if (receivedTransactionId !== transactionId) {
       return undefined;
     }
+
     const action = response.readUInt32BE(0);
+
     if (action === ACTION_ERROR) {
       const message = response.subarray(8).toString('utf8');
-      throw new TrackerError(`Tracker refused the request: ${message}`, { trackerUrl: announceUrl });
+
+      throw new TrackerError(`Tracker refused the request: ${message}`, {
+        trackerUrl: announceUrl,
+      });
     }
+
     if (action !== ACTION_ANNOUNCE) {
-      throw new TrackerError(`Unexpected action ${action} in announce response`, { trackerUrl: announceUrl });
+      throw new TrackerError(`Unexpected action ${action} in announce response`, {
+        trackerUrl: announceUrl,
+      });
     }
+
     if (response.length < 20) {
-      throw new TrackerError('UDP tracker announce response too short', { trackerUrl: announceUrl });
+      throw new TrackerError('UDP tracker announce response too short', {
+        trackerUrl: announceUrl,
+      });
     }
+
     return {
       interval: response.readUInt32BE(8),
       leechers: response.readUInt32BE(12),
@@ -106,16 +129,20 @@ function sendAndReceive(socket, request, host, port, timeoutMs, announceUrl, onM
 
     function handleMessage(msg) {
       let result;
+
       try {
         result = onMessage(msg);
       } catch (err) {
         cleanup();
         reject(err);
+
         return;
       }
+
       if (result === undefined) {
         return;
       }
+
       cleanup();
       resolve(result);
     }
@@ -136,7 +163,11 @@ function sendAndReceive(socket, request, host, port, timeoutMs, announceUrl, onM
     socket.send(request, port, host, (err) => {
       if (err) {
         cleanup();
-        reject(new TrackerError(`Failed to send UDP request: ${err.message}`, { trackerUrl: announceUrl }));
+        reject(
+          new TrackerError(`Failed to send UDP request: ${err.message}`, {
+            trackerUrl: announceUrl,
+          }),
+        );
       }
     });
   });

@@ -6,9 +6,11 @@
 
 export function computeFileLayout(torrent) {
   let offset = 0;
+
   return torrent.files.map((file) => {
     const entry = { path: file.path, length: file.length, torrentOffset: offset };
     offset += file.length;
+
     return entry;
   });
 }
@@ -16,11 +18,13 @@ export function computeFileLayout(torrent) {
 export function computePieceRanges(torrent) {
   const ranges = [];
   let offset = 0;
+
   for (let i = 0; i < torrent.pieces.length; i += 1) {
     const length = Math.min(torrent.pieceLength, torrent.totalLength - offset);
     ranges.push({ offset, length });
     offset += length;
   }
+
   return ranges;
 }
 
@@ -34,11 +38,16 @@ export function computePieceRanges(torrent) {
 export function computeOverlaps(fileLayout, rangeStart, rangeLength) {
   const rangeEnd = rangeStart + rangeLength;
   const overlaps = [];
+
   for (const file of fileLayout) {
     const fileEnd = file.torrentOffset + file.length;
     const overlapStart = Math.max(rangeStart, file.torrentOffset);
     const overlapEnd = Math.min(rangeEnd, fileEnd);
-    if (overlapStart >= overlapEnd) continue;
+
+    if (overlapStart >= overlapEnd) {
+      continue;
+    }
+
     overlaps.push({
       file,
       fileOffset: overlapStart - file.torrentOffset,
@@ -46,5 +55,6 @@ export function computeOverlaps(fileLayout, rangeStart, rangeLength) {
       rangeOffset: overlapStart - rangeStart,
     });
   }
+
   return overlaps;
 }
