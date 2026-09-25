@@ -2,11 +2,8 @@ import { TrackerError } from './errors.js';
 import { announceHttpTracker } from './httpTracker.js';
 import { announceUdpTracker } from './udpTracker.js';
 
-// Tries each tracker URL in order (deduplicated) and returns the result of
-// the first successful announce. A tracker that times out, errors, or uses
-// an unsupported scheme (e.g. wss://, used by browser-facing WebTorrent
-// swarms -- see docs/testing-torrent-sources.md) is skipped rather than
-// failing the whole call, so one bad tracker never blocks the others.
+// Tries each tracker in order and returns the first success. A tracker that fails or has an
+// unsupported scheme (e.g. wss://) is skipped, so one bad tracker never blocks the others.
 export async function announce(trackerUrls, params, options = {}) {
   const errors = [];
 

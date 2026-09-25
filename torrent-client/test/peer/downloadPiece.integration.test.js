@@ -8,12 +8,8 @@ import { parseTorrentFile } from '../../src/torrentFile.js';
 import { generatePeerId } from '../../src/trackers/peerId.js';
 import { announceUdpTracker } from '../../src/trackers/udpTracker.js';
 
-// Real network, real swarm, same reference torrent as announce.integration.test.js.
-// Most BitTorrent peers listed by a tracker are unreachable at any given
-// moment (NAT, offline, firewalled) -- normal for P2P, not a bug. A real
-// client tries many candidates and keeps whichever connects first, so this
-// test does the same with Promise.any() rather than picking one peer and
-// hoping it answers.
+// Real swarm. Most listed peers are unreachable (normal for P2P), so try many candidates
+// with Promise.any() and keep the first that connects.
 test(
   'downloads a real piece from a real peer in the Sintel swarm and verifies its hash',
   { timeout: 45000 },

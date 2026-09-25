@@ -96,10 +96,7 @@ function buildAnnounceUrl(announceUrl, params) {
   return `${base.origin}${base.pathname}${base.search}${separator}${search}`;
 }
 
-// Every byte is escaped, including ones that would technically be safe
-// unescaped (letters/digits) -- info_hash and peer_id are raw binary, and
-// escaping unconditionally avoids having to special-case which bytes are
-// URL-safe. Decodes identically to a "smart" partial-escaping encoder.
+// info_hash and peer_id are raw bytes: escape every byte, no "safe byte" special cases.
 function percentEncodeBytes(buffer) {
   let out = '';
 

@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-// Azureus-style client identifier: -HT0001- (Hypertube, version 0001),
-// padded to 20 bytes with random data as BEP20 expects.
+// Azureus-style id: -HT0001- plus 12 random bytes (BEP20).
 const CLIENT_PREFIX = '-HT0001-';
 
 export function generatePeerId() {

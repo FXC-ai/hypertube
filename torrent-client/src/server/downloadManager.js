@@ -14,11 +14,8 @@ export class DownloadManagerError extends Error {
 
 const DEFAULT_TRACKER_PORT = 6881;
 
-// In-memory job tracker wrapping torrentFile parsing + tracker announce +
-// swarm download behind a start/status/cancel surface, for the HTTP layer
-// (#11) to expose. Every "real" dependency is injectable so tests don't need
-// the network -- same pattern as fetchImpl in httpTracker.js and
-// httpAnnouncer/udpAnnouncer in announce.js.
+// In-memory jobs behind start/status/cancel. Every real dependency is injectable so tests
+// need no network.
 export function createDownloadManager({
   parseTorrentFileFn = parseTorrentFile,
   announceFn = defaultAnnounce,
@@ -53,9 +50,7 @@ export function createDownloadManager({
     jobs.set(id, job);
 
     run(job, { torrentBytes, torrentUrl }).catch(() => {
-      // run() always resolves the job's status itself; this catch only
-      // exists so a genuinely unexpected throw can't become an unhandled
-      // rejection.
+      // run() records its own failures; this only prevents an unhandled rejection.
     });
 
     return id;
@@ -96,9 +91,7 @@ export function createDownloadManager({
       const webSeedUrls = torrent.urlList ?? [];
 
       if (peers.length === 0 && webSeedUrls.length === 0) {
-        // No P2P peers is expected and fine for sources like archive.org
-        // (see #12) as long as the torrent provides BEP19 web-seed URLs --
-        // only genuinely fail when there's no way to get bytes at all.
+        // No peers is fine (e.g. archive.org) as long as web-seed URLs exist.
         throw new DownloadManagerError(
           'Tracker announce returned no peers and the torrent has no web-seed URLs',
         );

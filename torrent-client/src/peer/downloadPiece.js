@@ -22,11 +22,8 @@ export class PeerError extends Error {
   }
 }
 
-// Connects to a single peer, performs the handshake, waits to be unchoked,
-// then requests every 16KB block of one piece, verifying its SHA-1 against
-// `pieceHash` before returning it. A hash mismatch is never accepted
-// silently: the piece is re-requested from scratch, up to `maxAttempts`
-// times, before giving up.
+// Downloads one piece from one peer: handshake, wait for unchoke, request each 16KB block,
+// verify the SHA-1. A hash mismatch is retried from scratch up to `maxAttempts`, never accepted.
 export function downloadPieceFromPeer(peer, options) {
   const {
     infoHash,
@@ -222,8 +219,7 @@ export function downloadPieceFromPeer(peer, options) {
         return;
       }
 
-      // Reject the corrupt piece and redownload it from scratch rather than
-      // accepting it silently.
+      // Corrupt piece: discard the blocks and start over.
       blocks = new Map();
       nextRequestBegin = 0;
       outstanding = 0;

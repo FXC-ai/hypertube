@@ -1,6 +1,5 @@
-// Minimal bencode encoder used only to build fixtures in tests. Deliberately
-// separate from src/bencode.js (which only needs to decode for #7) so tests
-// don't validate the decoder against itself.
+// Minimal bencode encoder for building test fixtures, kept separate from src/bencode.js so
+// tests don't validate the decoder against itself.
 export function encode(value) {
   if (Buffer.isBuffer(value)) {
     return Buffer.concat([Buffer.from(`${value.length}:`), value]);

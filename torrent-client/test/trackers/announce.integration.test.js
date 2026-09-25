@@ -26,12 +26,8 @@ function paramsFor(torrent, overrides = {}) {
   };
 }
 
-// Real network calls against real, currently-alive public infrastructure --
-// same category as fixtures.test.js in #7. tracker.opentrackr.org is one of
-// the most reliably-uptime public UDP trackers and Sintel is one of the
-// most heavily-seeded torrents in existence, chosen specifically so this
-// test can assert a real, populated swarm (see docs/testing-torrent-sources.md,
-// "swarm normal, beaucoup de pairs").
+// Real network against tracker.opentrackr.org and Sintel, a heavily seeded torrent, so we
+// can assert a real populated swarm.
 test('announces to a real UDP tracker for a well-seeded reference torrent and gets real peers back', async () => {
   const torrent = loadFixture('sintel.webtorrent.io.torrent');
   const result = await announceUdpTracker('udp://tracker.opentrackr.org:1337', paramsFor(torrent), {
@@ -43,21 +39,14 @@ test('announces to a real UDP tracker for a well-seeded reference torrent and ge
 
   for (const peer of result.peers) {
     assert.match(peer.ip, /^\d+\.\d+\.\d+\.\d+$/);
-    // 0 is a valid uint16 and does show up for some real peers (NAT/relay
-    // artifacts); this only checks the wire format was parsed correctly,
-    // not that every peer is actually reachable.
+    // Port 0 does show up for some real peers; this only checks the wire format.
     assert.ok(peer.port >= 0 && peer.port <= 65535);
   }
 });
 
-// archive.org does not seed its own content peer-to-peer (documented in
-// docs/testing-torrent-sources.md) and this item is low-popularity, so the
-// P2P swarm is expected to be near-empty. What this test actually proves is
-// that the HTTP tracker round-trip itself works end-to-end against a real
-// server: valid bencoded response, no "failure reason". The one peer that
-// does come back in practice is our own announce being echoed by the
-// tracker, not a second real client -- real content delivery for this
-// source is the web-seeding fallback (#12), not the P2P swarm.
+// archive.org does not seed peer-to-peer, so the swarm is near-empty (the one peer that comes
+// back is our own announce echoed). This only proves the HTTP tracker round-trip works:
+// valid bencode, no "failure reason".
 test('announces to the real archive.org HTTP tracker and gets a valid response', async () => {
   const torrent = loadFixture('1953_movie_trailers_starting_monday.archive.org.torrent');
   const result = await announceHttpTracker(torrent.announce, paramsFor(torrent), {

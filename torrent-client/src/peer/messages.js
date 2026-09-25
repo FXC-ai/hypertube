@@ -11,8 +11,7 @@ export const MESSAGE_ID = {
   PORT: 9,
 };
 
-// Sentinel id for a zero-length keep-alive message (it has no id byte on
-// the wire at all -- just a 4-byte zero length prefix).
+// A keep-alive is a bare 4-byte zero length prefix, with no id byte.
 export const KEEP_ALIVE = 'keep-alive';
 
 export function encodeMessage(id, payload = Buffer.alloc(0)) {
@@ -42,11 +41,8 @@ export function encodeRequest(index, begin, length) {
   return encodeMessage(MESSAGE_ID.REQUEST, payload);
 }
 
-// Pulls every complete length-prefixed message out of `buffer`. TCP gives
-// no message boundaries, so a peer's messages can arrive split across
-// several 'data' events, or several bundled into one -- `remaining` holds
-// whatever trailing partial message wasn't complete yet, to be prepended to
-// the next chunk read from the socket.
+// Extracts every complete length-prefixed message. TCP has no message boundaries, so
+// `remaining` holds a trailing partial message to prepend to the next chunk.
 export function extractMessages(buffer) {
   const messages = [];
   let offset = 0;

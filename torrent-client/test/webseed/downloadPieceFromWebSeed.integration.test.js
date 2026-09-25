@@ -6,10 +6,7 @@ import { parseTorrentFile } from '../../src/torrentFile.js';
 import { computeFileLayout, computePieceRanges } from '../../src/torrentLayout.js';
 import { downloadPieceFromWebSeed } from '../../src/webseed/downloadPieceFromWebSeed.js';
 
-// Real network: archive.org's actual web-seed server, same fixture used
-// throughout #7-#11. Confirms the URL convention
-// (<url-list entry><torrent name>/<file path>) and Range-request handling
-// against the real thing, not just a fake fetch.
+// Real network: archive.org's web-seed URL convention and Range handling, not a fake fetch.
 test('downloads a real piece from archive.org via BEP19 web-seeding and verifies its hash', async () => {
   const torrentPath = fileURLToPath(
     new URL('../fixtures/1953_movie_trailers_starting_monday.archive.org.torrent', import.meta.url),

@@ -12,21 +12,11 @@ export class SwarmDownloadError extends Error {
   }
 }
 
-// Downloads every piece of `torrent` from `peers` (BitTorrent peer-wire)
-// and/or `webSeedUrls` (BEP19 HTTP web-seed base URLs, #12) using a bounded
-// pool of concurrent workers. Peers and web-seeds are mixed into a single
-// rotation, not tried as a fallback chain -- a worker just pulls the next
-// source in the list, peer-wire or web-seed, whichever comes up, so both
-// are used together whenever both are available rather than one being
-// abandoned in favour of the other. No persistent per-source connections
-// yet (see README): every attempt is a fresh TCP connection or HTTP
-// request. Pieces are written to their real file(s) under `outputDir`,
-// following torrent.files -- NOT to one flat blob, since a single piece
-// routinely straddles a file boundary in a multi-file torrent (every real
-// fixture in this repo, archive.org's included, is multi-file). A piece
-// that keeps failing (bad source, timeout, hash mismatch) is requeued
-// against a different source, up to maxAttemptsPerPiece, before the whole
-// download is abandoned with a SwarmDownloadError.
+// Downloads every piece of `torrent` with a bounded pool of workers. Peers (peer-wire) and
+// web-seeds (BEP19) share one source rotation, so both are used together rather than as a
+// fallback chain. Pieces are written to the real files under `outputDir`, since a piece can
+// straddle a file boundary in a multi-file torrent. A failing piece is requeued on another
+// source, up to maxAttemptsPerPiece, before the download fails with a SwarmDownloadError.
 export async function downloadTorrent(torrent, peers, options) {
   const {
     infoHash,
@@ -55,6 +45,8 @@ export async function downloadTorrent(torrent, peers, options) {
   const numPieces = torrent.pieces.length;
   const queue = [...Array(numPieces).keys()];
   const attempts = new Array(numPieces).fill(0);
+  // Keep each distinct failure: the last error alone can hide the real cause across sources.
+  const failureReasons = Array.from({ length: numPieces }, () => new Set());
   let completed = 0;
   let sourceCursor = 0;
   let failure = null;
@@ -66,12 +58,8 @@ export async function downloadTorrent(torrent, peers, options) {
     return source;
   }
 
-  // Maps to in-flight *promises*, not resolved handles: two workers can ask
-  // for the same file's handle in the same tick, before either has awaited
-  // anything. Storing the promise synchronously on the first call means the
-  // second caller reuses it instead of racing its own open(path, 'w') --
-  // which would truncate the file a second time and lose whatever the first
-  // handle had already written.
+  // Memoize the open() *promise*: two workers asking for the same file in the same tick would
+  // otherwise each open(path, 'w'), and the second would truncate what the first wrote.
   const fileHandlePromises = new Map();
   function handleFor(file) {
     let promise = fileHandlePromises.get(file.path);
@@ -146,10 +134,11 @@ export async function downloadTorrent(torrent, peers, options) {
           }
 
           attempts[pieceIndex] += 1;
+          failureReasons[pieceIndex].add(err.message);
 
           if (attempts[pieceIndex] >= maxAttemptsPerPiece) {
             failure = new SwarmDownloadError(
-              `Piece ${pieceIndex} failed after ${attempts[pieceIndex]} attempt(s) across the source pool: ${err.message}`,
+              `Piece ${pieceIndex} failed after ${attempts[pieceIndex]} attempt(s) across the source pool: ${[...failureReasons[pieceIndex]].join(' | ')}`,
             );
 
             return;
@@ -175,11 +164,7 @@ export async function downloadTorrent(torrent, peers, options) {
       throw new SwarmDownloadError(`Download incomplete: ${completed}/${numPieces} pieces`);
     }
 
-    // A zero-length file (e.g. an empty log placeholder -- archive.org's
-    // multi-file torrents routinely include a few) never overlaps any
-    // piece, so the loop above never calls handleFor() for it. Touch every
-    // file explicitly here so the torrent's full file list actually exists
-    // on disk, not just the ones pieces happened to write into.
+    // Zero-length files overlap no piece, so touch every file to make sure they all exist.
     await Promise.all(fileLayout.map((file) => handleFor(file)));
 
     return { outputDir, piecesDownloaded: completed, files: fileLayout.map((f) => f.path) };

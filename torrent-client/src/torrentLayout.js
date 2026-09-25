@@ -1,8 +1,5 @@
-// Pure byte-range math shared by the peer-wire write path (#10) and the
-// web-seed read path (#12): both need to know which file(s) a chunk of the
-// concatenated piece stream belongs to. BitTorrent lays out a multi-file
-// torrent's pieces and BEP19 web-seed ranges identically -- every file
-// concatenated back to back, in `files` order.
+// Byte-range math shared by the peer-wire write path and the web-seed read path: a torrent's
+// files are concatenated back to back in `files` order before being cut into pieces.
 
 export function computeFileLayout(torrent) {
   let offset = 0;
@@ -28,9 +25,8 @@ export function computePieceRanges(torrent) {
   return ranges;
 }
 
-// A byte range [rangeStart, rangeStart + rangeLength) in the concatenated
-// stream can straddle a file boundary. Returns one entry per file the range
-// actually overlaps:
+// A byte range in the concatenated stream can straddle files. Returns one entry per file it
+// overlaps:
 // - file: the computeFileLayout() entry
 // - fileOffset: where this chunk starts within that file
 // - length: how many bytes of this chunk

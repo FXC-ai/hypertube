@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Client Torrent - page de test</title>
+<style>
+:root{--bg:#fafaf9;--card:#fff;--text:#1c1917;--muted:#78716c;--border:#e7e5e4;--accent:#2563eb;--ok:#15803d;--bad:#b91c1c;--warn:#a16207;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1917;--card:#292524;--text:#fafaf9;--muted:#a8a29e;--border:#44403c;--accent:#60a5fa;--ok:#4ade80;--bad:#f87171;--warn:#facc15}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,sans-serif}
+main{max-width:820px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:17px;margin:0 0 12px}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:13px ui-monospace,monospace}
+button{padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font:inherit;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid var(--border);font-size:13px}
+.pill.ok{color:var(--ok);border-color:var(--ok)}.pill.bad{color:var(--bad);border-color:var(--bad)}.pill.warn{color:var(--warn);border-color:var(--warn)}
+.bar{height:10px;border-radius:5px;background:var(--border);overflow:hidden;margin:12px 0 6px}
+.bar>div{height:100%;width:0;background:var(--accent);transition:width .4s}
+pre{margin:8px 0 0;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow-x:auto;font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+code{font:13px ui-monospace,monospace}
+.muted{color:var(--muted)}
+.err{color:var(--bad)}
+details{margin-top:8px}summary{cursor:pointer}
+ol{padding-left:20px}
+</style>
+</head>
+<body>
+<main>
+<h1>Client Torrent - page de test</h1>
+<p class="sub">Lance un vrai téléchargement depuis le navigateur, sans écrire de curl. <span id="health" class="pill warn">service : vérification...</span></p>
+
+<section class="card">
+<h2>Lancer un téléchargement</h2>
+<label for="url">torrentUrl (torrent archive.org court, environ 2 Mo, pré-rempli)</label>
+<input id="url" value="https://archive.org/download/1953_Movie_Trailers_Starting_Monday/1953_Movie_Trailers_Starting_Monday_archive.torrent">
+<label for="dir">outputDir (chemin dans le conteneur ou sur la machine où tourne le service)</label>
+<input id="dir" value="__DEFAULT_OUTPUT_DIR__">
+<div class="row">
+<button id="start" class="primary">Lancer</button>
+<button id="cancel" disabled>Annuler</button>
+</div>
+<details open><summary class="muted">Équivalent curl</summary><pre id="curl"></pre></details>
+</section>
+
+<section class="card">
+<h2>Progression</h2>
+<div><span id="status" class="pill">aucun téléchargement</span> <span id="jobid" class="muted"></span></div>
+<div class="bar"><div id="fill"></div></div>
+<div id="counts" class="muted">-</div>
+<div id="error" class="err"></div>
+<details><summary class="muted">Réponse brute de GET /downloads/:id</summary><pre id="raw">-</pre></details>
+</section>
+
+<section class="card">
+<h2>Comment ça marche</h2>
+<ol>
+<li><code>POST /downloads</code> crée un job en mémoire et répond <code>202</code> avec son id tout de suite. Le travail continue en arrière-plan.</li>
+<li>Le <code>.torrent</code> est téléchargé puis décodé (bencode). Le SHA-1 du dictionnaire <code>info</code> donne l'info-hash.</li>
+<li>Les trackers (HTTP ou UDP) sont interrogés pour obtenir une liste de pairs.</li>
+<li>Pairs et web-seeds (serveurs HTTP de l'<code>url-list</code>) sont mélangés dans une seule liste de sources. Un pool de 10 workers télécharge les pièces en parallèle, chacune vérifiée par SHA-1, et retentée sur une autre source si elle échoue.</li>
+<li>Chaque pièce valide est écrite à son offset dans le ou les fichiers qu'elle recouvre. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
+</ol>
+<table>
+<tr><th>Route</th><th>Rôle</th></tr>
+<tr><td><code>GET /health</code></td><td>le service répond</td></tr>
+<tr><td><code>POST /downloads</code></td><td>démarre (<code>outputDir</code> et <code>torrentUrl</code> ou <code>torrentBase64</code>)</td></tr>
+<tr><td><code>GET /downloads/:id</code></td><td>statut : <code>downloading</code>, <code>completed</code>, <code>failed</code> ou <code>cancelled</code>, plus la progression</td></tr>
+<tr><td><code>DELETE /downloads/:id</code></td><td>annule un téléchargement en cours</td></tr>
+</table>
+<p class="muted">Cet item archive.org n'a quasiment aucun pair : le contenu vient du web-seed (HTTP Range) des serveurs d'archive.org. Il faut donc que le service ait accès à Internet, et que archive.org soit disponible.</p>
+<p class="muted">Tous les items archive.org ne se téléchargent pas : ceux dont le <code>_meta.xml</code> a été régénéré après la création du torrent échouent toujours (hash de pièce différent, refus voulu), et un nœud de stockage archive.org peut être injoignable. Le message d'erreur liste alors chaque cause distincte.</p>
+<p class="muted">Dans Docker, un outputDir sous <code>/var/www/html/storage/app/public/movies/</code> atterrit dans le volume partagé avec le conteneur <code>app</code>. Ailleurs, les fichiers restent dans le conteneur <code>client-torrent</code>.</p>
+<p class="muted">Détails des protocoles avec extraits de code : <code>torrent-client/PROTOCOLS.md</code>. Contrat de l'API : <code>torrent-client/API.md</code>.</p>
+</section>
+</main>
+<script>
+var $=function(id){return document.getElementById(id)};
+var url=$('url'),dir=$('dir'),startBtn=$('start'),cancelBtn=$('cancel');
+var jobId=null,timer=null;
+var TERMINAL=['completed','failed','cancelled'];
+
+function fmtBytes(n){
+  if(n===null||n===undefined){return '?'}
+  if(n<1024){return n+' o'}
+  if(n<1048576){return (n/1024).toFixed(1)+' Ko'}
+  return (n/1048576).toFixed(1)+' Mo';
+}
+function renderCurl(){
+  var body=JSON.stringify({torrentUrl:url.value,outputDir:dir.value});
+  $('curl').textContent="curl -X POST "+location.origin+"/downloads \\\n  -H 'Content-Type: application/json' \\\n  -d '"+body+"'";
+}
+function setStatus(text,cls){
+  var s=$('status');
+  s.textContent=text;
+  s.className='pill'+(cls?' '+cls:'');
+}
+function render(job){
+  var cls=job.status==='completed'?'ok':(job.status==='failed'?'bad':(job.status==='cancelled'?'warn':''));
+  setStatus(job.status,cls);
+  var pct=job.totalBytes?Math.min(100,job.downloadedBytes/job.totalBytes*100):0;
+  $('fill').style.width=pct+'%';
+  $('counts').textContent=fmtBytes(job.downloadedBytes)+' sur '+fmtBytes(job.totalBytes)+' - pièces '+job.piecesCompleted+' sur '+(job.totalPieces===null?'?':job.totalPieces);
+  $('error').textContent=job.error||'';
+  $('raw').textContent=JSON.stringify(job,null,2);
+}
+function stopPolling(){
+  if(timer){clearInterval(timer);timer=null}
+  startBtn.disabled=false;
+  cancelBtn.disabled=true;
+}
+function poll(){
+  fetch('/downloads/'+encodeURIComponent(jobId)).then(function(r){return r.json()}).then(function(job){
+    render(job);
+    if(TERMINAL.indexOf(job.status)!==-1){stopPolling()}
+  }).catch(function(e){$('error').textContent='Erreur de polling : '+e.message});
+}
+startBtn.onclick=function(){
+  $('error').textContent='';
+  startBtn.disabled=true;
+  fetch('/downloads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({torrentUrl:url.value,outputDir:dir.value})})
+    .then(function(r){return r.json().then(function(b){return {ok:r.ok,body:b}})})
+    .then(function(res){
+      if(!res.ok){throw new Error(res.body.error||'requête refusée')}
+      jobId=res.body.id;
+      $('jobid').textContent='id '+jobId;
+      cancelBtn.disabled=false;
+      setStatus('downloading','');
+      poll();
+      timer=setInterval(poll,1000);
+    })
+    .catch(function(e){startBtn.disabled=false;$('error').textContent=e.message});
+};
+cancelBtn.onclick=function(){
+  if(!jobId){return}
+  fetch('/downloads/'+encodeURIComponent(jobId),{method:'DELETE'}).then(function(){poll()});
+};
+url.oninput=renderCurl;
+dir.oninput=renderCurl;
+renderCurl();
+fetch('/health').then(function(r){return r.json()}).then(function(){
+  var h=$('health');h.textContent='service : en ligne';h.className='pill ok';
+}).catch(function(){
+  var h=$('health');h.textContent='service : injoignable';h.className='pill bad';
+});
+</script>
+</body>
+</html>

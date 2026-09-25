@@ -116,10 +116,8 @@ function sendAnnounce(socket, host, port, connectionId, params, timeoutMs, annou
   });
 }
 
-// Sends `request` and resolves with the first `onMessage(response)` result
-// that isn't undefined (undefined means "not our transaction id / not a
-// real reply yet, keep listening"). Rejects on socket error or timeout so a
-// silent tracker never hangs the caller indefinitely.
+// Sends `request` and resolves with the first onMessage() result that isn't undefined
+// (undefined = not our reply, keep listening). Rejects on error or timeout.
 function sendAndReceive(socket, request, host, port, timeoutMs, announceUrl, onMessage) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {

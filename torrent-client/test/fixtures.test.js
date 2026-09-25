@@ -4,11 +4,8 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseTorrentFile } from '../src/torrentFile.js';
 
-// Real, short reference torrent from archive.org: a bundle of derivative
-// files (mp4/ogv/thumbnails/...) for a 1953 movie trailer, ~3MB total.
-// Known info-hash (btih) taken from archive.org's own item metadata
-// (https://archive.org/metadata/1953_Movie_Trailers_Starting_Monday),
-// independent of this parser, so it's a real cross-check and not circular.
+// Real short torrent from archive.org (~3MB). The expected info-hash comes from archive.org's
+// own item metadata, independent of this parser.
 const FIXTURE_PATH = fileURLToPath(
   new URL('./fixtures/1953_movie_trailers_starting_monday.archive.org.torrent', import.meta.url),
 );

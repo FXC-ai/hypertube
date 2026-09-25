@@ -10,12 +10,8 @@ import { parseTorrentFile } from '../../src/torrentFile.js';
 import { generatePeerId } from '../../src/trackers/peerId.js';
 import { computeVideoSignature } from '../../src/videoSignature.js';
 
-// Real network, real web-seed servers, zero peers -- the literal #12
-// acceptance criteria: "Téléchargement complet réussi d'un item archive.org
-// réel n'ayant aucun pair P2P actif, uniquement via web-seeding". archive.org
-// doesn't seed its own content peer-to-peer (documented since #7/#8's
-// README notes), so passing an empty peer list here isn't a contrived
-// edge case -- it's what a real download of this source looks like.
+// Real network, zero peers: archive.org does not seed peer-to-peer, so an empty peer list is
+// what a real download of this source looks like.
 test(
   'downloads the complete archive.org torrent using only web-seeding, no peers',
   { timeout: 60000 },
@@ -52,10 +48,8 @@ test(
       );
       assert.equal(totalWrittenSize, torrent.totalLength);
 
-      // Closes the loop noted in #7/#9's README: compare the web-seed-assembled
-      // video against the ground-truth signature fetched independently over
-      // plain HTTP back in #7, proving both download paths produce identical
-      // bytes.
+      // Compare with the ground-truth signature fetched over plain HTTP: both download paths
+      // must produce identical bytes.
       const signatureJsonPath = fileURLToPath(
         new URL(
           '../fixtures/reference-video/1953_movie_trailers_starting_monday.reference.signature.json',

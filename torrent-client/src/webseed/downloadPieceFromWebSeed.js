@@ -11,13 +11,9 @@ export class WebSeedError extends Error {
 
 const DEFAULT_TIMEOUT_MS = 20000;
 
-// Downloads one piece via BEP19 web-seeding: for each file the piece
-// overlaps (a piece can straddle a file boundary, same as peer-wire writes
-// -- see torrentLayout.js), issues a ranged HTTP GET against
-// <baseUrl><torrent.name>/<file.path>, the convention archive.org (and
-// BEP19 generally) uses for multi-file torrents. The assembled piece is
-// verified against pieceHash exactly like a peer-wire piece (#9) -- same
-// integrity guarantee no matter where the bytes came from.
+// Downloads one piece via BEP19: one ranged GET per file the piece overlaps, at
+// <baseUrl><torrent.name>/<file.path> (the archive.org convention), then verifies the SHA-1
+// exactly like a peer-wire piece.
 export async function downloadPieceFromWebSeed(
   baseUrl,
   torrent,

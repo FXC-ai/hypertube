@@ -1,11 +1,25 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createDownloadManager, DownloadManagerError } from './downloadManager.js';
 
 const DOWNLOAD_ID_PATTERN = /^\/downloads\/([^/]+)$/;
 
-// start/status/cancel over plain node:http -- no framework, matching the
-// rest of this service. The manager is injectable purely for testing; in
-// production a single createDownloadManager() instance backs the server.
+// In Docker the shared volume exists: pre-fill the page with the path Laravel reads from.
+const DOCKER_STORAGE_DIR = '/var/www/html/storage';
+const DOCKER_OUTPUT_DIR = `${DOCKER_STORAGE_DIR}/app/public/movies/999`;
+const UI_TEMPLATE = readFileSync(new URL('./ui.html', import.meta.url), 'utf8');
+
+function renderUiPage() {
+  const outputDir = existsSync(DOCKER_STORAGE_DIR)
+    ? DOCKER_OUTPUT_DIR
+    : join(tmpdir(), 'hypertube-download');
+
+  return UI_TEMPLATE.replace('__DEFAULT_OUTPUT_DIR__', outputDir);
+}
+
+// Plain node:http, no framework. The manager is injectable for tests.
 export function createServer({ manager = createDownloadManager() } = {}) {
   return createHttpServer((req, res) => {
     handleRequest(req, res, manager).catch((err) => {
@@ -17,6 +31,17 @@ export function createServer({ manager = createDownloadManager() } = {}) {
 async function handleRequest(req, res, manager) {
   if (req.method === 'GET' && req.url === '/health') {
     sendJson(res, 200, { status: 'ok' });
+
+    return;
+  }
+
+  if (req.method === 'GET' && req.url === '/') {
+    const page = renderUiPage();
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Length': Buffer.byteLength(page),
+    });
+    res.end(page);
 
     return;
   }

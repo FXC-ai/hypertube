@@ -15,26 +15,12 @@ import { announceUdpTracker } from '../../src/trackers/udpTracker.js';
 
 const execFileAsync = promisify(execFile);
 
-// Full real download, end to end: real tracker, real swarm, real peers,
-// the complete Sintel torrent (~129MB across 11 files -- subtitles,
-// Sintel.mp4, a poster -- ~987 pieces). This is the literal acceptance
-// criteria for #10 ("Téléchargement complet d'un torrent de référence
-// réel... de bout en bout via le swarm").
+// Full real download of the Sintel torrent (~129MB, 11 files, ~987 pieces). It is multi-file:
+// piece 0 is subtitle text, and pieces straddle file boundaries, so the ffprobe check
+// targets Sintel.mp4 under outputDir, not the raw piece stream.
 //
-// Sintel is multi-file: piece 0 is actually German subtitle text, not
-// video bytes -- BitTorrent concatenates every file in `files` order
-// before slicing it into pieces, so a piece routinely straddles a file
-// boundary. downloadTorrent() reconstructs the real files under outputDir
-// (see src/swarm/downloadTorrent.js), so the ffprobe check below targets
-// Sintel.mp4 specifically, not the raw piece stream.
-//
-// Most tracker-listed peers are unreachable at any given moment (see #9's
-// README notes) -- feeding all ~130 candidates straight into downloadTorrent
-// would waste most retry attempts timing out against dead ones. Instead we
-// first probe connectivity for real (download piece 0 from every candidate
-// in parallel, short timeout) and keep only the peers that actually
-// answered, mirroring what a real client's peer pool looks like once
-// unreachable peers have been weeded out.
+// Most tracker-listed peers are unreachable, so first probe them (piece 0 from every
+// candidate in parallel, short timeout) and keep only the ones that answered.
 test(
   'downloads the complete Sintel torrent from the real swarm end to end',
   { timeout: 240000 },
@@ -97,8 +83,7 @@ test(
       );
       assert.equal(totalWrittenSize, torrent.totalLength);
 
-      // "lisible/valide (ex. ouvrable par ffprobe)" -- ask ffprobe to read the
-      // actual video file's stream metadata back out of what we assembled.
+      // ffprobe must be able to read the video stream back out of what we assembled.
       const videoPath = join(outputDir, 'Sintel.mp4');
       const { stdout } = await execFileAsync('ffprobe', [
         '-v',

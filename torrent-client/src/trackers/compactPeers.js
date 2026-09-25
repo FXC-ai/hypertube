@@ -1,6 +1,4 @@
-// Compact peer format (BEP23): 6 bytes per peer, 4-byte big-endian IPv4
-// followed by a 2-byte big-endian port. Shared by HTTP and UDP tracker
-// responses, which both use it.
+// Compact peers (BEP23): 6 bytes each, IPv4 then port, big-endian. Used by both trackers.
 export function parseCompactPeers(buffer) {
   if (buffer.length % 6 !== 0) {
     throw new RangeError('Compact peers buffer length must be a multiple of 6');

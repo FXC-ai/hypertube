@@ -239,3 +239,31 @@ test('combines a real peer and a web-seed in the same download rather than picki
     webSeed.close();
   }
 });
+
+test('a failed piece reports every distinct source failure, not only the last one', async () => {
+  const pieces = buildPieces(1);
+  const torrent = torrentFor(pieces);
+  // one web-seed serves bytes of the right length but wrong content (hash mismatch, like an
+  // archive.org _meta.xml regenerated after the torrent was made), the other is unreachable.
+  const wrongContent = Buffer.alloc(pieces[0].length, 99);
+  const webSeed = await startFakeWebSeed(torrent.name, { 'output.bin': wrongContent }, {});
+  const { port } = webSeed.address();
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await assert.rejects(
+        downloadTorrent(torrent, [], {
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+          pieceTimeoutMs: 2000,
+          maxAttemptsPerPiece: 4,
+          webSeedUrls: [`http://127.0.0.1:${port}/`, 'http://127.0.0.1:1/'],
+        }),
+        (err) => /hash mismatch/.test(err.message) && /Web-seed request failed/.test(err.message),
+      );
+    });
+  } finally {
+    webSeed.close();
+  }
+});

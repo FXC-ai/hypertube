@@ -5,13 +5,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { createServer } from '../../src/server/httpServer.js';
 
-// Full real stack over real HTTP: POST /downloads fetches the actual Sintel
-// .torrent from webtorrent.io, announces to the real tracker, and starts
-// pulling real pieces from the real swarm -- exactly what #13 (Laravel side)
-// will do when it calls this API with a resolved torrent reference. We only
-// wait for *some* real progress (not full completion, that's already proven
-// end-to-end by downloadTorrent.integration.test.js) and then exercise
-// DELETE to confirm a real in-progress download actually stops.
+// Real stack over HTTP: POST starts a real Sintel download, wait for some progress, then
+// DELETE must actually stop it.
 test(
   'starts a real download over HTTP, sees real progress, and DELETE cancels it',
   { timeout: 60000 },

@@ -18,10 +18,8 @@ export function buildHandshake(infoHash, peerId, { reserved = Buffer.alloc(8) } 
   ]);
 }
 
-// Returns `length`, the number of bytes the handshake actually occupied, so
-// callers reading from a live TCP stream can slice off exactly that many
-// bytes -- a peer routinely sends its first peer-wire message (e.g.
-// bitfield) in the same packet as the handshake.
+// Returns `length` (bytes consumed) so callers can slice it off: peers often send their first
+// message in the same packet as the handshake.
 export function parseHandshake(buffer) {
   if (buffer.length < 1) {
     throw new RangeError('Buffer too short to contain a handshake');
