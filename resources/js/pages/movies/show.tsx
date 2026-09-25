@@ -1,4 +1,4 @@
-import { Head, useForm, usePoll } from '@inertiajs/react';
+import { Head, InfiniteScroll, useForm, usePoll } from '@inertiajs/react';
 import Hls from 'hls.js';
 import {
     Film,
@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import CommentForm from '@/components/comment-form';
+import CommentItem from '@/components/comment-item';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -20,6 +22,7 @@ import {
 } from '@/components/ui/card';
 import { show } from '@/routes/movies';
 import { store as conversionStore } from '@/routes/movies/conversion';
+import type { Comment } from '@/types/comment';
 
 type ConversionStatus =
     'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
@@ -37,6 +40,7 @@ type MoviePageData = {
 
 type MovieShowProps = {
     moviePageData: MoviePageData;
+    comments: { data: Comment[], meta: {total: number} };
 };
 
 const conversionStatusLabel: Record<ConversionStatus, string> = {
@@ -52,14 +56,15 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
 
     const videoRef = useRef<HTMLVideoElement>(null);
 
-    const languages: { [language: string]: string } = {
-        french: 'fr',
-        german: 'de',
-        english: 'en',
-        italian: 'it',
-    };
-
     useEffect(() => {
+
+        const languages: { [language: string]: string } = {
+            french: 'fr',
+            german: 'de',
+            english: 'en',
+            italian: 'it',
+        };
+
         const video = videoRef.current;
 
         if (video === null) {
@@ -71,6 +76,7 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
 
         if (!supportsMediaSource && supportsNativeHls) {
             video.src = src;
+
             return () => {
                 video.removeAttribute('src');
                 video.load();
@@ -79,6 +85,7 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
 
         if (!supportsMediaSource) {
             console.error('HLS is not supported by this browser');
+
             return;
         }
 
@@ -162,7 +169,7 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
     );
 }
 
-export default function MovieShow({ moviePageData }: MovieShowProps) {
+export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
 
     const conversionForm = useForm({});
     const { stop } = usePoll(2000, {});
@@ -180,7 +187,9 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
         }
     }, [moviePageData.conversion_status, stop]);
 
-    const startConversion = (): void => { conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true }); };
+    const startConversion = (): void => {
+        conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true });
+    };
 
     console.log("moviePageData.conversion_attempt = ", moviePageData.conversion_attempt);
     return (
@@ -308,16 +317,29 @@ export default function MovieShow({ moviePageData }: MovieShowProps) {
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-lg">
                                 <MessageCircle className="size-5" />
-                                Comments
+                                Comments ({comments.meta.total})
                             </CardTitle>
                             <CardDescription>
                                 Share your thoughts with other viewers.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm text-muted-foreground">
-                                Comments and the writing area will be available
-                                soon.
+                        <CardContent className="space-y-6">
+                            <CommentForm movieId={moviePageData.id} />
+
+                            <div className="space-y-4">
+                                {comments.data.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                        No comments yet. Be the first to share your thoughts!
+                                    </p>
+                                ) : (
+                                    <InfiniteScroll data="comments" buffer={300} onlyNext>
+
+                                        {
+                                            comments.data.map((comment) => (<CommentItem key={comment.id} comment={comment}></CommentItem>))
+                                        }
+
+                                    </InfiniteScroll>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
