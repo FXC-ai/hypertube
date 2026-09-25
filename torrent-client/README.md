@@ -282,6 +282,16 @@ curl -sL -o test/fixtures/<nom>.torrent "https://archive.org/download/<identifie
 
 ## Notes pour la suite
 
+### Migration possible vers TypeScript et Node 24
+
+Le service est en JavaScript sur `node:20-alpine`, sans étape de build ni dépendance npm.
+Si l'équipe veut du TypeScript pour s'aligner sur le reste du repo, le chemin le plus simple
+est de passer à Node 24 (`node:24-alpine`), qui exécute du `.ts` en supprimant les types, sans
+`tsc` ni build : il faudrait alors renommer les fichiers en `.ts`, écrire les imports avec
+l'extension `.ts` et changer l'image du `Dockerfile`. Une étape intermédiaire sans réécriture
+est de garder le JS avec des annotations JSDoc et `checkJs` dans un `tsconfig.json` local.
+À faire après le merge de la PR #23, pas dedans.
+
 ### Tests intéressants à ajouter
 
 - **Validation Docker automatisée** - les 3 critères de #17 (build sans erreur, réseau interne,
