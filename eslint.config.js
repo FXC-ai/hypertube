@@ -49,6 +49,14 @@ export default [
         },
     },
     {
+        files: ['torrent-client/**/*.js'],
+        languageOptions: {
+            globals: {
+                ...globals.node,
+            },
+        },
+    },
+    {
         plugins: {
             import: importPlugin,
         },
