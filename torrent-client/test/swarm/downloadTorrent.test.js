@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -189,6 +189,49 @@ test('creates zero-length files on disk even though no piece ever overlaps them'
       assert.equal(empty2.length, 0);
       const movie = await readFile(join(outputDir, 'movie.mp4'));
       assert.ok(movie.equals(Buffer.concat(pieces)));
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('with fileIndexes, only the pieces covering the chosen file are fetched and only its bytes are written', async () => {
+  const pieces = buildPieces(4);
+  const stream = Buffer.concat(pieces);
+  // meta.sqlite [0,10000) and movie.mp4 [10000,42768) share piece 0; movie.mp4 and extra.mp3
+  // [42768,65536) share piece 2; piece 3 only holds extra.mp3.
+  const torrent = {
+    ...torrentFor(pieces),
+    files: [
+      { path: 'meta.sqlite', length: 10000 },
+      { path: 'movie.mp4', length: 32768 },
+      { path: 'extra.mp3', length: stream.length - 42768 },
+    ],
+  };
+  // the peer never answers for piece 3: the download can only succeed if it is never asked.
+  const server = await startFakePeer(pieces, { failPieceIndexes: new Set([3]) });
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(
+        torrent,
+        [{ ip: '127.0.0.1', port: server.address().port }],
+        {
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+          concurrency: 2,
+          pieceTimeoutMs: 2000,
+          maxAttemptsPerPiece: 1,
+          fileIndexes: [1],
+        },
+      );
+      assert.equal(result.piecesDownloaded, 3);
+      assert.deepEqual(result.files, ['movie.mp4']);
+      const movie = await readFile(join(outputDir, 'movie.mp4'));
+      assert.ok(movie.equals(stream.subarray(10000, 42768)));
+      await assert.rejects(access(join(outputDir, 'meta.sqlite')), { code: 'ENOENT' });
+      await assert.rejects(access(join(outputDir, 'extra.mp3')), { code: 'ENOENT' });
     });
   } finally {
     server.close();

@@ -15,26 +15,28 @@ Utilise le test runner intégré de Node (`node --test`), aucune installation n�
 
 ## Ce qui est couvert aujourd'hui
 
-La suite a été volontairement réduite (11 tests unitaires au lieu d'une centaine) pour garder les PR reviewables - chaque module garde **un** test unitaire ciblé sur son point le plus subtil, et les tests **réseau réel** (non touchés par cet élagage) restent la vraie preuve que chaque brique marche de bout en bout contre de vraies infrastructures. L'historique git de cette branche garde la couverture exhaustive d'origine si besoin de la retrouver.
+La suite a été volontairement réduite (une vingtaine de tests unitaires au lieu d'une centaine) pour garder les PR reviewables - chaque module garde **un** test unitaire ciblé sur son point le plus subtil, et les tests **réseau réel** (non touchés par cet élagage) restent la vraie preuve que chaque brique marche de bout en bout contre de vraies infrastructures. L'historique git de cette branche garde la couverture exhaustive d'origine si besoin de la retrouver.
 
 | Fichier | Ce qui est testé |
 |---|---|
+| `test/fileSelection.test.js` | Sélection de fichiers (#26) : type et conteneur déduits de l'extension, suggestion (plus grosse vidéo + tous les sous-titres, ou tout si le torrent n'a aucune vidéo), validation de `fileIndexes` |
 | `test/fixtures.test.js` | Le parser (`src/torrentFile.js`) contre un **vrai** `.torrent` archive.org, info-hash comparé au `btih` publié par archive.org lui-même |
-| `test/torrentLayout.test.js` | `computeOverlaps` : une plage d'octets qui chevauche deux fichiers - la classe de bug trouvée deux fois pendant le développement (#10 et #12) |
+| `test/torrentLayout.test.js` | `computeOverlaps` : une plage d'octets qui chevauche deux fichiers - la classe de bug trouvée deux fois pendant le développement (#10 et #12) ; `computeWantedPieces` : seules les pièces qui touchent un fichier choisi, pièces de bord comprises (#26) |
 | `test/trackers/httpTracker.test.js` | Annonce HTTP (BEP3) : encodage correct de `info_hash`/`peer_id` en octets bruts dans la query - `fetch` injecté |
 | `test/trackers/udpTracker.test.js` | Annonce UDP (BEP15) : format exact de la requête `announce` (98 octets, tous les champs), contre un faux tracker UDP local |
 | `test/trackers/announce.test.js` | Orchestrateur multi-tracker : bascule vers le tracker suivant si le premier échoue |
 | `test/trackers/announce.integration.test.js` | **Réseau réel** : annonce contre `tracker.opentrackr.org` (Sintel, swarm réellement peuplé), contre le tracker HTTP archive.org, fallback multi-tracker, timeouts bornés contre une adresse injoignable |
 | `test/peer/downloadPiece.test.js` | Pièce corrompue rejetée et re-téléchargée (jamais acceptée silencieusement) ; annulation (`AbortSignal`) qui stoppe promptement un téléchargement en vol - contre un faux pair TCP local |
 | `test/peer/downloadPiece.integration.test.js` | **Réseau réel** : télécharge une vraie pièce de 128 Ko depuis un vrai pair du swarm Sintel et vérifie son SHA-1 |
-| `test/swarm/downloadTorrent.test.js` | Fichiers de longueur zéro créés même sans pièce qui les recouvre ; combinaison réelle pair+web-seed dans le même téléchargement (pièces paires servies par le pair, impaires par le web-seed) - les deux bugs/exigences les plus subtils de #10/#12 ; quand toutes les sources échouent, le message d'erreur liste chaque cause distincte (hash différent, timeout...) au lieu de la seule dernière |
+| `test/swarm/downloadTorrent.test.js` | Fichiers de longueur zéro créés même sans pièce qui les recouvre ; combinaison réelle pair+web-seed dans le même téléchargement (pièces paires servies par le pair, impaires par le web-seed) - les deux bugs/exigences les plus subtils de #10/#12 ; quand toutes les sources échouent, le message d'erreur liste chaque cause distincte (hash différent, timeout...) au lieu de la seule dernière ; avec `fileIndexes`, seules les pièces du fichier choisi sont demandées (un faux pair qui ne sert jamais la dernière pièce le prouve) et seuls ses octets sont écrits, les fichiers non choisis n'étant pas créés (#26) |
 | `test/swarm/downloadTorrent.integration.test.js` | **Réseau réel, téléchargement complet** : l'intégralité du torrent Sintel (~129 Mo, 987 pièces, 11 fichiers) via le vrai swarm, `Sintel.mp4` ouvrable par `ffprobe`. ~47s |
 | `test/swarm/downloadTorrent.webseed.integration.test.js` | **Réseau réel, téléchargement complet, zéro pair** : l'item archive.org (12 fichiers, dont des vides) uniquement via web-seeding, signature du `.mp4` comparée au JSON de référence de #7 |
 | `test/webseed/downloadPieceFromWebSeed.integration.test.js` | **Réseau réel** : télécharge une vraie pièce (qui chevauche plusieurs fichiers) depuis le vrai serveur web-seed archive.org |
-| `test/server/downloadManager.test.js` | `cancelDownload` arrête un job en cours et son statut se stabilise sur `cancelled` |
+| `test/server/downloadManager.test.js` | `cancelDownload` arrête un job en cours et son statut se stabilise sur `cancelled` ; sélection par défaut, progression comptée par fichier (la part d'une pièce de bord qui appartient à un fichier non choisi n'est pas comptée), index hors bornes et infohash changé qui font échouer le job sans rien télécharger, `TorrentFetchError` à l'inspection (#26) |
+| `test/server/httpServer.test.js` | Sans réseau : `POST /torrents/inspect` sur le vrai `.torrent` Sintel (vidéo principale et sous-titres suggérés), `400` pour un torrent malformé ou un JSON invalide, `502` pour une `torrentUrl` injoignable, `400` pour un `fileIndexes`/`expectedInfoHash` malformé (#26) |
 | `test/server/httpServer.integration.test.js` | **Réseau réel, bout en bout via HTTP** : `POST` démarre un vrai téléchargement, poll jusqu'à progression réelle, `DELETE` annule, vérifie qu'aucune pièce ne progresse plus ensuite. ~19s |
 
-Voir [API.md](API.md) pour le contrat de l'API HTTP (`POST`/`GET`/`DELETE /downloads`).
+Voir [API.md](API.md) pour le contrat de l'API HTTP (`POST /torrents/inspect`, `POST`/`GET`/`DELETE /downloads`).
 
 ## Pour le pipeline encodage/transcodage/streaming
 
@@ -90,6 +92,7 @@ Le service s'expose en HTTP via `node:http` (`src/server/httpServer.js`, zéro f
 
 | Route | Rôle |
 |---|---|
+| `POST /torrents/inspect` | Liste les fichiers d'un `.torrent` (`torrentUrl` ou `torrentBase64`) avec leur type, et propose lesquels télécharger. Synchrone, voir la section #26 ci-dessous |
 | `POST /downloads` | Démarre un téléchargement en arrière-plan. Corps JSON : `{ "outputDir": "...", "torrentUrl": "https://..." }` (le service télécharge le `.torrent` lui-même) **ou** `{ "outputDir": "...", "torrentBase64": "..." }` (octets du `.torrent` envoyés directement). Répond `202` + `{ "id": "..." }` immédiatement - le parsing, l'annonce tracker et le téléchargement se font après, en tâche de fond |
 | `GET /downloads/:id` | `{ "status": "downloading"\|"completed"\|"failed"\|"cancelled", "downloadedBytes", "totalBytes", "piecesCompleted", "totalPieces", "error" }`. `404` si l'id est inconnu |
 | `DELETE /downloads/:id` | Déclenche l'arrêt (`AbortController`) et renvoie le statut courant - qui peut encore afficher `downloading` un court instant, le temps que les opérations en vol se terminent ; `GET` ensuite confirme `cancelled`. `404` si l'id est inconnu |
@@ -99,6 +102,18 @@ Le service s'expose en HTTP via `node:http` (`src/server/httpServer.js`, zéro f
 **Annulation propagée sur toute la chaîne** (nécessaire pour que `DELETE` arrête vraiment quelque chose) : `downloadPieceFromPeer` (#9) et `downloadTorrent` (#10) n'avaient aucun mécanisme d'arrêt avant #11 - ajouté a posteriori via un `AbortSignal` standard traversant les trois couches, avec une nouvelle classe partagée `CancelledError` (`src/cancelledError.js`) pour que le manager distingue « annulé » de « a échoué pour de vrai » sans avoir à inspecter des messages d'erreur.
 
 Aucune connexion base de données nulle part dans ce service (exigence de l'issue #6) - il ne connaît même pas l'existence de SQLite.
+
+## Sélection des fichiers (#26)
+
+Un torrent archive.org contient bien plus que le film (sqlite de métadonnées, mp3, ogv, gif, sous-titres...). Le client ne télécharge plus que les fichiers choisis.
+
+- **`src/fileSelection.js`** : `classifyFile(path)` déduit `kind` (`video`/`subtitle`/`other`) et `container` de l'extension (aucun octet du film n'est lu à ce stade) ; `inspectTorrent(torrent)` construit la réponse de `POST /torrents/inspect` et la suggestion (la plus grosse vidéo + tous les sous-titres, ou **tous** les fichiers si le torrent n'a aucune vidéo, pour qu'un appel sans `fileIndexes` ne télécharge jamais rien) ; `resolveFileIndexes` applique cette suggestion quand `fileIndexes` est absent.
+- **`computeWantedPieces()`** (`src/torrentLayout.js`) : les pièces qui touchent au moins un fichier choisi. Une pièce à cheval entre un fichier choisi et un fichier non choisi est téléchargée en entier (le hash porte sur toute la pièce).
+- **`downloadTorrent({ fileIndexes })`** ne met en file que ces pièces et n'écrit que les octets des fichiers choisis (la part de la pièce de bord qui appartient à un autre fichier est jetée, et ce fichier n'est pas créé). Sans `fileIndexes`, `downloadTorrent()` garde l'ancien comportement (tous les fichiers) : les tests d'intégration Sintel et archive.org l'utilisent ainsi.
+- **`downloadManager`** : au niveau HTTP, l'absence de `fileIndexes` veut dire "la suggestion", pas "tout". `expectedInfoHash` protège contre un `.torrent` régénéré entre l'inspection et le téléchargement (archive.org le fait à chaque modification d'un item). Les compteurs du statut (`downloadedBytes`, `totalBytes`, `piecesCompleted`, `totalPieces`) ne portent plus que sur les fichiers choisis, et `files[]` donne le détail par fichier.
+- **Page de test (`GET /`)** : bouton "Inspecter", cases à cocher pré-remplies avec la suggestion, `curl` équivalent pour les deux appels, et progression par fichier.
+
+Vérifié à la main sur le torrent archive.org de la page de test (12 fichiers) : avec la suggestion, seuls le `.mp4` et le `.srt` sont créés, en 5 pièces sur 6, et le `.mp4` a le même SHA-1 que celui servi directement par archive.org.
 
 ## Repli web-seeding BEP19 (#12)
 
@@ -170,10 +185,10 @@ Le service est en JavaScript sur `node:20-alpine`, sans étape de build ni dépe
 - **Sélection de pièces "rarest first"** - `downloadTorrent()` prend les pièces dans l'ordre (0, 1, 2…) et les pairs en rotation simple, pas la stratégie "pièce la plus rare d'abord" des vrais clients BitTorrent (qui maximise la disponibilité globale du swarm). Suffisant pour un swarm de la taille testée ici, mais à reconsidérer si la volumétrie réelle du produit final le justifie.
 - **Plusieurs jobs simultanés dans `downloadManager`** - testé aujourd'hui un à la fois ; vérifier qu'un `outputDir` par job reste isolé et qu'annuler l'un n'affecte pas les autres serait rassurant avant que #13 déclenche plusieurs films en parallèle.
 - **Persistance des jobs** - `downloadManager` garde tout en mémoire (`Map`) ; un redémarrage du conteneur perd l'état de tout téléchargement en cours. Pas un problème pour #11 en tant que tel, mais #13/#14 (Laravel qui interroge `GET /downloads/:id`) devront décider quoi faire si le Client Torrent redémarre pendant qu'un film télécharge.
-- **`torrentUrl` invalide ou inaccessible** - plus du tout testé depuis l'élagage de la suite (ni le contrat HTTP avec des fakes, ni le vrai comportement de `fetchImpl` contre une URL qui 404 ou timeout). Voir [API.md](API.md) pour le comportement attendu (`400`).
+- **`torrentUrl` invalide ou inaccessible** - couvert pour `POST /torrents/inspect` avec un `fetchImpl` qui échoue (`502`, `httpServer.test.js`), mais pas pour `POST /downloads` (le job doit passer en `failed`) ni contre une vraie URL qui 404 ou timeout.
 - **Un mirroir `url-list` down, les autres up** - `downloadPieceFromWebSeed` ne prend qu'une seule `baseUrl` à la fois ; `downloadTorrent()` ne traite chaque entrée de `webSeedUrls` que comme une source de plus dans la rotation (donc un mirroir mort échoue et fait simplement retenter la pièce ailleurs), mais rien ne teste spécifiquement le cas à 3 mirroirs réels dont 1 ou 2 indisponibles.
 
 ### Tests à supprimer/réviser lors des prochaines évolutions
 
 - **`test/helpers/bencodeEncode.js`** : encodeur bencode écrit uniquement pour construire des fixtures de test, séparé exprès de `src/bencode.js` pour ne pas tester le décodeur contre lui-même. N'est plus utilisé que par `httpTracker.test.js` depuis l'élagage de la suite. Si un encodeur bencode de production apparaît un jour dans `src/` (par ex. pour construire une requête d'annonce tracker), supprimer ce helper et faire pointer les tests dessus à la place.
-- Les tests **réseau réel** (`*.integration.test.js`) dépendent d'infrastructure externe qu'on ne contrôle pas (`tracker.opentrackr.org` up, Sintel toujours bien seedé, trackers et web-seed archive.org toujours disponibles, webtorrent.io joignable). C'est assumé et voulu - l'acceptance criteria de #8/#10/#11/#12 demande explicitement une preuve contre de vraies infrastructures, et depuis l'élagage de la suite ce sont ces tests qui portent l'essentiel de la couverture. Si l'un d'eux devient une source d'instabilité en CI, le séparer du run par défaut (`npm test`) plutôt que le supprimer purement et simplement - la couverture unitaire restante est volontairement mince (10 tests) et ne suffit pas à elle seule.
+- Les tests **réseau réel** (`*.integration.test.js`) dépendent d'infrastructure externe qu'on ne contrôle pas (`tracker.opentrackr.org` up, Sintel toujours bien seedé, trackers et web-seed archive.org toujours disponibles, webtorrent.io joignable). C'est assumé et voulu - l'acceptance criteria de #8/#10/#11/#12 demande explicitement une preuve contre de vraies infrastructures, et depuis l'élagage de la suite ce sont ces tests qui portent l'essentiel de la couverture. Si l'un d'eux devient une source d'instabilité en CI, le séparer du run par défaut (`npm test`) plutôt que le supprimer purement et simplement - la couverture unitaire restante est volontairement mince (une vingtaine de tests) et ne suffit pas à elle seule.

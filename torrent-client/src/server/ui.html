@@ -32,6 +32,12 @@ code{font:13px ui-monospace,monospace}
 .err{color:var(--bad)}
 details{margin-top:8px}summary{cursor:pointer}
 ol{padding-left:20px}
+.files td:first-child{width:28px}
+.files .num{text-align:right;white-space:nowrap}
+.kind{font-size:12px;padding:0 8px}
+.mini{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:4px}
+.mini>div{height:100%;width:0;background:var(--accent);transition:width .4s}
+.mini.done>div{background:var(--ok)}
 </style>
 </head>
 <body>
@@ -46,8 +52,14 @@ ol{padding-left:20px}
 <label for="dir">outputDir (chemin dans le conteneur ou sur la machine où tourne le service)</label>
 <input id="dir" value="__DEFAULT_OUTPUT_DIR__">
 <div class="row">
+<button id="inspect">Inspecter</button>
 <button id="start" class="primary">Lancer</button>
 <button id="cancel" disabled>Annuler</button>
+<span id="selection" class="muted">sans inspection : le client choisit les fichiers suggérés</span>
+</div>
+<div id="filesBox" hidden>
+<label>Fichiers du torrent (cochés = téléchargés). Suggestion du client : la vidéo principale et les sous-titres.</label>
+<table class="files"><thead><tr><th></th><th>Fichier</th><th>Type</th><th class="num">Taille</th></tr></thead><tbody id="files"></tbody></table>
 </div>
 <details open><summary class="muted">Équivalent curl</summary><pre id="curl"></pre></details>
 </section>
@@ -57,6 +69,7 @@ ol{padding-left:20px}
 <div><span id="status" class="pill">aucun téléchargement</span> <span id="jobid" class="muted"></span></div>
 <div class="bar"><div id="fill"></div></div>
 <div id="counts" class="muted">-</div>
+<table class="files" id="progressFiles" hidden><tbody id="progressRows"></tbody></table>
 <div id="error" class="err"></div>
 <details><summary class="muted">Réponse brute de GET /downloads/:id</summary><pre id="raw">-</pre></details>
 </section>
@@ -64,17 +77,19 @@ ol{padding-left:20px}
 <section class="card">
 <h2>Comment ça marche</h2>
 <ol>
+<li><code>POST /torrents/inspect</code> (bouton Inspecter, facultatif) lit le <code>.torrent</code> et liste ses fichiers, sans rien télécharger d'autre. Les index cochés partent dans <code>fileIndexes</code>, avec l'<code>expectedInfoHash</code> de l'inspection.</li>
 <li><code>POST /downloads</code> crée un job en mémoire et répond <code>202</code> avec son id tout de suite. Le travail continue en arrière-plan.</li>
 <li>Le <code>.torrent</code> est téléchargé puis décodé (bencode). Le SHA-1 du dictionnaire <code>info</code> donne l'info-hash.</li>
 <li>Les trackers (HTTP ou UDP) sont interrogés pour obtenir une liste de pairs.</li>
 <li>Pairs et web-seeds (serveurs HTTP de l'<code>url-list</code>) sont mélangés dans une seule liste de sources. Un pool de 10 workers télécharge les pièces en parallèle, chacune vérifiée par SHA-1, et retentée sur une autre source si elle échoue.</li>
-<li>Chaque pièce valide est écrite à son offset dans le ou les fichiers qu'elle recouvre. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
+<li>Seules les pièces qui touchent un fichier choisi sont téléchargées. Chaque pièce valide est écrite à son offset dans le ou les fichiers choisis qu'elle recouvre ; la part d'une pièce qui appartient à un fichier non choisi est jetée. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
 </ol>
 <table>
 <tr><th>Route</th><th>Rôle</th></tr>
 <tr><td><code>GET /health</code></td><td>le service répond</td></tr>
-<tr><td><code>POST /downloads</code></td><td>démarre (<code>outputDir</code> et <code>torrentUrl</code> ou <code>torrentBase64</code>)</td></tr>
-<tr><td><code>GET /downloads/:id</code></td><td>statut : <code>downloading</code>, <code>completed</code>, <code>failed</code> ou <code>cancelled</code>, plus la progression</td></tr>
+<tr><td><code>POST /torrents/inspect</code></td><td>liste les fichiers du torrent et propose lesquels télécharger</td></tr>
+<tr><td><code>POST /downloads</code></td><td>démarre (<code>outputDir</code> et <code>torrentUrl</code> ou <code>torrentBase64</code>, <code>fileIndexes</code> et <code>expectedInfoHash</code> facultatifs)</td></tr>
+<tr><td><code>GET /downloads/:id</code></td><td>statut : <code>downloading</code>, <code>completed</code>, <code>failed</code> ou <code>cancelled</code>, plus la progression globale et par fichier (<code>files</code>)</td></tr>
 <tr><td><code>DELETE /downloads/:id</code></td><td>annule un téléchargement en cours</td></tr>
 </table>
 <p class="muted">Cet item archive.org n'a quasiment aucun pair : le contenu vient du web-seed (HTTP Range) des serveurs d'archive.org. Il faut donc que le service ait accès à Internet, et que archive.org soit disponible.</p>
@@ -85,8 +100,9 @@ ol{padding-left:20px}
 </main>
 <script>
 var $=function(id){return document.getElementById(id)};
-var url=$('url'),dir=$('dir'),startBtn=$('start'),cancelBtn=$('cancel');
-var jobId=null,timer=null;
+var url=$('url'),dir=$('dir'),startBtn=$('start'),cancelBtn=$('cancel'),inspectBtn=$('inspect');
+var jobId=null,timer=null,inspection=null;
+var KIND_LABEL={video:'vidéo',subtitle:'sous-titre',other:'autre'};
 var TERMINAL=['completed','failed','cancelled'];
 
 function fmtBytes(n){
@@ -95,10 +111,33 @@ function fmtBytes(n){
   if(n<1048576){return (n/1024).toFixed(1)+' Ko'}
   return (n/1048576).toFixed(1)+' Mo';
 }
-function renderCurl(){
-  var body=JSON.stringify({torrentUrl:url.value,outputDir:dir.value});
-  $('curl').textContent="curl -X POST "+location.origin+"/downloads \\\n  -H 'Content-Type: application/json' \\\n  -d '"+body+"'";
+function esc(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML}
+function checkedIndexes(){
+  return Array.prototype.map.call(document.querySelectorAll('#files input:checked'),function(c){return Number(c.value)});
 }
+function startBody(){
+  var body={torrentUrl:url.value,outputDir:dir.value};
+  if(inspection){body.fileIndexes=checkedIndexes();body.expectedInfoHash=inspection.infoHash}
+  return body;
+}
+function curlFor(path,body){
+  return "curl -X POST "+location.origin+path+" \\\n  -H 'Content-Type: application/json' \\\n  -d '"+JSON.stringify(body)+"'";
+}
+function renderCurl(){
+  $('curl').textContent=curlFor('/torrents/inspect',{torrentUrl:url.value})+"\n\n"+curlFor('/downloads',startBody());
+  var n=inspection?checkedIndexes().length:null;
+  $('selection').textContent=inspection?(n+' fichier(s) sur '+inspection.files.length+' sélectionné(s)'):'sans inspection : le client choisit les fichiers suggérés';
+  startBtn.disabled=!!timer||(inspection!==null&&n===0);
+}
+function renderFiles(){
+  $('files').innerHTML=inspection.files.map(function(f){
+    var main=f.index===inspection.mainVideoIndex?' <span class="pill ok kind">principale</span>':'';
+    return '<tr><td><input type="checkbox" value="'+f.index+'"'+(f.suggested?' checked':'')+'></td><td><code>'+esc(f.path)+'</code>'+main+'</td><td><span class="pill kind">'+KIND_LABEL[f.kind]+(f.container?' · '+f.container:'')+'</span></td><td class="num">'+fmtBytes(f.length)+'</td></tr>';
+  }).join('');
+  $('filesBox').hidden=false;
+  Array.prototype.forEach.call(document.querySelectorAll('#files input'),function(c){c.onchange=renderCurl});
+}
+function resetInspection(){inspection=null;$('filesBox').hidden=true;renderCurl()}
 function setStatus(text,cls){
   var s=$('status');
   s.textContent=text;
@@ -112,11 +151,17 @@ function render(job){
   $('counts').textContent=fmtBytes(job.downloadedBytes)+' sur '+fmtBytes(job.totalBytes)+' - pièces '+job.piecesCompleted+' sur '+(job.totalPieces===null?'?':job.totalPieces);
   $('error').textContent=job.error||'';
   $('raw').textContent=JSON.stringify(job,null,2);
+  var files=job.files||[];
+  $('progressFiles').hidden=files.length===0;
+  $('progressRows').innerHTML=files.map(function(f){
+    var p=f.length?f.downloadedBytes/f.length*100:100;
+    return '<tr><td><code>'+esc(f.path)+'</code><div class="mini'+(f.complete?' done':'')+'"><div style="width:'+p+'%"></div></div></td><td class="num">'+fmtBytes(f.downloadedBytes)+' / '+fmtBytes(f.length)+'</td></tr>';
+  }).join('');
 }
 function stopPolling(){
   if(timer){clearInterval(timer);timer=null}
-  startBtn.disabled=false;
   cancelBtn.disabled=true;
+  renderCurl();
 }
 function poll(){
   fetch('/downloads/'+encodeURIComponent(jobId)).then(function(r){return r.json()}).then(function(job){
@@ -127,7 +172,7 @@ function poll(){
 startBtn.onclick=function(){
   $('error').textContent='';
   startBtn.disabled=true;
-  fetch('/downloads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({torrentUrl:url.value,outputDir:dir.value})})
+  fetch('/downloads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(startBody())})
     .then(function(r){return r.json().then(function(b){return {ok:r.ok,body:b}})})
     .then(function(res){
       if(!res.ok){throw new Error(res.body.error||'requête refusée')}
@@ -135,16 +180,30 @@ startBtn.onclick=function(){
       $('jobid').textContent='id '+jobId;
       cancelBtn.disabled=false;
       setStatus('downloading','');
-      poll();
       timer=setInterval(poll,1000);
+      poll();
     })
     .catch(function(e){startBtn.disabled=false;$('error').textContent=e.message});
+};
+inspectBtn.onclick=function(){
+  $('error').textContent='';
+  inspectBtn.disabled=true;
+  fetch('/torrents/inspect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({torrentUrl:url.value})})
+    .then(function(r){return r.json().then(function(b){return {ok:r.ok,body:b}})})
+    .then(function(res){
+      if(!res.ok){throw new Error(res.body.error||'inspection refusée')}
+      inspection=res.body;
+      renderFiles();
+      renderCurl();
+    })
+    .catch(function(e){$('error').textContent=e.message})
+    .then(function(){inspectBtn.disabled=false});
 };
 cancelBtn.onclick=function(){
   if(!jobId){return}
   fetch('/downloads/'+encodeURIComponent(jobId),{method:'DELETE'}).then(function(){poll()});
 };
-url.oninput=renderCurl;
+url.oninput=resetInspection;
 dir.oninput=renderCurl;
 renderCurl();
 fetch('/health').then(function(r){return r.json()}).then(function(){
