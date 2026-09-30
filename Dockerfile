@@ -1,26 +1,31 @@
-FROM php:8.5-fpm
+FROM php:8.4-fpm
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    git \
     curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    libzip-dev \
-    libjpeg62-turbo-dev \
     ffmpeg \
-    zip \
+    git \
+    libsqlite3-dev \
+    libzip-dev \
     unzip \
-    && docker-php-ext-configure gd --with-jpeg \
-    && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd zip
+    && docker-php-ext-install \
+        pdo_sqlite \
+        pcntl \
+        bcmath \
+        zip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Install Node.js 20 (LTS)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /var/www/html
+
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+COPY .env .env
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+CMD ["php-fpm", "-F"]
