@@ -13,17 +13,18 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.app
     command: ["php-fpm", "-F"]
     volumes:
       - .:/var/www/html
+      - vendor:/var/www/html/vendor
     depends_on:
-        - worker
+      - worker
 
   worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.app
     command:
       [
         "php",
@@ -34,11 +35,12 @@ services:
       ]
     volumes:
       - .:/var/www/html
+      - vendor:/var/www/html/vendor
 
   frontend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.app
     command:
       [
         "npm",
@@ -51,5 +53,34 @@ services:
       - "5173:5173"
     volumes:
       - .:/var/www/html
+      - node_modules:/var/www/html/node_modules
     depends_on:
       - app
+
+
+  client-torrent:
+    build:
+      context: ./torrent-client
+      dockerfile: Dockerfile
+    container_name: torrent-client
+    ports:
+      - "7881:7881"
+    volumes:
+      # Same volume as `app`'s storage mount, so a file this service writes
+      # at movies/{id}/{filename} lands exactly where
+      # Storage::disk('public')->path("movies/{id}/{filename}") expects it
+      # inside `app` (storage/app/public/movies/{id}/{filename}) -- see
+      # app/Jobs/ConvertMovie.php and app/Http/Controllers/MovieController.php.
+      - ./storage/app/public/movies:/var/www/html/storage/app/public/movies
+    environment:
+      PORT: "7881"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7881/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  vendor:
+  node_modules:

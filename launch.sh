@@ -5,36 +5,43 @@ if [ ! -e ".env" ]; then
     exit 1
 fi
 
-composer install
+#composer install
 
-npm install
+#npm install
 
-touch database/database.sqlite
+#touch database/database.sqlite
 
-if [ ! -e "storage/app/public/movies/1/hls" ]; then
+#php artisan migrate:fresh --seed
+
+#php artisan test
+
+if [  -e "storage/app/public/movies/1/hls" ]; then
     rm -rf storage/app/public/movies/1/hls
 fi
 
-if [ ! -e "storage/app/public/movies/2/hls" ]; then
+if [  -e "storage/app/public/movies/2/hls" ]; then
     rm -rf storage/app/public/movies/2/hls
 fi
 
-if [ ! -e "storage/app/public/movies/3/hls" ]; then
+if [  -e "storage/app/public/movies/3/hls" ]; then
     rm -rf storage/app/public/movies/3/hls
 fi
 
-if [ ! -e "storage/app/public/movies/4/hls" ]; then
+if [  -e "storage/app/public/movies/4/hls" ]; then
     rm -rf storage/app/public/movies/4/hls
 fi
 
-if [ ! -e "storage/app/public/movies/5/hls" ]; then
+if [  -e "storage/app/public/movies/5/hls" ]; then
     rm -rf storage/app/public/movies/5/hls
 fi
 
-php artisan migrate:fresh --seed
-
-php artisan test
 
 docker compose build
+
+docker compose run --rm app touch database/database.sqlite
+
+docker compose run --rm app php artisan migrate:fresh --seed
+
+docker compose run --rm app php artisan test
 
 docker compose up
