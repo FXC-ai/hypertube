@@ -1,29 +1,66 @@
 services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8000:80"
+    volumes:
+      - ./public:/var/www/html/public:ro
+      - ./storage/app/public:/var/www/html/storage/app/public:ro
+      - ./docker/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+
   app:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: laravel-app
+      dockerfile: Dockerfile.app
+    command: ["php-fpm", "-F"]
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+      - node_modules:/var/www/html/node_modules
+
+    depends_on:
+      - worker
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command:
+      [
+        "php",
+        "artisan",
+        "queue:work",
+        "--tries=1",
+        "--timeout=0"
+      ]
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+      - node_modules:/var/www/html/node_modules
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    command:
+      [
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--host=0.0.0.0"
+      ]
     ports:
-      - "8000:8000"
       - "5173:5173"
     volumes:
       - .:/var/www/html
-      - laravel-storage:/var/www/html/storage
-      - laravel-bootstrap:/var/www/html/bootstrap/cache
-    environment:
-      HOST_UID: "${HOST_UID:-1000}"
-      HOST_GID: "${HOST_GID:-1000}"
-    entrypoint: ./docker/entrypoint.sh
-    healthcheck:
-      test: ["CMD", "php", "artisan", "tinker", "--execute", "echo 'ok'"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      - vendor:/var/www/html/vendor
+      - node_modules:/var/www/html/node_modules
     depends_on:
-      client-torrent:
-        condition: service_healthy
+      - app
+
 
   client-torrent:
     build:
@@ -38,7 +75,7 @@ services:
       # Storage::disk('public')->path("movies/{id}/{filename}") expects it
       # inside `app` (storage/app/public/movies/{id}/{filename}) -- see
       # app/Jobs/ConvertMovie.php and app/Http/Controllers/MovieController.php.
-      - laravel-storage:/var/www/html/storage
+      - ./storage/app/public/movies:/var/www/html/storage/app/public/movies
     environment:
       PORT: "7881"
     healthcheck:
@@ -49,6 +86,5 @@ services:
       start_period: 10s
 
 volumes:
-  laravel-storage:
-  laravel-bootstrap:
-
+  vendor:
+  node_modules:
