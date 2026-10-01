@@ -6,7 +6,7 @@
 // not count against the source.
 export function createSourcePool(
   initialSources,
-  { maxConnectionFailures = 3, maxHashFailures = 2, cooldownMs = 120000, now = Date.now } = {},
+  { maxConnectionFailures = 3, maxHashFailures = 2, cooldownMs = 30000, now = Date.now } = {},
 ) {
   const sources = [];
   let cursor = 0;

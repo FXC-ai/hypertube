@@ -13,7 +13,7 @@ Dans le Client Torrent, une piece individuelle qui echoue contre une source atte
 _Avoid_: retry (seul, sans preciser le niveau)
 
 **Source active**:
-Pair ou web-seed que le Client Torrent utilise encore pour telecharger des pieces. Une source est ecartee ("dropped") 2 min apres 3 echecs de connexion d'affilee, ou pour de bon apres 2 pieces rejetees au hash. Echouer une piece pour une autre raison (pair qui ne l'a pas, HTTP 404) ne compte pas contre la source.
+Pair ou web-seed que le Client Torrent utilise encore pour telecharger des pieces. Une source est ecartee ("dropped") 30 s apres 3 echecs de connexion d'affilee, ou pour de bon apres 2 pieces rejetees au hash. Echouer une piece pour une autre raison (pair qui ne l'a pas, HTTP 404) ne compte pas contre la source.
 _Avoid_: peer (un web-seed est aussi une source)
 
 **Fichiers choisis**:

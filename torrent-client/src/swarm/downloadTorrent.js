@@ -51,7 +51,7 @@ export async function downloadTorrent(torrent, peers, options) {
     stallTimeoutMs = 120000,
     backoffBaseMs = 1000,
     backoffMaxMs = 60000,
-    sourceCooldownMs = 120000,
+    sourceCooldownMs = 30000,
     onProgress,
     onSourcesChange,
     signal,

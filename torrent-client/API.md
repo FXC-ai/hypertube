@@ -207,7 +207,7 @@ Les champs des tickets A et C sont implémentés ; ceux de B (🟡 dans la colon
 | `files[].detectedContainer` | B 🟡 | Format lu dans les premiers octets du fichier, sans ffmpeg : `"mp4"` (boîte `ftyp` aux octets 4 à 8), `"matroska"` (en-tête EBML `1A 45 DF A3`, MKV et WebM), `"unknown"`, ou `null` tant que la première pièce du fichier n'est pas arrivée. Permet de repérer un faux fichier (un `.mp4` qui n'en est pas un) sans attendre la fin du téléchargement. Le client ne décide rien : c'est à Laravel d'annuler s'il le veut. Les pistes et codecs restent l'affaire de ffprobe. |
 | `files[].availableRanges` | B 🟡 | Plages d'octets disponibles, `[début, fin exclue]`, fusionnées et triées, relatives au fichier. |
 | `pieces` | B 🟡 | Bitfield des pièces vérifiées, en base64, au format du message `bitfield` de BitTorrent (bit de poids fort du premier octet = pièce 0). Pour le débogage et la page de test, pas besoin de le décoder côté Laravel. |
-| `sources` | C | Sources utilisables (`active`) et écartées (`dropped`), pairs et web-seeds confondus. `null` avant le début du téléchargement. Une source injoignable 3 fois de suite est écartée 2 min puis retentée ; une source qui envoie 2 pièces corrompues l'est pour de bon. |
+| `sources` | C | Sources utilisables (`active`) et écartées (`dropped`), pairs et web-seeds confondus. `null` avant le début du téléchargement. Une source injoignable 3 fois de suite est écartée 30 s puis retentée ; une source qui envoie 2 pièces corrompues l'est pour de bon. |
 | `error` | C | Inclut désormais la cause réseau précise quand il y en a une (ex. `fetch failed (ECONNRESET)` au lieu de `fetch failed`). |
 
 **404** si l'`id` est inconnu :

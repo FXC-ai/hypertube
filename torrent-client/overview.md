@@ -186,7 +186,7 @@ Piece 12 failed after 12 attempt(s) across the source pool:
 
 | Sujet | Règle |
 |---|---|
-| Source injoignable | Après 3 **échecs de connexion** d'affilée (refus, timeout de connexion, `fetch failed`), la source est mise de côté 2 min, puis retentée ; au retour, un seul nouvel échec la remet de côté. Un succès remet son compteur à zéro. |
+| Source injoignable | Après 3 **échecs de connexion** d'affilée (refus, timeout de connexion, `fetch failed`), la source est mise de côté 30 s, puis retentée ; au retour, un seul nouvel échec la remet de côté. Un succès remet son compteur à zéro. |
 | Source corrompue | 2 pièces rejetées au hash : écartée pour de bon. |
 | Échecs qui ne comptent pas contre la source | Pair qui n'a pas la pièce, qui ferme la connexion en cours de pièce, web-seed qui répond 404/503, timeout de notre côté : seule la pièce est retentée. Sinon des workers parallèles feraient écarter un pair parfaitement sain. |
 | Choix de la source | Pour une pièce, la source active qui l'a le moins ratée, en rotation entre ex-aequo. |

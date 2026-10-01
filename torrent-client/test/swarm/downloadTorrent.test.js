@@ -460,3 +460,50 @@ test('skipPieces are not fetched again and the existing file is written in place
     server.close();
   }
 });
+
+test('an outage of every source shorter than stallTimeoutMs is survived: set-aside sources come back', async () => {
+  const pieces = buildPieces(3);
+  const content = Buffer.concat(pieces);
+  const outageUntil = Date.now() + 600; // longer than several cooldowns, shorter than the stall timeout
+  const webSeed = createHttpServer((req, res) => {
+    if (Date.now() < outageUntil) {
+      req.socket.destroy(); // fetch failed: a connection failure, like the archive.org outage
+
+      return;
+    }
+
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    res.writeHead(206, { 'Content-Length': end - start + 1 });
+    res.end(content.subarray(start, end + 1));
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        sourceCooldownMs: 100,
+        stallTimeoutMs: 2000,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('by default a set-aside source comes back well before the download is given up', async () => {
+  const { readFile: readSource } = await import('node:fs/promises');
+  const source = await readSource(
+    new URL('../../src/swarm/downloadTorrent.js', import.meta.url),
+    'utf8',
+  );
+  const cooldown = Number(/sourceCooldownMs = (\d+)/.exec(source)[1]);
+  const stall = Number(/stallTimeoutMs = (\d+)/.exec(source)[1]);
+
+  assert.ok(cooldown * 3 <= stall, `cooldown ${cooldown} ms vs stall ${stall} ms`);
+});
