@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\IndexMovieRequest;
+
 use App\Enums\ConversionStatus;
 use App\Http\Resources\CommentResource;
+use App\Http\Resources\IndexMovieResource;
 use App\Models\Movie;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Log;
 
 class MovieController extends Controller
 {
@@ -35,6 +39,48 @@ class MovieController extends Controller
                         $movie->comments()->with('user')->latest()->paginate(20)
                     ),
                 ),
+            ]
+        );
+    }
+
+    public function index(IndexMovieRequest $request): InertiaResponse
+    {
+
+        $params = $request->validated();
+
+        $search = $params['search'] ?? null;
+        $sort = $params['sort'] ?? null;
+        $dir = $params['dir'] ?? 'asc';
+        $perPage = (int) ($params['perPage'] ?? 5);
+
+        Log::channel("my_debug")->debug("search = ", [$search]);
+        // $page = (int) ($params['page'] ?? 1);
+
+        $query = Movie::query();
+
+        if ($search) {
+            $query->where('title', 'like', '%' . $search . '%');
+        }
+
+        if ($sort) {
+            $query->orderBy($sort, $dir);
+        } else {
+            $query->orderBy('created_at', $dir)->orderBy('id', $dir);
+        }
+
+        // $users = $query->paginate($perPage);
+
+        // Log::channel('my_debug')->debug('List USers ', [$users]);
+
+        return Inertia::render(
+            'movies/index',
+            [
+                "movies" => Inertia::scroll(
+                    fn() => IndexMovieResource::collection($query->paginate($perPage))
+                ),
+                'filters' => [
+                    'search' => $search,
+                ],
             ]
         );
     }

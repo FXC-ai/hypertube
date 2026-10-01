@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'title',
+    'release_date',
     'filename',
     'conversion_status',
     'conversion_attempt',
