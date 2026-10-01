@@ -197,6 +197,8 @@ Cette règle est interne au Client Torrent : elle remplace le **piece retry** de
 
 ### Ticket B - streaming et priorités
 
+Ce qui change côté Laravel, fonction par fonction, avec du code prototype et les résultats d'un prototype exécuté avec les vraies commandes ffmpeg : [docs/torrent-streaming-laravel-integration.md](../docs/torrent-streaming-laravel-integration.md).
+
 Trois niveaux de priorité, du plus urgent au moins urgent :
 
 1. **Plages demandées en HTTP** : les pièces qui couvrent la plage d'une requête `GET /downloads/:id/files/:index` en cours, plus une fenêtre d'avance de 8 Mo qui suit la lecture.
