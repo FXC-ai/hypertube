@@ -9,11 +9,11 @@ Service Node.js separe, sans dependance npm, qui parle le protocole BitTorrent n
 _Avoid_: torrent service, downloader
 
 **Piece retry**:
-Dans le Client Torrent, une piece individuelle qui echoue contre une source est retentee contre une autre source (pair ou web-seed), jusqu'a `maxAttemptsPerPiece`. Deja implemente, interne au Client Torrent - ne concerne pas les tentatives de telechargement complet. Le ticket C (propose, voir [overview.md](torrent-client/overview.md#ticket-c---robustesse-des-sources-et-reprise)) remplace le budget fixe par un backoff et l'abandon seulement quand plus aucune **Source active** ne reste.
+Dans le Client Torrent, une piece individuelle qui echoue contre une source attend un delai croissant (backoff) puis est retentee contre la **Source active** qui l'a le moins ratee. Pas de budget fixe par piece : le telechargement n'echoue que si aucune piece n'aboutit pendant 2 min (voir [overview.md](torrent-client/overview.md#ticket-c---robustesse-des-sources-et-reprise)). Interne au Client Torrent - ne concerne pas les tentatives de telechargement complet.
 _Avoid_: retry (seul, sans preciser le niveau)
 
 **Source active**:
-Pair ou web-seed que le Client Torrent utilise encore pour telecharger des pieces. Une source est ecartee ("dropped") apres des echecs de connexion repetes ou des pieces rejetees au hash (ticket C, propose).
+Pair ou web-seed que le Client Torrent utilise encore pour telecharger des pieces. Une source est ecartee ("dropped") 2 min apres 3 echecs de connexion d'affilee, ou pour de bon apres 2 pieces rejetees au hash. Echouer une piece pour une autre raison (pair qui ne l'a pas, HTTP 404) ne compte pas contre la source.
 _Avoid_: peer (un web-seed est aussi une source)
 
 **Fichiers choisis**:

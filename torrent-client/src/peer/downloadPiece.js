@@ -15,10 +15,14 @@ const BLOCK_SIZE = 16384;
 const MAX_PIPELINED_REQUESTS = 5;
 const HANDSHAKE_LENGTH = 68;
 
+// connectionFailure: the peer could not be reached at all (as opposed to failing a piece).
+// hashMismatch: the peer sent data that does not match the piece hash.
 export class PeerError extends Error {
-  constructor(message) {
+  constructor(message, { connectionFailure = false, hashMismatch = false } = {}) {
     super(message);
     this.name = 'PeerError';
+    this.connectionFailure = connectionFailure;
+    this.hashMismatch = hashMismatch;
   }
 }
 
@@ -47,6 +51,7 @@ export function downloadPieceFromPeer(peer, options) {
     const socket = connect({ host: peer.ip, port: peer.port, timeout: connectTimeoutMs });
 
     let buffer = Buffer.alloc(0);
+    let connected = false;
     let handshakeDone = false;
     let unchoked = false;
     let settled = false;
@@ -93,14 +98,24 @@ export function downloadPieceFromPeer(peer, options) {
     signal?.addEventListener('abort', onAbort);
 
     socket.on('connect', () => {
+      connected = true;
       socket.setTimeout(0);
       socket.write(buildHandshake(infoHash, peerId));
     });
+    // The socket timeout is only armed until 'connect', so it always means "unreachable".
     socket.on('timeout', () =>
-      fail(new PeerError(`Connection to ${peer.ip}:${peer.port} timed out`)),
+      fail(
+        new PeerError(`Connection to ${peer.ip}:${peer.port} timed out`, {
+          connectionFailure: true,
+        }),
+      ),
     );
     socket.on('error', (err) =>
-      fail(new PeerError(`Socket error with ${peer.ip}:${peer.port}: ${err.message}`)),
+      fail(
+        new PeerError(`Socket error with ${peer.ip}:${peer.port}: ${err.message}`, {
+          connectionFailure: !connected,
+        }),
+      ),
     );
     socket.on('close', () =>
       fail(
@@ -213,6 +228,7 @@ export function downloadPieceFromPeer(peer, options) {
         fail(
           new PeerError(
             `Piece ${pieceIndex} hash mismatch after ${maxAttempts} attempt(s): expected ${pieceHash}, got ${actualHash}`,
+            { hashMismatch: true },
           ),
         );
 

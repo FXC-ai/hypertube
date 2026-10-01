@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -222,7 +222,7 @@ test('with fileIndexes, only the pieces covering the chosen file are fetched and
           outputDir,
           concurrency: 2,
           pieceTimeoutMs: 2000,
-          maxAttemptsPerPiece: 1,
+          stallTimeoutMs: 3000,
           fileIndexes: [1],
         },
       );
@@ -269,7 +269,7 @@ test('combines a real peer and a web-seed in the same download rather than picki
           outputDir,
           concurrency: 4,
           pieceTimeoutMs: 2000,
-          maxAttemptsPerPiece: 6,
+          backoffBaseMs: 10,
           webSeedUrls: [`http://127.0.0.1:${port}/`],
         },
       );
@@ -300,7 +300,8 @@ test('a failed piece reports every distinct source failure, not only the last on
           peerId: CLIENT_PEER_ID,
           outputDir,
           pieceTimeoutMs: 2000,
-          maxAttemptsPerPiece: 4,
+          backoffBaseMs: 10,
+          stallTimeoutMs: 500,
           webSeedUrls: [`http://127.0.0.1:${port}/`, 'http://127.0.0.1:1/'],
         }),
         (err) => /hash mismatch/.test(err.message) && /Web-seed request failed/.test(err.message),
@@ -308,5 +309,154 @@ test('a failed piece reports every distinct source failure, not only the last on
     });
   } finally {
     webSeed.close();
+  }
+});
+
+// A TCP port nothing listens on: connecting is refused straight away (ECONNREFUSED).
+async function deadPeer() {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  await new Promise((resolve) => server.close(resolve));
+
+  return { ip: '127.0.0.1', port };
+}
+
+const FAST = { pieceTimeoutMs: 2000, backoffBaseMs: 10, concurrency: 2 };
+
+test('a peer that refuses every connection is dropped and the download finishes on the others', async () => {
+  const pieces = buildPieces(6);
+  const torrent = torrentFor(pieces);
+  const good = await startFakePeer(pieces);
+  const sourceCounts = [];
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(
+        torrent,
+        [await deadPeer(), { ip: '127.0.0.1', port: good.address().port }],
+        {
+          ...FAST,
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+          onSourcesChange: (counts) => sourceCounts.push(counts),
+        },
+      );
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(Buffer.concat(pieces)));
+      assert.deepEqual(sourceCounts.at(-1), { active: 1, dropped: 1 });
+    });
+  } finally {
+    good.close();
+  }
+});
+
+test('a piece that fails many times on the only source is retried until it gets through (Mulan case)', async () => {
+  const pieces = buildPieces(2);
+  const torrent = torrentFor(pieces);
+  const content = Buffer.concat(pieces);
+  let failuresLeft = 6; // more than the old fixed budget of max(4, sources x 2) = 4
+  const webSeed = createHttpServer((req, res) => {
+    if (failuresLeft > 0) {
+      failuresLeft -= 1;
+      req.socket.destroy(); // fetch() sees "fetch failed", like the archive.org web-seed did
+
+      return;
+    }
+
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    res.writeHead(206, { 'Content-Length': end - start + 1 });
+    res.end(content.subarray(start, end + 1));
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrent, [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        sourceCooldownMs: 50,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+      assert.equal(failuresLeft, 0);
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('when every source is dead, the download fails once nothing has progressed for stallTimeoutMs', async () => {
+  const torrent = torrentFor(buildPieces(2));
+
+  await withTempDir(async (outputDir) => {
+    await assert.rejects(
+      downloadTorrent(torrent, [await deadPeer()], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        stallTimeoutMs: 500,
+      }),
+      (err) => /No piece completed for/.test(err.message) && /ECONNREFUSED/.test(err.message),
+    );
+  });
+});
+
+test('a re-announce brings new peers when the active ones run out', async () => {
+  const pieces = buildPieces(3);
+  const good = await startFakePeer(pieces);
+  let refreshes = 0;
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [await deadPeer()], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        refreshIntervalMs: 0,
+        refreshSources: async () => {
+          refreshes += 1;
+
+          return [{ ip: '127.0.0.1', port: good.address().port }];
+        },
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(Buffer.concat(pieces)));
+      assert.ok(refreshes >= 1);
+    });
+  } finally {
+    good.close();
+  }
+});
+
+test('skipPieces are not fetched again and the existing file is written in place, not truncated', async () => {
+  const pieces = buildPieces(3);
+  const content = Buffer.concat(pieces);
+  // the peer never serves pieces 0 and 1: the download only succeeds if it never asks
+  const server = await startFakePeer(pieces, { failPieceIndexes: new Set([0, 1]) });
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await writeFile(join(outputDir, 'output.bin'), content.subarray(0, PIECE_LENGTH * 2));
+      const result = await downloadTorrent(
+        torrentFor(pieces),
+        [{ ip: '127.0.0.1', port: server.address().port }],
+        {
+          ...FAST,
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+          stallTimeoutMs: 3000,
+          skipPieces: new Set([0, 1]),
+        },
+      );
+      assert.equal(result.piecesDownloaded, 1);
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+    });
+  } finally {
+    server.close();
   }
 });

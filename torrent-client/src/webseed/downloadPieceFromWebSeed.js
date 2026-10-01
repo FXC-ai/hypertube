@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { CancelledError } from '../cancelledError.js';
 import { computeOverlaps } from '../torrentLayout.js';
 
+// Same flags as PeerError: connectionFailure (server unreachable) and hashMismatch.
 export class WebSeedError extends Error {
-  constructor(message) {
+  constructor(message, { connectionFailure = false, hashMismatch = false } = {}) {
     super(message);
     this.name = 'WebSeedError';
+    this.connectionFailure = connectionFailure;
+    this.hashMismatch = hashMismatch;
   }
 }
 
@@ -53,7 +56,11 @@ export async function downloadPieceFromWebSeed(
           throw new CancelledError();
         }
 
-        throw new WebSeedError(`Web-seed request failed for ${url}: ${err.message}`);
+        // Our own timeout means "slow", not "unreachable". fetch() hides the real network
+        // error (ECONNRESET, ENOTFOUND...) in err.cause.
+        throw new WebSeedError(`Web-seed request failed for ${url}: ${describeFetchError(err)}`, {
+          connectionFailure: err.name !== 'TimeoutError',
+        });
       }
 
       if (response.status !== 206 && response.status !== 200) {
@@ -80,11 +87,22 @@ export async function downloadPieceFromWebSeed(
     if (actualHash !== pieceHash) {
       throw new WebSeedError(
         `Piece ${pieceIndex} hash mismatch via web-seed: expected ${pieceHash}, got ${actualHash}`,
+        { hashMismatch: true },
       );
     }
   }
 
   return pieceBuffer;
+}
+
+export function describeFetchError(err) {
+  const cause = err.cause;
+
+  if (!cause) {
+    return err.message;
+  }
+
+  return `${err.message} (${cause.code ?? cause.message ?? String(cause)})`;
 }
 
 function buildFileUrl(baseUrl, torrentName, filePath) {

@@ -6,6 +6,7 @@ import {
   validateFileIndexesShape,
 } from '../fileSelection.js';
 import { downloadTorrent as defaultDownloadTorrent } from '../swarm/downloadTorrent.js';
+import { recheckPieces } from '../recheck.js';
 import { parseTorrentFile } from '../torrentFile.js';
 import {
   computeFileLayout,
@@ -40,6 +41,7 @@ export function createDownloadManager({
   parseTorrentFileFn = parseTorrentFile,
   announceFn = defaultAnnounce,
   downloadTorrentFn = defaultDownloadTorrent,
+  recheckPiecesFn = recheckPieces,
   generatePeerIdFn = generatePeerId,
   fetchImpl = fetch,
   trackerPort = DEFAULT_TRACKER_PORT,
@@ -80,7 +82,8 @@ export function createDownloadManager({
     const id = randomUUID();
     const job = {
       id,
-      status: 'downloading',
+      // "checking" covers fetching the .torrent and re-verifying files already on disk
+      status: 'checking',
       downloadedBytes: 0,
       totalBytes: null,
       piecesCompleted: 0,
@@ -88,6 +91,7 @@ export function createDownloadManager({
       infoHash: null,
       pieceLength: null,
       files: [],
+      sources: null,
       error: null,
       outputDir,
       controller: new AbortController(),
@@ -144,18 +148,46 @@ export function createDownloadManager({
         new Set(selectedIndexes),
       ).length;
 
+      function countPiece(pieceIndex) {
+        const { offset, length } = pieceRanges[pieceIndex];
+        job.piecesCompleted += 1;
+
+        for (const overlap of computeOverlaps(selectedFiles, offset, length)) {
+          const fileStatus = fileStatusByIndex.get(overlap.file.index);
+          fileStatus.downloadedBytes += overlap.length;
+          fileStatus.complete = fileStatus.downloadedBytes === fileStatus.length;
+          job.downloadedBytes += overlap.length;
+        }
+      }
+
+      // Resume: pieces already valid on disk (previous attempt, restart) are not fetched again.
+      const piecesOnDisk = await recheckPiecesFn(torrent, {
+        outputDir: job.outputDir,
+        fileIndexes: selectedIndexes,
+        signal: job.controller.signal,
+        onPiece: ({ pieceIndex, valid }) => valid && countPiece(pieceIndex),
+      });
+
+      if (piecesOnDisk.size === job.totalPieces) {
+        job.status = 'completed';
+
+        return;
+      }
+
+      job.status = 'downloading';
+
       const infoHash = Buffer.from(torrent.infoHash, 'hex');
       const peerId = generatePeerIdFn();
       const trackerUrls = flattenTrackerUrls(torrent);
+      const announceParams = () => ({
+        infoHash,
+        peerId,
+        port: trackerPort,
+        left: job.totalBytes - job.downloadedBytes,
+      });
       const announceResult = await announceFn(
         trackerUrls,
-        {
-          infoHash,
-          peerId,
-          port: trackerPort,
-          left: job.totalBytes,
-          event: 'started',
-        },
+        { ...announceParams(), event: 'started' },
         { fetchImpl },
       );
 
@@ -179,18 +211,14 @@ export function createDownloadManager({
         outputDir: job.outputDir,
         webSeedUrls,
         fileIndexes: selectedIndexes,
+        skipPieces: piecesOnDisk,
+        refreshSources: async () =>
+          (await announceFn(trackerUrls, announceParams(), { fetchImpl })).peers ?? [],
         signal: job.controller.signal,
-        onProgress: ({ completed, pieceIndex }) => {
-          job.piecesCompleted = completed;
-          const { offset, length } = pieceRanges[pieceIndex];
-
-          for (const overlap of computeOverlaps(selectedFiles, offset, length)) {
-            const fileStatus = fileStatusByIndex.get(overlap.file.index);
-            fileStatus.downloadedBytes += overlap.length;
-            fileStatus.complete = fileStatus.downloadedBytes === fileStatus.length;
-            job.downloadedBytes += overlap.length;
-          }
+        onSourcesChange: (counts) => {
+          job.sources = counts;
         },
+        onProgress: ({ pieceIndex }) => countPiece(pieceIndex),
       });
 
       job.status = 'completed';
@@ -243,7 +271,7 @@ export function createDownloadManager({
       return null;
     }
 
-    if (job.status === 'downloading') {
+    if (job.status === 'checking' || job.status === 'downloading') {
       job.controller.abort();
     }
 
