@@ -201,6 +201,7 @@ GET /downloads/2ce4f502-b325-444f-9053-da3174fb94b5
 | `downloadedBytes`, `totalBytes`, `piecesCompleted`, `totalPieces` | A | **Changement de sens** : ne comptent plus que les fichiers choisis (et les pièces qui les couvrent), plus tout le torrent. `totalBytes` est la somme des `files[].length`. |
 | `files[]` | A | Un élément par fichier **choisi**, dans l'ordre des index. `downloadedBytes` et `complete` dès le ticket A. |
 | `files[].contiguousBytesFromStart` | B | Octets disponibles d'un seul tenant depuis le début du fichier. Indicateur pour "prêt à regarder" côté UI. |
+| `files[].detectedContainer` | B | Format lu dans les premiers octets du fichier, sans ffmpeg : `"mp4"` (boîte `ftyp` aux octets 4 à 8), `"matroska"` (en-tête EBML `1A 45 DF A3`, MKV et WebM), `"unknown"`, ou `null` tant que la première pièce du fichier n'est pas arrivée. Permet de repérer un faux fichier (un `.mp4` qui n'en est pas un) sans attendre la fin du téléchargement. Le client ne décide rien : c'est à Laravel d'annuler s'il le veut. Les pistes et codecs restent l'affaire de ffprobe. |
 | `files[].availableRanges` | B | Plages d'octets disponibles, `[début, fin exclue]`, fusionnées et triées, relatives au fichier. |
 | `pieces` | B | Bitfield des pièces vérifiées, en base64, au format du message `bitfield` de BitTorrent (bit de poids fort du premier octet = pièce 0). Pour le débogage et la page de test, pas besoin de le décoder côté Laravel. |
 | `sources` | C | Sources encore utilisées (`active`) et écartées après des échecs répétés (`dropped`), pairs et web-seeds confondus. |
@@ -241,10 +242,14 @@ Range: bytes=2959137415-
 1. La requête enregistre la plage demandée comme **prioritaire** : les pièces qui la couvrent, plus une fenêtre d'avance (`STREAM_READAHEAD_BYTES`, 8 Mo par défaut), passent devant toutes les autres. La fenêtre avance au fil de la lecture.
 2. Si les premiers octets de la plage sont déjà sur disque, la réponse part tout de suite. Sinon, le client **attend** qu'ils arrivent avant d'envoyer les en-têtes.
 3. Les octets sont ensuite envoyés au fur et à mesure que les pièces arrivent. Le reste du fichier continue de se télécharger en arrière-plan.
-4. Si aucune nouvelle pièce de la plage n'arrive pendant `STREAM_STALL_TIMEOUT_MS` (60 s par défaut, compteur remis à zéro à chaque pièce reçue) :
-   - avant l'envoi des en-têtes : réponse **503** avec un corps JSON d'erreur ;
-   - après l'envoi des en-têtes : la connexion est coupée. Le lecteur voit une réponse plus courte que son `Content-Length` et doit la traiter comme une erreur.
-5. Si le job passe en `"failed"` ou `"cancelled"`, les octets déjà présents restent servis, mais toute attente d'octets manquants se termine immédiatement comme au point 4.
+4. Si aucune nouvelle pièce de la plage n'arrive pendant `STREAM_STALL_TIMEOUT_MS` (60 s par défaut, compteur remis à zéro à chaque pièce reçue), c'est une situation **temporaire** : le téléchargement continue, la pièce peut encore arriver.
+   - avant l'envoi des en-têtes : réponse **503** + `Retry-After: 5` ;
+   - après l'envoi des en-têtes : la connexion est coupée (on ne peut plus changer le code). Le lecteur voit une réponse plus courte que son `Content-Length` ; ffmpeg se reconnecte alors à l'octet exact, et c'est cette nouvelle requête qui reçoit le 503.
+5. Si le job est `"failed"` ou `"cancelled"`, c'est **définitif** : les octets déjà présents restent servis, mais une requête sur des octets manquants reçoit tout de suite **410 Gone** avec la cause connue dans le corps (une réponse déjà en cours est coupée, et la reconnexion reçoit le 410).
+
+```json
+{ "status": "failed", "error": "No piece completed for 120s (812/1413 downloaded, 0 active source(s), 5 dropped). Stuck: piece 12 ..." }
+```
 
 Sans en-tête `Range`, la réponse est un `200` avec le fichier entier, servi de la même façon (en attendant les pièces au fil de l'eau).
 
@@ -256,14 +261,24 @@ Sans en-tête `Range`, la réponse est un `200` avec le fichier entier, servi de
 | **200** | Pas d'en-tête `Range` : fichier entier. |
 | **404** | `id` inconnu (y compris après un redémarrage du conteneur, l'état étant en mémoire), ou `index` qui n'est pas un fichier choisi de ce téléchargement. |
 | **416** | Plage hors du fichier. |
-| **503** | Octets indisponibles : délai d'attente dépassé avant l'envoi des en-têtes, ou job terminé en `"failed"`/`"cancelled"` sans ces octets. |
+| **410** | Le job est `"failed"` ou `"cancelled"` et ces octets n'arriveront jamais. Corps JSON `{ "status", "error" }` avec la cause connue. **Ne pas réessayer.** |
+| **503** | Délai d'attente dépassé, téléchargement toujours en cours : **réessayer** (`Retry-After: 5`). |
 
 Formes de `Range` supportées : `bytes=début-fin`, `bytes=début-` et `bytes=-N` (les N derniers octets). Une seule plage par requête (pas de `multipart/byteranges`).
 
 ### Côté ffmpeg (Laravel)
 
 - Passer l'URL `http://client-torrent:7881/downloads/{id}/files/{index}` comme entrée de `ffprobe` et `ffmpeg` tant que `GET /downloads/:id` ne renvoie pas `"completed"`, puis le chemin disque habituel.
-- Régler `-rw_timeout` (en microsecondes) **au-dessus** de `STREAM_STALL_TIMEOUT_MS`, par exemple `-rw_timeout 90000000` pour 90 s. Avec une valeur plus basse, ffmpeg abandonne pendant que le client attend encore une pièce.
+- Options d'entrée à placer avant `-i` (et avant l'URL pour ffprobe), vérifiées avec le prototype (voir le [guide d'intégration](../docs/torrent-streaming-laravel-integration.md)) :
+
+  ```
+  -rw_timeout 90000000 -reconnect 1 -reconnect_on_network_error 1 -reconnect_on_http_error 5xx -reconnect_delay_max 5
+  ```
+
+  - `-rw_timeout` (microsecondes) **au-dessus** de `STREAM_STALL_TIMEOUT_MS`, sinon ffmpeg abandonne pendant que le client attend encore une pièce.
+  - `-reconnect_on_http_error 5xx` : à l'ouverture du flux, un 503 est retenté, un 410 arrête net. Sans cette option, ffprobe abandonne au premier 503.
+  - `-reconnect_delay_max 5` : en cours de lecture, ffmpeg retente sur toute erreur jusqu'à ce délai. C'est le client qui attend les pièces lentes, donc un délai court suffit et un job en échec est détecté en quelques secondes (39 s avec 30, 18 s avec 5 dans le prototype).
+- **Ajouter `-xerror` à la commande ffmpeg** : sans lui, une coupure définitive donne un HLS tronqué avec un code de sortie 0.
 - Un seul lecteur par film est prévu : le ffmpeg de `ConvertMovie`. Les spectateurs lisent le HLS produit, jamais cet endpoint.
 
 ### Variables d'environnement

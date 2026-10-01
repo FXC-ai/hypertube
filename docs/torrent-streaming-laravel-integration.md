@@ -19,6 +19,9 @@ Pour lever les inconnues avant d'écrire une ligne dans Laravel, [`torrent-clien
 | Pièce qui arrive très en retard (12 s, le client abandonne la requête à 5 s) | Avec `-reconnect` : ffmpeg **redemande exactement à l'octet coupé** (`Range: bytes=7340032-`), attend, et produit les 60 s. |
 | ⚠️ Pièce qui n'arrive **jamais**, commande actuelle | ffmpeg affiche `Stream ends prematurely` mais **sort avec le code 0** : un film de **28 s sur 60** serait marqué `Converted`. |
 | Pièce qui n'arrive jamais, avec `-xerror` | ffmpeg sort en erreur (code 183) : `HlsConverter` lève `MediaConversionException`, le film passe en `Failed`. |
+| Ouverture du flux (1re requête de ffprobe) sur une pièce en retard : le client répond **503** | Sans `-reconnect_on_http_error 5xx`, ffprobe abandonne au premier 503 alors que la pièce arrivait 4 s plus tard. Avec, il réessaie et réussit. |
+| Ouverture du flux quand le job est en échec : le client répond **410 Gone** | Avec `-reconnect_on_http_error 5xx`, ffprobe s'arrête **net** (un 410 n'est pas un 5xx). |
+| En cours de lecture, job en échec (410) | ffmpeg retente sur toute erreur jusqu'à `-reconnect_delay_max` : arrêt au bout de 39 s avec `30`, de **18 s avec `5`**. Avec `5`, une pièce en retard passe toujours, puisque c'est le client qui attend la pièce, pas ffmpeg. |
 
 Ce que ffprobe demande réellement sur un MP4 avec `moov` en fin de fichier :
 
@@ -33,7 +36,7 @@ Le client n'a **rien eu à analyser** : ffprobe calcule lui-même où est le `mo
 Les deux points qui changent la conception :
 
 1. **`-xerror` est obligatoire.** Sans lui, une coupure du flux donne une conversion tronquée marquée réussie. C'est d'ailleurs aussi vrai aujourd'hui avec un fichier local corrompu : l'option a du sens dans tous les cas.
-2. **`-reconnect` seulement sur les erreurs réseau, pas sur les erreurs HTTP.** Avec `-reconnect_on_http_error 5xx`, une pièce morte a fait boucler ffmpeg **5 min** sur des `503`, alors que le client avait déjà abandonné. Sans cette option, un `503` arrête ffmpeg tout de suite.
+2. **Le client distingue "réessaie" (503) de "c'est fini" (410)**, et ffmpeg reçoit `-reconnect_on_http_error 5xx -reconnect_delay_max 5`. Une première version renvoyait 503 dans les deux cas : ffmpeg ne pouvait pas savoir qu'il fallait arrêter, et une pièce morte l'a fait boucler **5 min**. Avec 410 pour un job en échec, il s'arrête net à l'ouverture et en quelques secondes en cours de lecture, avec `HTTP error 410 Gone` dans son message d'erreur : la cause est identifiable dans `conversion_error`.
 
 ## 2. Ce qui change, classe par classe
 
@@ -175,11 +178,13 @@ final readonly class MovieInput
 
         return [
             '-rw_timeout', (string) config('media.stream.rw_timeout_us'),
-            // Reprend à l'octet coupé si la connexion tombe. Volontairement PAS
-            // -reconnect_on_http_error : un 503 veut dire que le client a abandonné.
+            // Reprend à l'octet coupé si la connexion tombe, et réessaie un 503 (pièce en
+            // retard, temporaire). Un 410 (téléchargement en échec, définitif) arrête net.
             '-reconnect', '1',
             '-reconnect_on_network_error', '1',
-            '-reconnect_delay_max', '30',
+            '-reconnect_on_http_error', '5xx',
+            // Court : c'est le client qui attend les pièces lentes, pas ffmpeg.
+            '-reconnect_delay_max', '5',
         ];
     }
 }
@@ -316,6 +321,7 @@ Ces champs sont ceux que #6 prévoyait déjà ("ajouter les champs d'état de t�
 | **Peu de code côté Laravel** | Une petite classe de données, un résolveur, deux signatures qui passent de `string` à `MovieInput`, et des options ffmpeg. Le reste du pipeline est intact. |
 | **Robuste aux lenteurs** | Avec `-reconnect`, une coupure reprend exactement où elle s'était arrêtée (vérifié). |
 | **Échecs visibles** | Avec `-xerror`, un flux mort donne `Failed` au lieu d'un film tronqué marqué `Converted`. Améliore aussi le cas d'un fichier local corrompu. |
+| **Échecs identifiables** | Un téléchargement en échec répond `410 Gone` avec la cause en JSON ; ffmpeg l'écrit dans son erreur (`HTTP error 410 Gone`), qui finit dans `conversion_error`. Une lenteur (503) n'est pas confondue avec un échec. |
 | **Indépendant de la position des fichiers dans le torrent** | Un film dont le début ou la fin partage une pièce avec un autre fichier se lit pareil (vérifié). |
 
 ### Inconvénients et risques
@@ -342,14 +348,42 @@ Ces champs sont ceux que #6 prévoyait déjà ("ajouter les champs d'état de t�
 | Dépendance au client pendant la conversion | Aucune | Oui (échec propre + reprise) |
 | Changements Laravel | Polling du seuil | `MovieInput`, résolveur, options ffmpeg |
 
-## 6. Points ouverts
+## 6. Questions fréquentes
+
+### Pourquoi ce n'est pas le client qui détecte le type de fichier ?
+
+Il y a deux niveaux de détection :
+
+| Niveau | Comment | Qui |
+|---|---|---|
+| **Le conteneur** (MP4 ou MKV/WebM) | Les premiers octets suffisent : boîte `ftyp` aux octets 4 à 8 pour un MP4, en-tête EBML `1A 45 DF A3` pour un MKV/WebM. Pas besoin de ffmpeg : le client a déjà la fonction (`detectContainerFormat()` dans `src/videoSignature.js`). | **Le client**, dès que la première pièce du fichier est là (elle est prioritaire). Exposé dans `files[].detectedContainer`. |
+| **Les pistes et codecs** (h264, aac, langues des sous-titres) | Il faut analyser le `moov` d'un MP4 ou les `Tracks` d'un MKV, c'est-à-dire réécrire une partie de ffprobe. | **ffprobe, côté Laravel.** Avec le streaming, il les obtient en moins d'une seconde, pendant le téléchargement. |
+
+À l'inspection du `.torrent` (`POST /torrents/inspect`), aucun octet du film n'est encore téléchargé : seule l'extension est connue. La détection par les premiers octets vient compléter ensuite, et sert surtout à repérer un faux fichier (un `.mp4` qui est en fait une archive ou un exécutable, classique des torrents piégés) avant d'avoir téléchargé des Go pour rien. Le client ne fait que l'exposer : c'est à Laravel de décider d'annuler.
+
+Mettre ffprobe dans le conteneur du client serait possible (environ 80 Mo de plus sur l'image Alpine), mais doublerait une responsabilité que Laravel assure déjà, pour un gain d'une seconde.
+
+### Pourquoi 410 et pas 503 quand le téléchargement a échoué ?
+
+Parce que les deux situations n'appellent pas la même réaction :
+
+| Situation | Nature | Code | Réaction de ffmpeg |
+|---|---|---|---|
+| Une pièce n'est pas arrivée depuis 60 s, le téléchargement continue | Temporaire | **503** + `Retry-After` | Réessaie (`-reconnect_on_http_error 5xx`) |
+| Le job est `failed` ou `cancelled` : ces octets ne viendront jamais | Définitif, cause connue | **410 Gone** + `{ "status", "error" }` | S'arrête : le film passe en `Failed`, #18 relance |
+
+`410 Gone` dit exactement "cette ressource ne sera plus disponible". Avec un seul code pour les deux, ffmpeg ne pouvait pas savoir qu'il fallait arrêter.
+
+Limite : une fois les en-têtes envoyés, on ne peut plus changer le code HTTP, seulement couper la connexion. ffmpeg se reconnecte alors à l'octet exact, et c'est cette nouvelle requête qui reçoit le 503 ou le 410.
+
+## 7. Points ouverts
 
 1. **Validation de l'[ADR-0007](adr/0007-stream-partial-files-over-http.md)** par FX, avant de créer le ticket B.
 2. **Queue dédiée aux conversions** : nécessaire dès qu'on convertit pendant le téléchargement (voir inconvénients).
 3. **Fichier vidéo dans un sous-dossier du torrent** : `ConvertMovie` refuse aujourd'hui un `filename` qui contient `/` (`Invalid file name.`). Dans un torrent multi-fichiers, la vidéo peut être dans un sous-dossier (`files[].path` = `Sample/movie.mp4`). Avec l'URL, le nom n'est plus utilisé pendant le téléchargement, mais il le reste pour le chemin disque après. Il faudra soit accepter un chemin relatif contrôlé, soit stocker le chemin relatif à part.
 4. **`-xerror` dès maintenant ?** Indépendamment du streaming, il évite qu'une conversion tronquée soit marquée `Converted`. Peut entrer dans le code de FX sans attendre le ticket B.
 
-## 7. Rejouer le prototype
+## 8. Rejouer le prototype
 
 Prérequis : Node ≥ 20 et ffmpeg/ffprobe.
 
@@ -367,4 +401,4 @@ Dans un autre terminal :
 ffprobe -v error -rw_timeout 90000000 -show_streams http://127.0.0.1:8790/movie.mp4
 ```
 
-Le serveur affiche chaque requête, les pièces du torrent qu'elle touche (et avec quels autres fichiers elles sont partagées), combien manquaient et combien de temps la réponse a attendu. Pour simuler une pièce lente ou morte : 5e argument = numéro de pièce, avec `LATE_MS=12000` (arrive au bout de 12 s) ou sans (n'arrive jamais), et `STALL_TIMEOUT_MS=5000` pour raccourcir l'attente côté client.
+Le serveur affiche chaque requête, les pièces du torrent qu'elle touche (et avec quels autres fichiers elles sont partagées), combien manquaient et combien de temps la réponse a attendu. Pour simuler une pièce lente ou morte : 5e argument = numéro de pièce, avec `LATE_MS=12000` (arrive au bout de 12 s) ou sans (n'arrive jamais), et `STALL_TIMEOUT_MS=5000` pour raccourcir l'attente côté client. Avec `FAIL_AFTER_MS=15000`, le "job" est déclaré en échec au bout de 15 s : les octets manquants reçoivent alors `410 Gone`.

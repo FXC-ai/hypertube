@@ -13,7 +13,9 @@
 //           (random bytes), e.g. "meta.sqlite:300000,movie.mkv,subs.srt:700000"
 //   never-piece: a torrent piece that never arrives (stall timeout), or arrives after
 //           LATE_MS ms when that environment variable is set.
-// env: STALL_TIMEOUT_MS (default 60000), PIECE_BYTES (default 1 MiB)
+// env: STALL_TIMEOUT_MS (default 60000), PIECE_BYTES (default 1 MiB),
+//      FAIL_AFTER_MS: the simulated job is declared failed after n ms (the real client does it
+//      when no piece completes for 2 min); missing bytes then get 410 Gone instead of waiting.
 
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -24,6 +26,13 @@ const RATE = Number(rateArg);
 const STALL_TIMEOUT_MS = Number(process.env.STALL_TIMEOUT_MS ?? 60000);
 const NEVER = neverArg === undefined ? null : Number(neverArg);
 const LATE_MS = process.env.LATE_MS === undefined ? null : Number(process.env.LATE_MS);
+const FAIL_AFTER_MS =
+  process.env.FAIL_AFTER_MS === undefined ? null : Number(process.env.FAIL_AFTER_MS);
+let jobFailed = false;
+
+// Temporary (503, retry later) vs definitive (410, those bytes will never come).
+class StallError extends Error {}
+class JobEndedError extends Error {}
 
 let offset = 0;
 const files = layoutArg.split(',').map((entry) => {
@@ -67,6 +76,13 @@ function describePieces(first, last) {
     .join(' .. ');
 }
 
+if (FAIL_AFTER_MS !== null) {
+  setTimeout(() => {
+    jobFailed = true;
+    console.log(`${elapsed()} job declared failed`);
+  }, FAIL_AFTER_MS);
+}
+
 if (NEVER !== null && LATE_MS !== null) {
   setTimeout(() => {
     have[NEVER] = true;
@@ -92,8 +108,12 @@ async function waitFor(pieceIndex) {
   const waitedSince = Date.now();
 
   while (!have[pieceIndex]) {
+    if (jobFailed) {
+      throw new JobEndedError(`download failed, piece ${pieceIndex} will never arrive`);
+    }
+
     if (Date.now() - waitedSince > STALL_TIMEOUT_MS) {
-      throw new Error(`piece ${pieceIndex} not received for ${STALL_TIMEOUT_MS} ms`);
+      throw new StallError(`piece ${pieceIndex} not received for ${STALL_TIMEOUT_MS} ms`);
     }
 
     priority.add(pieceIndex);
@@ -121,17 +141,25 @@ createServer(async (req, res) => {
     return;
   }
 
-  // Wait for the first piece before sending headers: a stall here can still be a clean 503.
+  // Wait for the first piece before sending headers: a stall here can still get a status code.
   const asked = Date.now();
   const missingAtRequest = have.slice(pieceOf(start), pieceOf(end) + 1).filter((ok) => !ok).length;
 
   try {
     await waitFor(pieceOf(start));
   } catch (err) {
+    const gone = err instanceof JobEndedError;
     res
-      .writeHead(503, { 'Content-Type': 'application/json' })
-      .end(JSON.stringify({ error: err.message }));
-    console.log(`${elapsed()} Range=${req.headers.range ?? '(none)'} -> 503 ${err.message}`);
+      .writeHead(gone ? 410 : 503, {
+        'Content-Type': 'application/json',
+        ...(gone ? {} : { 'Retry-After': '5' }),
+      })
+      .end(
+        JSON.stringify(gone ? { status: 'failed', error: err.message } : { error: err.message }),
+      );
+    console.log(
+      `${elapsed()} Range=${req.headers.range ?? '(none)'} -> ${gone ? 410 : 503} ${err.message}`,
+    );
 
     return;
   }
