@@ -64,7 +64,7 @@ Attention aux sources qui régénèrent leur `.torrent` (archive.org, voir [docs
 
 ## `GET /` - page de test
 
-Ouvrir `http://localhost:7881/` dans un navigateur : un formulaire pré-rempli (torrent archive.org court, `outputDir` par défaut) pour lancer un téléchargement, suivre la progression et l'annuler, avec la doc du fonctionnement sur la même page. Hors Docker, `outputDir` vaut un dossier temporaire ; dans Docker, le chemin du volume partagé avec `app`. Cette page n'est pas destinée à Laravel, elle sert à tester à la main.
+Ouvrir `http://localhost:7881/` dans un navigateur : un formulaire pré-rempli (torrent archive.org court, `outputDir` par défaut, ou un `.torrent` local envoyé en `torrentBase64`) pour inspecter, choisir les fichiers, lancer un téléchargement, suivre la progression et l'annuler. La page affiche aussi la réponse complète de l'inspection, l'historique des téléchargements lancés dans l'onglet, et une référence de chaque route (corps, codes, exemples) avec un bouton pour l'essayer. Cette référence vient d'un objet `ROUTES` dans `src/server/ui.html`, à tenir à jour avec ce document. Hors Docker, `outputDir` vaut un dossier temporaire ; dans Docker, le chemin du volume partagé avec `app`. Cette page n'est pas destinée à Laravel, elle sert à tester à la main.
 
 ## `GET /health`
 

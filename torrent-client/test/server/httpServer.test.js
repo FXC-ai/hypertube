@@ -90,3 +90,27 @@ test('POST /downloads: 400 for malformed fileIndexes or expectedInfoHash', async
     }
   });
 });
+
+test('GET / serves the test page with the default outputDir and the API reference', async () => {
+  await withServer(async (base) => {
+    const res = await fetch(`${base}/`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /^text\/html/);
+    const page = await res.text();
+
+    assert.ok(!page.includes('__DEFAULT_OUTPUT_DIR__'), 'outputDir placeholder replaced');
+    assert.match(page, /var ROUTES=\[/);
+    for (const route of [
+      "method:'GET',path:'/health'",
+      "method:'POST',path:'/torrents/inspect'",
+      "method:'POST',path:'/downloads'",
+      "method:'GET',path:'/downloads/:id'",
+      "method:'DELETE',path:'/downloads/:id'",
+    ]) {
+      assert.ok(page.includes(route), route);
+    }
+    assert.ok(page.includes('id="routes"'), 'API reference container');
+    assert.ok(page.includes('id="inspectBox"'), 'inspection result');
+    assert.ok(page.includes('id="historyRows"'), 'job history');
+  });
+});
