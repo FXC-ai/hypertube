@@ -59,7 +59,7 @@ dt{color:var(--muted)}dd{margin:0;min-width:0;word-break:break-all}
 .method{display:inline-block;min-width:64px;text-align:center;font:600 12px ui-monospace,monospace;padding:2px 8px;border-radius:6px;border:1px solid currentColor}
 .m-get{color:var(--get)}.m-post{color:var(--post)}.m-delete{color:var(--del)}
 .try{border-top:1px dashed var(--border);margin-top:16px;padding-top:4px}
-#pieceMap{width:100%;height:auto;margin-top:12px;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;display:block}
+#pieceMap{width:100%;height:40px;margin-top:12px;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;display:block}
 video{width:100%;margin-top:12px;border-radius:8px;background:#000}
 .legend span{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 12px;vertical-align:middle}
 </style>
@@ -396,13 +396,15 @@ function render(job){
     var info='lisible depuis le début : '+fmtBytes(f.contiguousBytesFromStart)+(f.detectedContainer?' - conteneur détecté : '+f.detectedContainer:'');
     return '<tr><td><code>'+esc(f.path)+'</code><div class="mini'+(f.complete?' done':'')+'"><div style="width:'+p+'%"></div></div><div class="muted" style="font-size:12px">'+esc(info)+'</div></td><td class="num">'+fmtBytes(f.downloadedBytes)+' / '+fmtBytes(f.length)+'</td></tr>';
   }).join('');
-  drawPieces(job.pieces,job.totalPieces);
+  drawPieces(job.pieces,job.infoHash);
   attachPlayer(job);
 }
-// One column per piece of the whole torrent, from the base64 BitTorrent bitfield.
-function drawPieces(b64){
+// One column per piece of the whole torrent, from the base64 BitTorrent bitfield. The bitfield
+// is padded to whole bytes: the inspection of the same torrent gives the real piece count.
+function drawPieces(b64,infoHash){
   if(!b64){return}
-  var bytes=atob(b64),count=bytes.length*8,canvas=$('pieceMap'),ctx=canvas.getContext('2d');
+  var bytes=atob(b64),known=inspection&&inspection.infoHash===infoHash;
+  var count=known?inspection.totalPieces:bytes.length*8,canvas=$('pieceMap'),ctx=canvas.getContext('2d');
   var css=getComputedStyle(document.documentElement);
   $('mapBox').hidden=false;
   canvas.width=Math.min(Math.max(count,1),2000);
