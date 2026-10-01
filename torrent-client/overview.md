@@ -209,6 +209,8 @@ Ces règles sont internes au Client Torrent : elles remplacent le **piece retry*
 
 ### Ticket B - streaming et priorités
 
+**Implémenté** ([#28](https://github.com/FXC-ai/hypertube/issues/28)) : détails, pièges et mesures sur un vrai film dans [README.md](README.md#streaming-http-range-28). Ajout par rapport à la conception ci-dessous : les pièces prioritaires partent vers les sources qui ont déjà livré des pièces (ou un web-seed au départ), sinon elles pouvaient tomber sur un pair mort et attendre son timeout.
+
 Ce qui change côté Laravel, fonction par fonction, avec du code prototype et les résultats d'un prototype exécuté avec les vraies commandes ffmpeg : [docs/torrent-streaming-laravel-integration.md](../docs/torrent-streaming-laravel-integration.md).
 
 Trois niveaux de priorité, du plus urgent au moins urgent :

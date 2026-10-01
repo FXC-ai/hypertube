@@ -21,6 +21,9 @@ La suite a été volontairement réduite (une vingtaine de tests unitaires au li
 |---|---|
 | `test/fileSelection.test.js` | Sélection de fichiers (#26) : type et conteneur déduits de l'extension, suggestion (plus grosse vidéo + tous les sous-titres non vides, ou tout si le torrent n'a aucune vidéo), validation de `fileIndexes` |
 | `test/recheck.test.js` | Revérification sur disque (#27) : seules les pièces dont le hash correspond sont gardées (trou à zéro, octet corrompu, fichier absent ou tronqué : invalides) ; une pièce partagée avec un fichier non choisi n'est jamais valide |
+| `test/stream/pieceAvailability.test.js` | Plages disponibles relatives au fichier et fusionnées, bitfield au format BitTorrent, rang urgent/boosté/normal avec réclamations comptées par requête (#28) |
+| `test/stream/streamEndpoint.test.js` | Sans réseau, vrai manager + vrai `downloadTorrent` + faux pair lent sur un torrent multi-fichiers à pièces partagées : première et dernière pièce de la vidéo d'abord, plage en fin de film qui passe devant, octets exacts sans ceux des autres fichiers, statut (`contiguousBytesFromStart`, `availableRanges`, `pieces`, `detectedContainer`), 404/416, 503 + `Retry-After` puis 410 après annulation, fichier refermé quand le lecteur part en pleine contre-pression (#28) |
+| `test/swarm/sourcePool.test.js` | Une pièce attendue va à la source éprouvée (ou à un web-seed au départ), les autres continuent la rotation ; moins d'échecs sur la pièce prime sur l'historique (#28) |
 | `test/fixtures.test.js` | Le parser (`src/torrentFile.js`) contre un **vrai** `.torrent` archive.org, info-hash comparé au `btih` publié par archive.org lui-même |
 | `test/torrentLayout.test.js` | `computeOverlaps` : une plage d'octets qui chevauche deux fichiers - la classe de bug trouvée deux fois pendant le développement (#10 et #12) ; `computeWantedPieces` : seules les pièces qui touchent un fichier choisi, pièces de bord comprises (#26) |
 | `test/trackers/httpTracker.test.js` | Annonce HTTP (BEP3) : encodage correct de `info_hash`/`peer_id` en octets bruts dans la query - `fetch` injecté |
@@ -35,7 +38,7 @@ La suite a été volontairement réduite (une vingtaine de tests unitaires au li
 | `test/webseed/downloadPieceFromWebSeed.test.js` | `fetch failed` garde la vraie cause (`ECONNRESET`) et compte comme un échec de connexion ; un HTTP 404 n'en est pas un (#27) |
 | `test/webseed/downloadPieceFromWebSeed.integration.test.js` | **Réseau réel** : télécharge une vraie pièce (qui chevauche plusieurs fichiers) depuis le vrai serveur web-seed archive.org |
 | `test/server/downloadManager.test.js` | `cancelDownload` arrête un job en cours et son statut se stabilise sur `cancelled` ; sélection par défaut, progression comptée par fichier (la part d'une pièce de bord qui appartient à un fichier non choisi n'est pas comptée), index hors bornes et infohash changé qui font échouer le job sans rien télécharger, `TorrentFetchError` à l'inspection (#26) ; état `checking` pendant la revérification, pièces déjà sur disque comptées et passées en `skipPieces`, job terminé sans annonce si tout est déjà là, `refreshSources` qui réannonce sans `event` (#27) |
-| `test/server/httpServer.test.js` | Sans réseau : `POST /torrents/inspect` sur le vrai `.torrent` Sintel (vidéo principale et sous-titres suggérés), `400` pour un torrent malformé ou un JSON invalide, `502` pour une `torrentUrl` injoignable, `400` pour un `fileIndexes`/`expectedInfoHash` malformé (#26), `GET /` sert la page de test avec `outputDir` remplacé et la référence `ROUTES` des cinq routes |
+| `test/server/httpServer.test.js` | Sans réseau : `POST /torrents/inspect` sur le vrai `.torrent` Sintel (vidéo principale et sous-titres suggérés), `400` pour un torrent malformé ou un JSON invalide, `502` pour une `torrentUrl` injoignable, `400` pour un `fileIndexes`/`expectedInfoHash` malformé (#26), `GET /` sert la page de test avec `outputDir` remplacé et la référence `ROUTES` des six routes |
 | `test/server/httpServer.integration.test.js` | **Réseau réel, bout en bout via HTTP** : `POST` démarre un vrai téléchargement, poll jusqu'à progression réelle, `DELETE` annule, vérifie qu'aucune pièce ne progresse plus ensuite. ~19s |
 
 Voir [API.md](API.md) pour le contrat de l'API HTTP (`POST /torrents/inspect`, `POST`/`GET`/`DELETE /downloads`).
@@ -177,6 +180,28 @@ Un téléchargement réel (Mulan, archive.org) a échoué à 86 % sur **une seul
 La cause réseau de `fetch failed` est maintenant dans le message (`fetch failed (ECONNRESET)`), pour diagnostiquer le prochain incident web-seed.
 
 Pas reproduit sur Mulan lui-même : ce dépôt archive.org n'est vraisemblablement pas du domaine public, donc il ne sert pas de fixture. Le cas est reproduit dans `downloadTorrent.test.js` (6 échecs réseau sur la seule source, au-delà de l'ancien budget de 4, puis succès).
+
+## Streaming HTTP Range (#28)
+
+`GET /downloads/:id/files/:index` sert un fichier choisi **pendant** son téléchargement, pour que ffprobe/ffmpeg lisent une URL au lieu d'un fichier troué ([ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md), contrat dans [API.md](API.md#get-downloadsidfilesindex)).
+
+- **`src/stream/pieceAvailability.js`** : les pièces vérifiées d'un job (bitfield, plages disponibles par fichier), les écouteurs qui attendent une pièce, et le rang de chaque pièce : `URGENT` (une requête l'attend), `BOOSTED` (première et dernière pièce de la vidéo principale, pour le `moov`/les `Cues`), `NORMAL`.
+- **`src/stream/streamFile.js`** : découpe l'en-tête `Range` (`a-b`, `a-`, `-N`), réclame les pièces de la plage (+ `STREAM_READAHEAD_BYTES`) comme urgentes, attend la première avant d'envoyer les en-têtes (503 + `Retry-After` si elle tarde, 410 si le job a échoué ou été annulé), puis envoie les octets au fil des pièces, en respectant la contre-pression.
+- **`downloadTorrent({ priorityOf, provenSourcesBelowPriority })`** : prend la pièce prête de plus faible rang, et confie les pièces urgentes ou boostées aux sources qui ont déjà livré (`sourcePool.pick(..., { preferProven })`), ou à un web-seed au départ.
+- **`downloadManager`** : `openStream()` pour l'endpoint ; le statut gagne `files[].contiguousBytesFromStart`, `availableRanges`, `detectedContainer` (premiers octets, sans ffmpeg, via `videoSignature.js`) et `pieces`.
+- **Page de test** : carte des pièces et lecteur `<video>` branché sur l'endpoint (le navigateur fait lui-même des requêtes `Range`).
+
+**Piège trouvé en testant sur un vrai film** : quand le lecteur se déconnecte pendant que le serveur attend `drain` (tampon d'envoi plein), `drain` n'arrive jamais. La fonction restait bloquée sans fermer le fichier, et Node 26 transforme un `FileHandle` ramassé par le GC en **erreur fatale** : le service plantait. Corrigé en attendant `drain` **ou** `close` ; test de non-régression dans `streamEndpoint.test.js`.
+
+**Vérifié sur un vrai torrent** (*His Girl Friday*, 1940, domaine public, archive.org, mp4 de 575 Mo en 276 pièces de 2 Mo) avec les commandes du guide d'intégration :
+
+| Mesure | Résultat |
+|---|---|
+| ffprobe sur l'URL, juste après `POST /downloads` | Durée et pistes en **5,3 s** (dont 2 s de récupération du `.torrent`, revérification et annonce) ; 10 à 25 s avant la règle des sources éprouvées |
+| Commande HLS exacte de `HlsCommandBuilder` | 4 min de film converties à 10 s, 11 min à 30 s ; téléchargement fini vers 45 s ; 29 min converties en 60 s, sans erreur |
+| Lecteur `<video>` de la page de test | Métadonnées et 80 s de tampon pendant le téléchargement, saut à 60 s possible |
+
+Les torrents archive.org contiennent des fichiers de bourrage BEP 47 (`.____padding_file/N`) qui alignent chaque fichier sur une pièce : chez eux, deux fichiers ne partagent jamais une pièce. Ils apparaissent dans l'inspection comme `other`, non suggérés.
 
 ## Notes pour la suite
 

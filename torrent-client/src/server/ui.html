@@ -59,6 +59,9 @@ dt{color:var(--muted)}dd{margin:0;min-width:0;word-break:break-all}
 .method{display:inline-block;min-width:64px;text-align:center;font:600 12px ui-monospace,monospace;padding:2px 8px;border-radius:6px;border:1px solid currentColor}
 .m-get{color:var(--get)}.m-post{color:var(--post)}.m-delete{color:var(--del)}
 .try{border-top:1px dashed var(--border);margin-top:16px;padding-top:4px}
+#pieceMap{width:100%;height:auto;margin-top:12px;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;display:block}
+video{width:100%;margin-top:12px;border-radius:8px;background:#000}
+.legend span{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 12px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -110,8 +113,18 @@ dt{color:var(--muted)}dd{margin:0;min-width:0;word-break:break-all}
 <div class="bar"><div id="fill"></div></div>
 <div id="counts" class="muted">-</div>
 <table class="files" id="progressFiles" hidden><tbody id="progressRows"></tbody></table>
+<div id="mapBox" hidden>
+<canvas id="pieceMap" width="760" height="40"></canvas>
+<div class="muted legend">Carte des pièces du torrent (une colonne = une pièce)<span style="background:var(--ok)"></span>vérifiée<span style="background:var(--border)"></span>pas encore là, ou d'un fichier non choisi (jamais téléchargée)</div>
+</div>
 <div id="error" class="err"></div>
 <details><summary class="muted">Réponse brute de GET /downloads/:id</summary><pre id="raw">-</pre></details>
+</section>
+
+<section class="card" id="playerBox" hidden>
+<h2>Lecture pendant le téléchargement</h2>
+<p class="muted">Le lecteur lit <code id="streamUrl"></code> : le navigateur envoie des requêtes <code>Range</code>, et le client télécharge en priorité les pièces demandées. Un MP4 en h264/aac se lit dans tous les navigateurs ; un MKV dépend du navigateur.</p>
+<video id="player" controls preload="metadata"></video>
 </section>
 
 <section class="card">
@@ -150,6 +163,9 @@ var EXAMPLE_ID='2ce4f502-b325-444f-9053-da3174fb94b5';
 var EXAMPLE_HASH='3f4c8a0b9d2e7f61a5c4b3d2e1f0a9b8c7d6e5f4';
 var EXAMPLE_DIR='/var/www/html/storage/app/public/movies/42';
 var EXAMPLE_URL='https://archive.org/download/some_item/some_item_archive.torrent';
+var EXAMPLE_STATUS={id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[
+  {index:0,path:'Movie.mp4',length:2961234567,downloadedBytes:6291456,complete:false,detectedContainer:'mp4',contiguousBytesFromStart:4194304,availableRanges:[[0,4194304],[2959137415,2961234567]]},
+  {index:1,path:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true,detectedContainer:'unknown',contiguousBytesFromStart:81234,availableRanges:[[0,81234]]}],sources:{active:3,dropped:2},error:null,outputDir:EXAMPLE_DIR,pieces:'wAAAAAAAAAA...AAE='};
 var STATUS_VALUES='<code>"checking"</code>, <code>"downloading"</code>, <code>"completed"</code>, <code>"failed"</code> ou <code>"cancelled"</code>';
 
 // Single source of truth for the API reference, the curl examples and the "Essayer" forms.
@@ -209,24 +225,34 @@ var ROUTES=[
   ['piecesCompleted, totalPieces','progression en pièces qui couvrent les fichiers choisis'],
   ['infoHash, pieceLength','<code>null</code> tant que le <code>.torrent</code> n\'est pas parsé'],
   ['files[]','un élément par fichier choisi : <code>index</code>, <code>path</code>, <code>length</code>, <code>downloadedBytes</code>, <code>complete</code>'],
+  ['files[].contiguousBytesFromStart','octets disponibles d\'un seul tenant depuis le début du fichier'],
+  ['files[].availableRanges','plages disponibles <code>[début, fin exclue]</code>, fusionnées et triées, relatives au fichier'],
+  ['files[].detectedContainer','format lu dans les premiers octets : <code>"mp4"</code>, <code>"matroska"</code>, <code>"unknown"</code>, ou <code>null</code> tant que la première pièce n\'est pas arrivée'],
+  ['pieces','bitfield des pièces vérifiées du torrent entier, en base64 (bit de poids fort du premier octet = pièce 0). Dessiné par la carte des pièces de cette page.'],
   ['sources','<code>{ active, dropped }</code> : sources utilisables et écartées, pairs et web-seeds confondus. <code>null</code> avant le début du téléchargement.'],
   ['error','<code>null</code>, ou la cause de l\'échec quand <code>status</code> vaut <code>"failed"</code> (cause réseau précise, pièces bloquées et sources écartées)'],
   ['outputDir','tel que reçu au lancement']],
  responses:[['200','job connu'],['404','id inconnu, y compris après un redémarrage du service (état en mémoire)']],
- example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[
-  {index:0,path:'Movie.mp4',length:2961234567,downloadedBytes:6210222,complete:false},
-  {index:1,path:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true}],sources:{active:3,dropped:2},error:null,outputDir:EXAMPLE_DIR}}},
+ example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:EXAMPLE_STATUS}},
+{id:'stream',method:'GET',path:'/downloads/:id/files/:index',summary:'lit un fichier choisi pendant son téléchargement',binary:true,
+ role:'Sert un fichier choisi <strong>pendant</strong> son téléchargement, avec <code>Range</code>. C\'est l\'entrée de ffprobe et ffmpeg tant que le job n\'est pas <code>"completed"</code>. Les pièces de la plage demandée, plus une fenêtre d\'avance (<code>STREAM_READAHEAD_BYTES</code>, 8 Mo), passent devant les autres. La réponse attend les octets manquants et les envoie au fil de l\'eau.',
+ params:[['id','UUID renvoyé par <code>POST /downloads</code>'],['index','index d\'un fichier choisi (<code>files[].index</code>)']],
+ headers:[{name:'Range',type:'string',required:'non',def:'fichier entier (200)',desc:'<code>bytes=début-fin</code>, <code>bytes=début-</code> ou <code>bytes=-N</code>. Une seule plage par requête.',sample:'bytes=0-1023'}],
+ fields:[['corps','les octets demandés. En-têtes <code>Content-Range</code>, <code>Content-Length</code>, <code>Accept-Ranges: bytes</code>, <code>Content-Type</code> déduit de l\'extension.']],
+ responses:[['200','pas de <code>Range</code> : fichier entier'],['206','plage valide'],['404','id inconnu, ou index qui n\'est pas un fichier choisi'],['410','job <code>"failed"</code> ou <code>"cancelled"</code> et octets manquants : définitif, ne pas réessayer. Corps <code>{ "status", "error" }</code>.'],['416','plage hors du fichier'],['503','aucune pièce de la plage pendant <code>STREAM_STALL_TIMEOUT_MS</code> (60 s) : réessayer, <code>Retry-After: 5</code>']],
+ notes:'Pour ffmpeg, options d\'entrée avant <code>-i</code> : <code>-rw_timeout 90000000 -reconnect 1 -reconnect_on_network_error 1 -reconnect_on_http_error 5xx -reconnect_delay_max 5</code>, et <code>-xerror</code> sur la commande. Détails dans <code>API.md</code>.',
+ example:{path:'/downloads/'+EXAMPLE_ID+'/files/0',headers:{Range:'bytes=0-1023'},status:206,responseText:'206 Partial Content\nContent-Range: bytes 0-1023/2961234567\nContent-Length: 1024\nContent-Type: video/mp4\nAccept-Ranges: bytes\n\n(1024 octets du fichier)'}},
 {id:'cancel',method:'DELETE',path:'/downloads/:id',summary:'annule un téléchargement en cours',
  role:'Annule un job en cours. La réponse donne le statut au moment de l\'appel : elle peut encore dire <code>"downloading"</code>, un <code>GET</code> quelques centaines de ms plus tard confirme <code>"cancelled"</code>. Sur un job déjà terminé, ne fait rien et renvoie son statut final.',
  params:[['id','UUID renvoyé par <code>POST /downloads</code>']],
  responses:[['200','même corps que <code>GET /downloads/:id</code>'],['404','id inconnu']],
  notes:'Les fichiers déjà écrits restent sur disque, partiels : à supprimer côté appelant si besoin.',
- example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[],sources:{active:3,dropped:2},error:null,outputDir:EXAMPLE_DIR}}}
+ example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:EXAMPLE_STATUS}}
 ];
 
 var $=function(id){return document.getElementById(id)};
 var url=$('url'),dir=$('dir'),startBtn=$('start'),cancelBtn=$('cancel'),inspectBtn=$('inspect');
-var jobId=null,timer=null,inspection=null,selected={},torrentFile=null;
+var jobId=null,lastJob=null,timer=null,inspection=null,selected={},torrentFile=null;
 var KIND_LABEL={video:'vidéo',subtitle:'sous-titre',other:'autre'};
 var TERMINAL=['completed','failed','cancelled'];
 var B64_MARK='__TORRENT_BASE64__';
@@ -266,8 +292,9 @@ function startBody(){
   return body;
 }
 // A local .torrent is not inlined: the curl reads it with base64 into $B64.
-function curlFor(method,path,body){
+function curlFor(method,path,body,headers){
   var cmd='curl'+(method==='GET'?'':' -X '+method)+' '+location.origin+path;
+  Object.keys(headers||{}).forEach(function(name){cmd+=" \\\n  -H '"+name+': '+headers[name]+"'"});
   if(body===undefined){return cmd}
   var copy=Object.assign({},body);
   if(copy.torrentBase64!==undefined&&torrentFile&&copy.torrentBase64===torrentFile.base64){copy.torrentBase64=B64_MARK}
@@ -353,6 +380,7 @@ function setStatus(text,cls){
   s.className='pill'+(cls?' '+cls:'');
 }
 function render(job){
+  lastJob=job;
   setStatus(job.status,statusClass(job.status));
   var pct=job.totalBytes?Math.min(100,job.downloadedBytes/job.totalBytes*100):0;
   $('fill').style.width=pct+'%';
@@ -365,8 +393,39 @@ function render(job){
   $('progressFiles').hidden=files.length===0;
   $('progressRows').innerHTML=files.map(function(f){
     var p=f.length?f.downloadedBytes/f.length*100:100;
-    return '<tr><td><code>'+esc(f.path)+'</code><div class="mini'+(f.complete?' done':'')+'"><div style="width:'+p+'%"></div></div></td><td class="num">'+fmtBytes(f.downloadedBytes)+' / '+fmtBytes(f.length)+'</td></tr>';
+    var info='lisible depuis le début : '+fmtBytes(f.contiguousBytesFromStart)+(f.detectedContainer?' - conteneur détecté : '+f.detectedContainer:'');
+    return '<tr><td><code>'+esc(f.path)+'</code><div class="mini'+(f.complete?' done':'')+'"><div style="width:'+p+'%"></div></div><div class="muted" style="font-size:12px">'+esc(info)+'</div></td><td class="num">'+fmtBytes(f.downloadedBytes)+' / '+fmtBytes(f.length)+'</td></tr>';
   }).join('');
+  drawPieces(job.pieces,job.totalPieces);
+  attachPlayer(job);
+}
+// One column per piece of the whole torrent, from the base64 BitTorrent bitfield.
+function drawPieces(b64){
+  if(!b64){return}
+  var bytes=atob(b64),count=bytes.length*8,canvas=$('pieceMap'),ctx=canvas.getContext('2d');
+  var css=getComputedStyle(document.documentElement);
+  $('mapBox').hidden=false;
+  canvas.width=Math.min(Math.max(count,1),2000);
+  ctx.fillStyle=css.getPropertyValue('--border');ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle=css.getPropertyValue('--ok');
+  for(var i=0;i<count;i++){
+    if(bytes.charCodeAt(i>>3)&(0x80>>(i&7))){ctx.fillRect(Math.floor(i*canvas.width/count),0,Math.max(1,Math.ceil(canvas.width/count)),canvas.height)}
+  }
+}
+// The largest chosen video file, or null when the job has none.
+function mainFile(job){
+  var videos=(job.files||[]).filter(function(f){return /\.(mp4|m4v|mov|mkv|webm|ogv)$/i.test(f.path)});
+  return videos.sort(function(a,b){return b.length-a.length})[0]||null;
+}
+// The main video, played straight from the streaming endpoint.
+function attachPlayer(job){
+  var main=mainFile(job);
+  if(!main||$('player').dataset.job===job.id){return}
+  var src='/downloads/'+encodeURIComponent(job.id)+'/files/'+main.index;
+  $('player').dataset.job=job.id;
+  $('player').src=src;
+  $('streamUrl').textContent='GET '+src;
+  $('playerBox').hidden=false;
 }
 function stopPolling(){
   if(timer){clearInterval(timer);timer=null}
@@ -398,6 +457,10 @@ function follow(id){
   $('jobid').textContent='id '+id;
   $('error').textContent='';
   $('raw').textContent='-';
+  $('mapBox').hidden=true;
+  $('playerBox').hidden=true;
+  $('player').removeAttribute('src');
+  $('player').dataset.job='';
   cancelBtn.disabled=false;
   setStatus('...','');
   timer=setInterval(poll,1000);
@@ -438,18 +501,21 @@ function renderRoutes(){
     var h='<details class="route" id="route-'+r.id+'"><summary><span class="method m-'+r.method.toLowerCase()+'">'+r.method+'</span><code>'+r.path+'</code><span class="muted">'+r.summary+'</span></summary>';
     h+='<p>'+r.role+'</p>';
     if(r.params){h+='<h3>Paramètres d\'URL</h3>'+table(['Nom','Description'],r.params.map(function(p){return ['<code>'+p[0]+'</code>',p[1]]}))}
+    if(r.headers){h+='<h3>En-têtes</h3>'+table(['En-tête','Type','Obligatoire','Défaut','Description'],r.headers.map(function(f){return ['<code>'+f.name+'</code>','<code>'+f.type+'</code>',f.required,f.def,f.desc]}))}
     if(r.body){h+='<h3>Corps JSON</h3>'+table(['Champ','Type','Obligatoire','Défaut','Description'],r.body.map(function(f){return ['<code>'+f.name+'</code>','<code>'+f.type+'</code>',f.required,f.def,f.desc]}))}
     if(r.fields){h+='<h3>Champs de la réponse</h3>'+table(['Champ','Description'],r.fields.map(function(f){return ['<code>'+f[0]+'</code>',f[1]]}))}
     h+='<h3>Réponses</h3>'+table(['Code','Cas'],r.responses.map(function(c){return ['<code>'+c[0]+'</code>',c[1]]}));
     if(r.responses.some(function(c){return c[0]>='400'})){h+='<p class="muted small">Toute erreur répond en JSON : <code>{ "error": "message" }</code>.</p>'}
     if(r.notes){h+='<p class="muted">'+r.notes+'</p>'}
     if(r.example){
-      h+='<h3>Exemple</h3><pre>'+esc(curlFor(r.method,r.example.path||r.path,r.example.request))+'</pre>';
+      h+='<h3>Exemple</h3><pre>'+esc(curlFor(r.method,r.example.path||r.path,r.example.request,r.example.headers)+(r.binary?' \\\n  -D - -o extrait.bin':''))+'</pre>';
       if(r.example.response){h+='<pre>'+esc(r.example.status+'\n'+json(r.example.response))+'</pre>'}
+      if(r.example.responseText){h+='<pre>'+esc(r.example.responseText)+'</pre>'}
     }
     if(!r.noTry){
       h+='<div class="try" data-route="'+i+'"><h3>Essayer</h3>';
       (r.params||[]).forEach(function(p){h+='<label>'+p[0]+'</label><input data-param="'+p[0]+'">'});
+      (r.headers||[]).forEach(function(f){h+='<label>en-tête '+f.name+' (vide = non envoyé)</label><input data-header="'+f.name+'" value="'+esc(f.sample)+'">'});
       if(r.tryBody){h+='<label>Corps JSON (envoyé tel quel, même invalide)</label><textarea rows="6" spellcheck="false"></textarea>'}
       h+='<div class="row"><button type="button" class="primary" data-send>Envoyer</button>';
       if(r.params||r.tryBody){h+='<button type="button" data-refill>Reprendre l\'état de la page</button>'}
@@ -463,7 +529,10 @@ function refillTry(box){
   var r=ROUTES[Number(box.dataset.route)];
   var area=box.querySelector('textarea');
   if(area){area.value=json(r.tryBody())}
-  Array.prototype.forEach.call(box.querySelectorAll('[data-param]'),function(input){input.value=jobId||(jobs[0]&&jobs[0].id)||''});
+  Array.prototype.forEach.call(box.querySelectorAll('[data-param]'),function(input){
+    var main=lastJob&&(mainFile(lastJob)||lastJob.files[0]);
+    input.value=input.dataset.param==='index'?String(main?main.index:0):(jobId||(jobs[0]&&jobs[0].id)||'');
+  });
 }
 function sendTry(box){
   var r=ROUTES[Number(box.dataset.route)];
@@ -471,10 +540,24 @@ function sendTry(box){
   var path=r.path.replace(/:(\w+)/g,function(_,name){return encodeURIComponent(box.querySelector('[data-param="'+name+'"]').value.trim())});
   var opts={method:r.method};
   var area=box.querySelector('textarea');
-  if(area){opts.headers={'Content-Type':'application/json'};opts.body=area.value}
+  opts.headers={};
+  if(area){opts.headers['Content-Type']='application/json';opts.body=area.value}
+  Array.prototype.forEach.call(box.querySelectorAll('[data-header]'),function(input){
+    if(input.value.trim()){opts.headers[input.dataset.header]=input.value.trim()}
+  });
   meta.textContent='envoi de '+r.method+' '+path+'...';
   var started=performance.now();
   fetch(path,opts).then(function(res){
+    if(r.binary&&!/json/.test(res.headers.get('Content-Type')||'')){
+      return res.arrayBuffer().then(function(buf){
+        var ms=Math.round(performance.now()-started);
+        meta.innerHTML='<span class="pill '+(res.ok?'ok':'bad')+'">HTTP '+res.status+'</span> '+ms+' ms, <code>'+esc(r.method+' '+path)+'</code>';
+        var head=['Content-Type','Content-Length','Content-Range','Accept-Ranges'].map(function(n){return n+': '+(res.headers.get(n)||'-')}).join('\n');
+        var hex=Array.prototype.map.call(new Uint8Array(buf.slice(0,64)),function(b){return ('0'+b.toString(16)).slice(-2)}).join(' ');
+        out.textContent=head+'\n\n'+buf.byteLength+' octets reçus. Premiers octets (hex) :\n'+hex;
+        out.hidden=false;
+      });
+    }
     return res.text().then(function(text){
       var ms=Math.round(performance.now()-started);
       meta.innerHTML='<span class="pill '+(res.ok?'ok':'bad')+'">HTTP '+res.status+'</span> '+ms+' ms, <code>'+esc(r.method+' '+path)+'</code>';

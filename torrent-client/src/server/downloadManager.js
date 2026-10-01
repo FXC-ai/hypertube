@@ -1,12 +1,16 @@
 import { randomUUID } from 'node:crypto';
+import { open } from 'node:fs/promises';
+import { join } from 'node:path';
 import { CancelledError } from '../cancelledError.js';
 import {
+  classifyFile,
   inspectTorrent as inspectParsedTorrent,
   resolveFileIndexes,
   validateFileIndexesShape,
 } from '../fileSelection.js';
 import { downloadTorrent as defaultDownloadTorrent } from '../swarm/downloadTorrent.js';
 import { recheckPieces } from '../recheck.js';
+import { createPieceAvailability, PRIORITY } from '../stream/pieceAvailability.js';
 import { parseTorrentFile } from '../torrentFile.js';
 import {
   computeFileLayout,
@@ -16,6 +20,7 @@ import {
 } from '../torrentLayout.js';
 import { announce as defaultAnnounce, flattenTrackerUrls } from '../trackers/announce.js';
 import { generatePeerId } from '../trackers/peerId.js';
+import { detectContainerFormat } from '../videoSignature.js';
 
 export class DownloadManagerError extends Error {
   constructor(message) {
@@ -34,6 +39,8 @@ export class TorrentFetchError extends DownloadManagerError {
 
 const DEFAULT_TRACKER_PORT = 6881;
 const INFO_HASH_PATTERN = /^[0-9a-f]{40}$/i;
+const CONTAINER_SNIFF_BYTES = 12;
+const ENDED_STATUSES = new Set(['failed', 'cancelled']);
 
 // In-memory jobs behind start/status/cancel. Every real dependency is injectable so tests
 // need no network.
@@ -47,6 +54,8 @@ export function createDownloadManager({
   trackerPort = DEFAULT_TRACKER_PORT,
 } = {}) {
   const jobs = new Map();
+  // Per job, what the streaming endpoint needs once the .torrent is parsed (not in the status).
+  const streamSources = new Map();
 
   // Synchronous for the caller: returns the file list so it can pick fileIndexes.
   async function inspectTorrent({ torrentBytes, torrentUrl }) {
@@ -97,6 +106,12 @@ export function createDownloadManager({
       controller: new AbortController(),
     };
     jobs.set(id, job);
+    streamSources.set(id, {
+      ready: deferred(),
+      availability: null,
+      files: null,
+      pieceLength: null,
+    });
 
     run(job, { torrentBytes, torrentUrl, fileIndexes, expectedInfoHash }).catch(() => {
       // run() records its own failures; this only prevents an unhandled rejection.
@@ -136,6 +151,7 @@ export function createDownloadManager({
           length: file.length,
           downloadedBytes: 0,
           complete: file.length === 0,
+          detectedContainer: null,
         };
         fileStatusByIndex.set(file.index, fileStatus);
 
@@ -148,9 +164,37 @@ export function createDownloadManager({
         new Set(selectedIndexes),
       ).length;
 
+      const availability = createPieceAvailability({
+        pieceCount: torrent.pieces.length,
+        pieceLength: torrent.pieceLength,
+        totalLength: torrent.totalLength,
+      });
+      const streamSource = streamSources.get(job.id);
+      Object.assign(streamSource, {
+        availability,
+        files: selectedFiles,
+        pieceLength: torrent.pieceLength,
+      });
+      // ffprobe needs the start of the main video and often its end (moov, Cues): fetch them
+      // before anything else that nobody is waiting for.
+      const mainVideo = selectedFiles
+        .filter((file) => classifyFile(file.path).kind === 'video' && file.length > 0)
+        .sort((a, b) => b.length - a.length)[0];
+
+      if (mainVideo) {
+        availability.setBoosted([
+          Math.floor(mainVideo.torrentOffset / torrent.pieceLength),
+          Math.floor((mainVideo.torrentOffset + mainVideo.length - 1) / torrent.pieceLength),
+        ]);
+      }
+
+      streamSource.ready.resolve();
+
       function countPiece(pieceIndex) {
         const { offset, length } = pieceRanges[pieceIndex];
         job.piecesCompleted += 1;
+        availability.mark(pieceIndex);
+        detectContainers(job, selectedFiles, availability);
 
         for (const overlap of computeOverlaps(selectedFiles, offset, length)) {
           const fileStatus = fileStatusByIndex.get(overlap.file.index);
@@ -215,6 +259,8 @@ export function createDownloadManager({
         refreshSources: async () =>
           (await announceFn(trackerUrls, announceParams(), { fetchImpl })).peers ?? [],
         signal: job.controller.signal,
+        priorityOf: availability.rank,
+        provenSourcesBelowPriority: PRIORITY.NORMAL,
         onSourcesChange: (counts) => {
           job.sources = counts;
         },
@@ -229,7 +275,82 @@ export function createDownloadManager({
         job.status = 'failed';
         job.error = err.message;
       }
+    } finally {
+      streamSources.get(job.id).ready.resolve();
     }
+  }
+
+  // Container sniffed from the first bytes on disk, once they are verified. No ffmpeg: the
+  // signature is enough to tell a real MP4/MKV from a fake file early.
+  function detectContainers(job, selectedFiles, availability) {
+    for (const fileStatus of job.files) {
+      const file = selectedFiles.find((f) => f.index === fileStatus.index);
+      const needed = Math.min(CONTAINER_SNIFF_BYTES, file.length);
+
+      if (fileStatus.detectedContainer !== null || fileStatus.sniffing || needed === 0) {
+        continue;
+      }
+
+      if (availability.contiguousBytesFromStart(file) < needed) {
+        continue;
+      }
+
+      fileStatus.sniffing = true;
+      readHead(join(job.outputDir, file.path), needed)
+        .then((head) => {
+          const format = detectContainerFormat(head);
+          fileStatus.detectedContainer = format === 'webm/mkv' ? 'matroska' : format;
+        })
+        .catch(() => {
+          fileStatus.detectedContainer = 'unknown';
+        });
+    }
+  }
+
+  // Everything the streaming endpoint needs for one file of one job, waiting up to
+  // `stallTimeoutMs` for the .torrent to be parsed. One of:
+  // { kind: 'notFound' } | { kind: 'gone', status, error } | { kind: 'stalled' }
+  // | { kind: 'ready', source }
+  async function openStream(id, fileIndex, { stallTimeoutMs }) {
+    const job = jobs.get(id);
+    const streamSource = streamSources.get(id);
+
+    if (!job) {
+      return { kind: 'notFound' };
+    }
+
+    if (!streamSource.availability) {
+      const parsed = await Promise.race([
+        streamSource.ready.promise.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), stallTimeoutMs)),
+      ]);
+
+      if (!parsed) {
+        return { kind: 'stalled' };
+      }
+    }
+
+    if (!streamSource.availability) {
+      return { kind: 'gone', status: job.status, error: job.error };
+    }
+
+    const file = streamSource.files.find((f) => f.index === fileIndex);
+
+    if (!file) {
+      return { kind: 'notFound' };
+    }
+
+    return {
+      kind: 'ready',
+      source: {
+        file,
+        path: join(job.outputDir, file.path),
+        pieceLength: streamSource.pieceLength,
+        availability: streamSource.availability,
+        endedState: () =>
+          ENDED_STATUSES.has(job.status) ? { status: job.status, error: job.error } : null,
+      },
+    };
   }
 
   async function fetchTorrentBytes(torrentUrl) {
@@ -258,8 +379,20 @@ export function createDownloadManager({
     }
 
     const status = { ...job };
+    const { availability, files } = streamSources.get(id);
 
     delete status.controller;
+    status.files = job.files.map((fileStatus) => {
+      const { sniffing, ...publicFields } = fileStatus;
+      const file = files?.find((f) => f.index === fileStatus.index);
+
+      return {
+        ...publicFields,
+        contiguousBytesFromStart: availability ? availability.contiguousBytesFromStart(file) : 0,
+        availableRanges: availability ? availability.fileRanges(file) : [],
+      };
+    });
+    status.pieces = availability ? availability.bitfieldBase64() : null;
 
     return status;
   }
@@ -278,7 +411,29 @@ export function createDownloadManager({
     return getStatus(id);
   }
 
-  return { inspectTorrent, startDownload, getStatus, cancelDownload };
+  return { inspectTorrent, startDownload, getStatus, cancelDownload, openStream };
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((res) => {
+    resolve = res;
+  });
+
+  return { promise, resolve };
+}
+
+async function readHead(path, length) {
+  const handle = await open(path, 'r');
+
+  try {
+    const head = Buffer.alloc(length);
+    await handle.read(head, 0, length, 0);
+
+    return head;
+  } finally {
+    await handle.close();
+  }
 }
 
 function requireTorrentSource({ torrentBytes, torrentUrl }) {
