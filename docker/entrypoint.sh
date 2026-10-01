@@ -33,4 +33,6 @@ php artisan migrate --force
 
 # Lancer PHP-FPM en arrière-plan
 echo "🐘 Démarrage PHP-FPM..."
-composer dev
+
+npm run dev \
+& php-fpm -F
