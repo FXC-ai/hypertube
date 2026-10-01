@@ -20,7 +20,7 @@ services:
       - "5173:5173"
     volumes:
       - .:/var/www/html
-      - laravel-storage:/var/www/html/storage
+      - laravel-storage-framework:/var/www/html/storage/framework
       - laravel-bootstrap:/var/www/html/bootstrap/cache
     environment:
       HOST_UID: "${HOST_UID:-1000}"
@@ -61,5 +61,6 @@ services:
 
 volumes:
   laravel-storage:
+  laravel-storage-framework:
   laravel-bootstrap:
 

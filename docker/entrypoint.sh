@@ -35,4 +35,5 @@ php artisan migrate --force
 echo "🐘 Démarrage PHP-FPM..."
 
 npm run dev \
+& php artisan queue:work --tries=1 --timeout=0 \
 & php-fpm -F
