@@ -19,7 +19,7 @@ La suite a été volontairement réduite (une vingtaine de tests unitaires au li
 
 | Fichier | Ce qui est testé |
 |---|---|
-| `test/fileSelection.test.js` | Sélection de fichiers (#26) : type et conteneur déduits de l'extension, suggestion (plus grosse vidéo + tous les sous-titres, ou tout si le torrent n'a aucune vidéo), validation de `fileIndexes` |
+| `test/fileSelection.test.js` | Sélection de fichiers (#26) : type et conteneur déduits de l'extension, suggestion (plus grosse vidéo + tous les sous-titres non vides, ou tout si le torrent n'a aucune vidéo), validation de `fileIndexes` |
 | `test/fixtures.test.js` | Le parser (`src/torrentFile.js`) contre un **vrai** `.torrent` archive.org, info-hash comparé au `btih` publié par archive.org lui-même |
 | `test/torrentLayout.test.js` | `computeOverlaps` : une plage d'octets qui chevauche deux fichiers - la classe de bug trouvée deux fois pendant le développement (#10 et #12) ; `computeWantedPieces` : seules les pièces qui touchent un fichier choisi, pièces de bord comprises (#26) |
 | `test/trackers/httpTracker.test.js` | Annonce HTTP (BEP3) : encodage correct de `info_hash`/`peer_id` en octets bruts dans la query - `fetch` injecté |
@@ -107,7 +107,7 @@ Aucune connexion base de données nulle part dans ce service (exigence de l'issu
 
 Un torrent archive.org contient bien plus que le film (sqlite de métadonnées, mp3, ogv, gif, sous-titres...). Le client ne télécharge plus que les fichiers choisis.
 
-- **`src/fileSelection.js`** : `classifyFile(path)` déduit `kind` (`video`/`subtitle`/`other`) et `container` de l'extension (aucun octet du film n'est lu à ce stade) ; `inspectTorrent(torrent)` construit la réponse de `POST /torrents/inspect` et la suggestion (la plus grosse vidéo + tous les sous-titres, ou **tous** les fichiers si le torrent n'a aucune vidéo, pour qu'un appel sans `fileIndexes` ne télécharge jamais rien) ; `resolveFileIndexes` applique cette suggestion quand `fileIndexes` est absent.
+- **`src/fileSelection.js`** : `classifyFile(path)` déduit `kind` (`video`/`subtitle`/`other`) et `container` de l'extension (aucun octet du film n'est lu à ce stade) ; `inspectTorrent(torrent)` construit la réponse de `POST /torrents/inspect` et la suggestion (la plus grosse vidéo + tous les sous-titres non vides, ou **tous** les fichiers si le torrent n'a aucune vidéo, pour qu'un appel sans `fileIndexes` ne télécharge jamais rien) ; `resolveFileIndexes` applique cette suggestion quand `fileIndexes` est absent.
 - **`computeWantedPieces()`** (`src/torrentLayout.js`) : les pièces qui touchent au moins un fichier choisi. Une pièce à cheval entre un fichier choisi et un fichier non choisi est téléchargée en entier (le hash porte sur toute la pièce).
 - **`downloadTorrent({ fileIndexes })`** ne met en file que ces pièces et n'écrit que les octets des fichiers choisis (la part de la pièce de bord qui appartient à un autre fichier est jetée, et ce fichier n'est pas créé). Sans `fileIndexes`, `downloadTorrent()` garde l'ancien comportement (tous les fichiers) : les tests d'intégration Sintel et archive.org l'utilisent ainsi.
 - **`downloadManager`** : au niveau HTTP, l'absence de `fileIndexes` veut dire "la suggestion", pas "tout". `expectedInfoHash` protège contre un `.torrent` régénéré entre l'inspection et le téléchargement (archive.org le fait à chaque modification d'un item). Les compteurs du statut (`downloadedBytes`, `totalBytes`, `piecesCompleted`, `totalPieces`) ne portent plus que sur les fichiers choisis, et `files[]` donne le détail par fichier.

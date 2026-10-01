@@ -56,6 +56,21 @@ test('inspectTorrent: suggests the largest video and every subtitle, nothing els
   });
 });
 
+test('inspectTorrent: an empty subtitle file is not suggested', () => {
+  const inspection = inspectTorrent(
+    fakeTorrent([
+      { path: 'Movie.mp4', length: 900 },
+      { path: 'Movie.en.srt', length: 0 },
+      { path: 'Movie.fr.srt', length: 5 },
+    ]),
+  );
+
+  assert.deepEqual(
+    inspection.files.filter((f) => f.suggested).map((f) => f.index),
+    [0, 2],
+  );
+});
+
 test('inspectTorrent: without any video file, every file is suggested', () => {
   const inspection = inspectTorrent(
     fakeTorrent([

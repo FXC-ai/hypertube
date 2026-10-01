@@ -55,7 +55,7 @@ Corps JSON : `torrentUrl` **ou** `torrentBase64`, mêmes règles que pour `POST 
 | `files[].kind` | `"video"` \| `"subtitle"` \| `"other"`, déduit de l'extension uniquement (aucun octet du film n'est lu à ce stade). Vidéo : `mp4`, `m4v`, `mov`, `mkv`, `webm`, `avi`, `ogv`. Sous-titre : `srt`, `vtt`, `ass`, `ssa`, `sub`. |
 | `files[].container` | `"mp4"` \| `"matroska"` \| `"ogg"` \| `"avi"` \| `null`, déduit de l'extension. |
 | `mainVideoIndex` | Le plus gros fichier `"video"`, ou `null` s'il n'y en a aucun. |
-| `files[].suggested` | Proposition du client : la vidéo principale et tous les fichiers de sous-titres. **C'est une suggestion** : Laravel reste libre de choisir d'autres index. |
+| `files[].suggested` | Proposition du client : la vidéo principale et tous les fichiers de sous-titres non vides (archive.org publie parfois des sous-titres de 0 octet). **C'est une suggestion** : Laravel reste libre de choisir d'autres index. |
 
 **400** - JSON invalide, ni `torrentUrl` ni `torrentBase64`, ou `.torrent` malformé.
 **502** - `torrentUrl` injoignable ou réponse HTTP non-2xx.

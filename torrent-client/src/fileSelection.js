@@ -34,8 +34,8 @@ export function classifyFile(path) {
   return { kind: 'other', container: null };
 }
 
-// Suggestion: the largest video plus every subtitle (external subtitles sit next to MP4s,
-// and Laravel can still untick them). A torrent without any video keeps every file, so a
+// Suggestion: the largest video plus every non-empty subtitle (external subtitles sit next to
+// MP4s, and Laravel can still untick them; archive.org ships empty ones). A torrent without any video keeps every file, so a
 // caller that sends no fileIndexes never ends up downloading nothing.
 export function inspectTorrent(torrent) {
   const files = torrent.files.map((file, index) => ({
@@ -58,7 +58,9 @@ export function inspectTorrent(torrent) {
 
   for (const file of files) {
     file.suggested =
-      mainVideoIndex === null || file.index === mainVideoIndex || file.kind === 'subtitle';
+      mainVideoIndex === null ||
+      file.index === mainVideoIndex ||
+      (file.kind === 'subtitle' && file.length > 0);
   }
 
   return {
