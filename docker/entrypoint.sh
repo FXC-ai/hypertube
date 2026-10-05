@@ -1,36 +1,53 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 set -e
 
-echo "🚀 Démarrage du serveur de développement..."
+cd /var/www/html
 
-# Créer les répertoires nécessaires (volume mount peut écraser ceux de l'image)
-mkdir -p storage/framework/{views,cache,sessions,testing}
-mkdir -p storage/logs
-mkdir -p bootstrap/cache
-chmod -R 777 storage bootstrap/cache
+echo "Preparing Laravel..."
 
-# Rendre la base SQLite accessible en écriture
-if [ -f "database/database.sqlite" ]; then
-    chmod 666 database/database.sqlite
+mkdir -p \
+    bootstrap/cache \
+    storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/testing \
+    storage/framework/views \
+    storage/logs
+
+if [ ! -f .env ]; then
+    echo "Creating .env..."
+    cp .env.example .env
 fi
 
+echo "Installing PHP dependencies..."
+composer install \
+    --no-interaction \
+    --prefer-dist
 
-echo "📦 Installation des dépendances PHP..."
-composer install --no-interaction --prefer-dist --optimize-autoloader
+echo "Installing JavaScript dependencies..."
+npm install \
+    --no-audit \
+    --no-fund
 
-# Générer la clé de l'application si elle n'existe pas
-if [ -z "$APP_KEY" ]; then
-    echo "⚠️  Clé APP_KEY non définie, génération automatique..."
-    php artisan key:generate
+if ! grep -Eq '^APP_KEY=.+$' .env; then
+    echo "Generating application key..."
+    php artisan key:generate --force
 fi
 
-echo "📦 Installation des dépendances npm..."
-npm install
+if grep -Eq '^DB_CONNECTION=sqlite$' .env \
+    && [ ! -f database/database.sqlite ]; then
+    echo "Creating SQLite database..."
+    touch database/database.sqlite
+fi
 
-# Exécuter les migrations
-echo "📦 Migration de la base de données..."
+echo "Running migrations..."
 php artisan migrate --force
 
-# Lancer PHP-FPM en arrière-plan
-echo "🐘 Démarrage PHP-FPM..."
-composer dev
+echo "Starting Vite..."
+npm run dev -- --host 0.0.0.0 &
+
+echo "Starting queue worker..."
+php artisan queue:work --tries=1 --timeout=0 &
+
+echo "Starting PHP-FPM..."
+exec php-fpm -F
