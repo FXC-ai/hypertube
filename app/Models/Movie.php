@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'title',
-    'release_date',
+    'titles',
     'filename',
+    'torrent_url',
+    'imdb_id',
     'conversion_status',
     'conversion_attempt',
     'conversion_error',
@@ -19,6 +21,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'conversion_playable_at',
     'conversion_completed_at',
 ])]
+
+/**
+ * @property-read string|null $title
+ * @property-read array<string, string>|null $titles
+ */
 class Movie extends Model
 {
     use HasFactory;
@@ -32,6 +39,7 @@ class Movie extends Model
     {
         return [
             'conversion_status' => ConversionStatus::class,
+            'titles' => 'array',
             'conversion_started_at' => 'datetime',
             'conversion_playable_at' => 'datetime',
             'conversion_completed_at' => 'datetime',
