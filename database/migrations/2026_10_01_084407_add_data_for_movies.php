@@ -15,14 +15,12 @@ return new class extends Migration
             $table->id();
             $table->string('source');
             $table->date('release_date');
-            $table->string('imdb_id');
-            $table->index('imdb_id', "movie_data_imdb_id_hash", 'hash');
+            $table->unique('imdb_id');
             $table->timestamps();
         });
 
         Schema::table('movies', function (Blueprint $table) {
-            $table->string('imdb_id');
-            $table->index('imdb_id', "movies_imdb_id_hash", 'hash');
+            $table->unique('imdb_id');
         });
     }
 

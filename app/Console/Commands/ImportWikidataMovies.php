@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Input\InputOption;
 
-#[Signature('import:wikidata-movies {--limit=1000000} {--dry-run}')]
+#[Signature('import:wikidata-movies {--limit=1000000} {--dry-run} {--batch-size=1000}')]
 #[Description('Import public domain films from Wikidata into the movies table')]
 class ImportWikidataMovies extends Command
 {
@@ -54,7 +54,8 @@ class ImportWikidataMovies extends Command
     protected function getOptions(): array
     {
         return [
-            ['limit', 'l', InputOption::VALUE_OPTIONAL, 'Number of movies to import', 100],
+            ['limit', 'l', InputOption::VALUE_OPTIONAL, 'Number of movies to import', 200],
+            ['batch-size', null, InputOption::VALUE_OPTIONAL, 'Batch size for insert', 1000],
             ['dry-run', null, InputOption::VALUE_NONE, 'Show what would be imported without saving'],
         ];
     }
@@ -62,10 +63,11 @@ class ImportWikidataMovies extends Command
     public function handle(): int
     {
         $limit = (int) $this->option('limit');
+        $batchSize = (int) $this->option('batch-size');
         $dryRun = $this->option('dry-run');
 
         $this->info('🎬 Importing public domain films from Wikidata...');
-        $this->info("Limit: {$limit} | Mode: " . ($dryRun ? 'DRY RUN' : 'LIVE'));
+        $this->info("Limit: {$limit} | Batch: {$batchSize} | Mode: " . ($dryRun ? 'DRY RUN' : 'LIVE'));
 
         // Get already imported imdb_ids for comparison
         $existingImdbIds = Movie::query()->whereNotNull('imdb_id')->pluck('imdb_id')->toArray();
@@ -101,7 +103,7 @@ class ImportWikidataMovies extends Command
             return self::SUCCESS;
         }
 
-        $imported = 0;
+        $newMovies = [];
         $skipped = 0;
         $failed = 0;
 
@@ -123,20 +125,22 @@ class ImportWikidataMovies extends Command
 
             // Parse titles JSON
             $titles = null;
+            $titlesEncoded = null;
             if ($titlesJson) {
                 $decoded = json_decode($titlesJson, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                     $titles = $decoded;
+                    $titlesEncoded = json_encode($titles);
                 }
             }
 
             // Determine default title (prefer French, then English)
             $defaultTitle = null;
-            if (isset($titles['fr'])) {
+            if (is_array($titles) && isset($titles['fr'])) {
                 $defaultTitle = $titles['fr'];
-            } elseif (isset($titles['en'])) {
+            } elseif (is_array($titles) && isset($titles['en'])) {
                 $defaultTitle = $titles['en'];
-            } elseif (! empty($titles)) {
+            } elseif (is_array($titles) && ! empty($titles)) {
                 $defaultTitle = array_values($titles)[0];
             }
 
@@ -150,35 +154,46 @@ class ImportWikidataMovies extends Command
 
             if ($dryRun) {
                 $this->line("📝 Would import: {$imdbId} - " . ($defaultTitle ?? 'Unknown'));
-                $imported++;
+                $skipped++;
 
                 continue;
             }
 
-            try {
-                \App\Models\Movie::query()->create([
-                    'title' => $defaultTitle,
-                    'titles' => $titles,
-                    'imdb_id' => $imdbId,
-                    'filename' => null,
-                    'torrent_url' => $torrentUrl,
-                ]);
+            // Collect for batch insert
+            $newMovies[] = [
+                'title' => $defaultTitle,
+                'titles' => $titlesEncoded,
+                'imdb_id' => $imdbId,
+                'filename' => null,
+                'torrent_url' => $torrentUrl,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
 
-                $imported++;
-                $this->line("✅ Imported: {$imdbId} - " . ($defaultTitle ?? 'Unknown'));
-            } catch (\Exception $e) {
-                Log::error('Wikidata import failed', [
-                    'imdb_id' => $imdbId,
-                    'error' => $e->getMessage(),
-                ]);
-                $failed++;
-                $this->line("❌ Failed: {$imdbId} - {$e->getMessage()}");
+        if (! empty($newMovies)) {
+            $this->info("\n📦 Inserting " . count($newMovies) . " movies in batches of {$batchSize}...");
+
+            $batchInserted = 0;
+            $batchTotal = 0;
+
+            foreach (array_chunk($newMovies, $batchSize) as $chunkIndex => $batch) {
+                $batchTotal++;
+                $inserted = Movie::insertOrIgnore($batch);
+                $batchInserted += $inserted;
+
+                $this->line("  Batch {$batchTotal}: {$inserted} movies inserted");
+
+                // Small delay between batches to avoid overwhelming the DB
+                usleep(100000); // 100ms
             }
+
+            $this->info("\n✅ Batch insert complete: {$batchInserted} movies inserted");
         }
 
         $this->newLine();
         $this->info("🎉 Import complete!");
-        $this->line("   ✅ Imported:  {$imported}");
+        $this->line("   ✅ Imported:  " . count($newMovies));
         $this->line("   ⏭️  Skipped:  {$skipped}");
         $this->line("   ❌ Failed:    {$failed}");
 
