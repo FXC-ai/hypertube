@@ -14,4 +14,9 @@ class IndexMovieResource extends JsonResource
             'title' => $this->title,
         ];
     }
+
+    public static function collection($resource)
+    {
+        return parent::collection($resource);
+    }
 }

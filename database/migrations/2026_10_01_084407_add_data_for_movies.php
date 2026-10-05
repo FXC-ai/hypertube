@@ -12,15 +12,20 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('movie_data', function (Blueprint $table) {
-            $table->id();
+            $table->string('imdb_id');
+            $table->foreignId('movie_id')
+                ->nullable()
+                ->after('id')
+                ->constrained('movies')
+                ->nullOnDelete();
+            $table->unique(['imdb_id', 'movie_id']);
             $table->string('source');
             $table->date('release_date');
-            $table->unique('imdb_id');
             $table->timestamps();
         });
 
         Schema::table('movies', function (Blueprint $table) {
-            $table->unique('imdb_id');
+            $table->string('imdb_id');
         });
     }
 
@@ -30,7 +35,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('movies', function (Blueprint $table) {
-            $table->removeColumn("release_date");
             $table->removeColumn("imdb_id");
         });
 

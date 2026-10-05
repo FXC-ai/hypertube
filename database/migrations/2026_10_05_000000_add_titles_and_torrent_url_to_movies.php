@@ -25,7 +25,7 @@ return new class extends Migration
     {
         Schema::table('movies', function (Blueprint $table) {
             $table->string('filename')->nullable(false)->change();
-            $table->dropColumn(['titles', 'torrent_url']);
+            // $table->removeColumn(['titles', 'torrent_url']);
         });
     }
 };

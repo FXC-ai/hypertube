@@ -35,6 +35,11 @@ class Movie extends Model
         return $this->hasMany(Comment::class)->orderByDesc('created_at');
     }
 
+    public function movieData()
+    {
+        return $this->hasOne(\App\Models\MovieData::class);
+    }
+
     protected function casts(): array
     {
         return [

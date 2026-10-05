@@ -27,6 +27,23 @@ import type { Comment } from '@/types/comment';
 type ConversionStatus =
     'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
 
+type OmdbData = {
+    imdbID: string;
+    title: string;
+    year: string;
+    rated: string | null;
+    released: string | null;
+    runtime: string;
+    genre: string;
+    director: string;
+    writer: string;
+    actors: string;
+    plot: string;
+    language: string;
+    poster: string | null;
+    awards: string;
+} | null;
+
 type MoviePageData = {
     id: number;
     title: string;
@@ -36,6 +53,7 @@ type MoviePageData = {
     conversion_error: string | null;
     playable: boolean;
     preferredlanguage: string;
+    movieData: OmdbData;
 };
 
 type MovieShowProps = {
@@ -192,6 +210,9 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
     };
 
     console.log("moviePageData.conversion_attempt = ", moviePageData.conversion_attempt);
+
+    console.log("Data: ", moviePageData.movieData);
+
     return (
         <>
             <Head title={moviePageData.title} />
@@ -295,23 +316,104 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                         </CardContent>
                     </Card>
 
-                    <Card className="border-border/60 shadow-sm">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-lg">
-                                <Info className="size-5" />
-                                About this movie
-                            </CardTitle>
-                            <CardDescription>
-                                A dedicated space for the movie details.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm text-muted-foreground">
-                                Genres, runtime, description, and credits will
-                                appear here.
-                            </div>
-                        </CardContent>
-                    </Card>
+                    {moviePageData.movieData && (
+                        <Card className="border-border/60 shadow-sm">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <Info className="size-5" />
+                                    About this movie
+                                </CardTitle>
+                                <CardDescription>
+                                    Movie details from OMDb.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {moviePageData.movieData.poster && (
+                                    <div className="flex justify-center">
+                                        <img
+                                            src={moviePageData.movieData.poster}
+                                            alt={`Poster for ${moviePageData.movieData.title}`}
+                                            className="max-w-50 rounded-lg shadow-md"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                                    <div>
+                                        <span className="text-muted-foreground">Year:</span>
+                                        <span className="ml-2 font-medium">{moviePageData.movieData.year}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Rated:</span>
+                                        <span className="ml-2 font-medium">{moviePageData.movieData.rated ?? 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Released:</span>
+                                        <span className="ml-2 font-medium">{moviePageData.movieData.released ?? 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Runtime:</span>
+                                        <span className="ml-2 font-medium">{moviePageData.movieData.runtime}</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <span className="text-muted-foreground">Genre:</span>
+                                    <span className="ml-2 font-medium">{moviePageData.movieData.genre}</span>
+                                </div>
+
+                                <div>
+                                    <span className="text-muted-foreground">Director:</span>
+                                    <span className="ml-2 font-medium">{moviePageData.movieData.director}</span>
+                                </div>
+
+                                <div>
+                                    <span className="text-muted-foreground">Writer:</span>
+                                    <span className="ml-2 font-medium">{moviePageData.movieData.writer}</span>
+                                </div>
+
+                                <div>
+                                    <span className="text-muted-foreground">Actors:</span>
+                                    <span className="ml-2 font-medium">{moviePageData.movieData.actors}</span>
+                                </div>
+
+                                <div>
+                                    <span className="text-muted-foreground">Plot:</span>
+                                    <p className="mt-1 text-muted-foreground">{moviePageData.movieData.plot}</p>
+                                </div>
+
+                                <div>
+                                    <span className="text-muted-foreground">Language:</span>
+                                    <span className="ml-2 font-medium">{moviePageData.movieData.language}</span>
+                                </div>
+
+                                {moviePageData.movieData.awards !== 'N/A' && (
+                                    <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                                        <strong>Awards:</strong> {moviePageData.movieData.awards}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {!moviePageData.movieData && (
+                        <Card className="border-border/60 shadow-sm">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-lg">
+                                    <Info className="size-5" />
+                                    About this movie
+                                </CardTitle>
+                                <CardDescription>
+                                    A dedicated space for the movie details.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm text-muted-foreground">
+                                    No additional information available for this movie.
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     <Card className="border-border/60 shadow-sm">
                         <CardHeader className="pb-3">
