@@ -69,9 +69,6 @@ class ImportWikidataMovies extends Command
         $this->info('🎬 Importing public domain films from Wikidata...');
         $this->info("Limit: {$limit} | Batch: {$batchSize} | Mode: " . ($dryRun ? 'DRY RUN' : 'LIVE'));
 
-        // Get already imported imdb_ids for comparison
-        $existingImdbIds = Movie::query()->whereNotNull('imdb_id')->pluck('imdb_id')->toArray();
-
         $query = $this->getQuery($limit);
 
         try {
@@ -144,14 +141,6 @@ class ImportWikidataMovies extends Command
                 $defaultTitle = array_values($titles)[0];
             }
 
-            // Check if already imported
-            if (in_array($imdbId, $existingImdbIds)) {
-                $this->line("⏭️  Skipped (already exists): {$imdbId}");
-                $skipped++;
-
-                continue;
-            }
-
             if ($dryRun) {
                 $this->line("📝 Would import: {$imdbId} - " . ($defaultTitle ?? 'Unknown'));
                 $skipped++;
@@ -179,6 +168,7 @@ class ImportWikidataMovies extends Command
 
             foreach (array_chunk($newMovies, $batchSize) as $chunkIndex => $batch) {
                 $batchTotal++;
+                // TODO: We ignore duplicate entries for the same movie, but we could store all the torrent variants
                 $inserted = Movie::insertOrIgnore($batch);
                 $batchInserted += $inserted;
 

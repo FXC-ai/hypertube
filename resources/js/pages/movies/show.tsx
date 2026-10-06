@@ -29,7 +29,6 @@ type ConversionStatus =
 
 type OmdbData = {
     imdbID: string;
-    title: string;
     year: string;
     rated: string | null;
     released: string | null;
@@ -332,8 +331,8 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                     <div className="flex justify-center">
                                         <img
                                             src={moviePageData.movieData.poster}
-                                            alt={`Poster for ${moviePageData.movieData.title}`}
-                                            className="max-w-50 rounded-lg shadow-md"
+                                            alt={`${moviePageData.title}`}
+                                            className="max-w-50 rounded-lg shadow-md text-center"
                                         />
                                     </div>
                                 )}

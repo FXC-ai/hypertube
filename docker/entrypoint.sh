@@ -11,6 +11,7 @@ chmod -R 777 storage bootstrap/cache
 
 # Rendre la base SQLite accessible en écriture
 if [ -f "database/database.sqlite" ]; then
+    echo "⛁ Création de la base de donnée"
     chmod 666 database/database.sqlite
 fi
 

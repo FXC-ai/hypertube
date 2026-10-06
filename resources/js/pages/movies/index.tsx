@@ -13,6 +13,7 @@ import InputError from '@/components/input-error';
 type Movie = {
     id: number;
     title: string;
+    data: any;
     created_at: string;
 };
 
@@ -34,7 +35,6 @@ function formatRegistrationDate(date: string): string {
 }
 
 function MovieItem({ movie }: { movie: Movie }) {
-
     return (
         <Link
             href={`/movies/${movie.id}`}
@@ -42,14 +42,16 @@ function MovieItem({ movie }: { movie: Movie }) {
         >
 
             <div className='w-full relative'>
-                <picture>
-                    <source src="/watched.svg" type="image/svg"></source>
-                    <img className="w-full aspect-2/3 text-center" src="https://m.media-amazon.com/images/M/MV5BMjAxMzY3NjcxNF5BMl5BanBnXkFtZTcwNTI5OTM0Mw@@._V1_QL75_UX380_CR0,0,380,562_.jpg" alt="Movie Image" />
-                </picture>
-                <div className='flex gap-1 absolute bottom-3 right-3 py-1 px-2 rounded-lg bg-stone-900'>
-                    9
-                    <img className="w-5" src="/star-score.svg" alt="stars" />
-                </div>
+                <object className="w-full aspect-2/3 rounded" data={movie.data?.poster}>
+                    <img className="w-full aspect-2/3 rounded" src="/default-poster.png" alt="Movie Image" />
+                </object>
+
+                {movie.data?.imdbRating && (
+                    <div className='flex gap-1 absolute bottom-3 right-3 py-1 px-2 rounded-lg bg-stone-900'>
+                        {movie.data.imdbRating}
+                        <img className="w-5" src="/star-score.svg" alt="stars" />
+                    </div>
+                )}
 
                 <span className='absolute text-xl text-blue-500 bg-white rounded-full p-1 top-3 right-3'>
                     <img className="w-5" src="/watched.svg" alt="✓" />
@@ -153,7 +155,7 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                     movies.data.length > 0 ?
                         (
                             <InfiniteScroll data="movies" buffer={300} onlyNext>
-                                <div className='flex flex-wrap items-center justify-center'>
+                                <div className='flex flex-wrap justify-center'>
                                     {
                                         movies.data.map((movie) => (<MovieItem key={movie.id} movie={movie}></MovieItem>))
                                     }

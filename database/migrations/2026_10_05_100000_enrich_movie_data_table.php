@@ -19,6 +19,9 @@ return new class extends Migration
             $table->string('rated')->nullable()->after('writers');
             $table->json('language')->nullable()->after('rated');
             $table->json('awards')->nullable()->after('language');
+            $table->float('imdbRating')->nullable()->after('awards');
+            $table->integer('imdbVotes')->nullable()->after('imdbRating');
+            $table->float('boxOffice')->nullable()->after('imdbRating');
 
             $table->index('imdb_id');
         });
@@ -28,8 +31,9 @@ return new class extends Migration
     {
         Schema::table('movie_data', function (Blueprint $table) {
             $table->dropColumn([
-                'movie_id', 'poster', 'plot', 'genres', 'runtime',
+                'poster', 'plot', 'genres', 'runtime',
                 'actors', 'director', 'writers', 'rated', 'language', 'awards',
+                'imdbRating', 'imdbVotes', 'boxOffice'
             ]);
         });
     }

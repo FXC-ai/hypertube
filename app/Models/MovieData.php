@@ -21,6 +21,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'writers',
     'rated',
     'language',
+    'imdbRating',
+    'imdbVotes',
+    'boxOffice',
     'awards',
 ])]
 class MovieData extends Model
@@ -56,8 +59,8 @@ class MovieData extends Model
             [
                 'movie_id' => null,
                 'source' => 'omdb',
-                'poster' => $data['poster'] ?? null,
-                'plot' => $data['plot'] ?? null,
+                'poster' => $data['Poster'] ?? null,
+                'plot' => $data['Plot'] ?? null,
                 'genres' => isset($data['Genre']) ? explode(',', $data['Genre']) : null,
                 'runtime' => isset($data['Runtime']) ? (int) preg_replace('/\D/', '', $data['Runtime']) : null,
                 'actors' => isset($data['Actors']) ? explode(',', $data['Actors']) : null,
@@ -66,7 +69,10 @@ class MovieData extends Model
                 'rated' => $data['Rated'] ?? null,
                 'language' => isset($data['Language']) ? explode(',', $data['Language']) : null,
                 'awards' => isset($data['Awards']) ? ['text' => $data['Awards']] : null,
-                'release_date' => isset($data['Released']) ? \Carbon\Carbon::parse($data['Released']) : null,
+                'imdbRating' => ($data['imdbRating'] != 'N/A') ? $data['imdbRating'] : null,
+                'imdbVotes' => ($data['imdbVotes'] != 'N/A') ? $data['imdbVotes'] : null,
+                'boxOffice' => ($data['BoxOffice'] != 'N/A') ? $data['BoxOffice'] : null,
+                'release_date' => $data['Released'] != 'N/A' ? \Carbon\Carbon::parse($data['Released']) : null,
             ],
         );
     }

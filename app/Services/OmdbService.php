@@ -31,7 +31,9 @@ final class OmdbService
 
         try {
             $response = Http::timeout(30)->get('http://www.omdbapi.com/', [
+            // $response = Http::timeout(30)->get('http://www.omdbapi.com/demo.aspx/', [
                 'apikey' => $this->apiKey,
+                // 'token' => "demo",
                 'i' => $imdbId,
                 'plot' => 'full',
                 'r' => 'json',
@@ -86,16 +88,15 @@ final class OmdbService
         }
 
         // Store for next time
-        MovieData::storeFromOmdb($imdbId, $data);
+        $store = MovieData::storeFromOmdb($imdbId, $data);
 
-        return $data;
+        return $this->normalizeCachedData($store);
     }
 
     private function normalizeCachedData(MovieData $data): array
     {
         return [
             'imdbID' => $data->imdb_id,
-            'title' => $data->movie?->title ?? 'Unknown',
             'year' => $data->release_date?->format('Y') ?? 'N/A',
             'rated' => $data->rated,
             'released' => $data->release_date?->format('d M Y'),
@@ -107,6 +108,9 @@ final class OmdbService
             'plot' => $data->plot ?? 'No plot available.',
             'language' => $data->language ? implode(', ', $data->language) : 'N/A',
             'poster' => $data->poster ?? null,
+            'imdbRating' => $data->imdbRating,
+            'imdbVotes' => $data->imdbVotes,
+            'boxOffice' => $data->boxOffice,
             'awards' => is_array($data->awards) ? ($data->awards['text'] ?? 'N/A') : 'N/A',
         ];
     }

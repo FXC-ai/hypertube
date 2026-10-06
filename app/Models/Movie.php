@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\ConversionStatus;
+use App\Models\MovieData;
+use App\Services\OmdbService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -38,6 +40,28 @@ class Movie extends Model
     public function movieData()
     {
         return $this->hasOne(\App\Models\MovieData::class);
+    }
+
+    public function getEnrichedData(): ?array
+    {
+        if ($this->imdb_id == null) {
+            return null;
+        }
+
+        $omdbService = OmdbService::factory();
+        $enriched = $omdbService->enrichByImdbId($this->imdb_id);
+
+        // Link the movie_data row to this movie if it was just created
+        if ($enriched !== null) {
+            $movieData = MovieData::findByImdbId($this->imdb_id);
+            if ($movieData && $movieData->movie_id === null) {
+                $omdbService->linkMovie($movieData, $this->id);
+            }
+        } else {
+            // TODO: Log
+        }
+
+        return $enriched;
     }
 
     protected function casts(): array

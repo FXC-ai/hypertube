@@ -20,12 +20,12 @@ return new class extends Migration
                 ->nullOnDelete();
             $table->unique(['imdb_id', 'movie_id']);
             $table->string('source');
-            $table->date('release_date');
+            $table->date('release_date')->nullable();
             $table->timestamps();
         });
 
         Schema::table('movies', function (Blueprint $table) {
-            $table->string('imdb_id');
+            $table->string('imdb_id')->unique();
         });
     }
 
