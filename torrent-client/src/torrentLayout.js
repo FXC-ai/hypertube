@@ -4,8 +4,8 @@
 export function computeFileLayout(torrent) {
   let offset = 0;
 
-  return torrent.files.map((file) => {
-    const entry = { path: file.path, length: file.length, torrentOffset: offset };
+  return torrent.files.map((file, index) => {
+    const entry = { index, path: file.path, length: file.length, torrentOffset: offset };
     offset += file.length;
 
     return entry;
@@ -53,4 +53,21 @@ export function computeOverlaps(fileLayout, rangeStart, rangeLength) {
   }
 
   return overlaps;
+}
+
+// Indexes of the pieces that overlap at least one wanted file, in ascending order. A piece
+// straddling a wanted and an unwanted file is still needed: its hash covers the whole piece.
+export function computeWantedPieces(fileLayout, pieceRanges, wantedFileIndexes) {
+  const wantedFiles = fileLayout.filter((file) => wantedFileIndexes.has(file.index));
+  const wanted = [];
+
+  for (let i = 0; i < pieceRanges.length; i += 1) {
+    const { offset, length } = pieceRanges[i];
+
+    if (computeOverlaps(wantedFiles, offset, length).length > 0) {
+      wanted.push(i);
+    }
+  }
+
+  return wanted;
 }

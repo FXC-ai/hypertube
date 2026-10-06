@@ -7,6 +7,8 @@ Ce document donne la vue architecture du Client Torrent : ce qui est construit (
 - [docs/architecture.md](../docs/architecture.md) - vue d'ensemble de tout Hypertube, pas seulement le Client Torrent
 - [CONTEXT.md](../CONTEXT.md) - glossaire des termes utilisés ici (piece retry, download attempt, reenqueue, exhausted...)
 - [ADR-0006](../docs/adr/0006-download-retry-diverges-from-conversion-retry.md) - pourquoi le retry de téléchargement ne copie pas celui de la conversion
+- [ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md) - pourquoi ffmpeg lit un film en cours de téléchargement via HTTP plutôt que le fichier qui grossit (proposé)
+- [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md) - pourquoi l'état reste en mémoire, avec reprise par revérification des fichiers sur disque (proposé)
 
 ## Architecture interne (ce qui est construit)
 
@@ -124,7 +126,7 @@ Le détail complet de chaque transition (endpoints exacts, timings, critères) e
 | Déclencheur | Automatique pour les 3 premières tentatives (Job Laravel, `$tries`/backoff), manuel ensuite |
 | Nombre de tentatives | 3 tentatives automatiques avant `Exhausted` |
 | Backoff | Délai croissant entre tentatives (ex. 1 min puis 5 min), pas de reenqueue immédiat |
-| Fichiers de l'attempt échoué | `outputDir` namespacé par `download_attempt` (miroir de `hls/{conversion_attempt}`) ; fichiers laissés sur disque, pas de purge automatique - cohérent avec le comportement déjà documenté pour `DELETE /downloads/:id` dans [API.md](API.md) |
+| Fichiers de l'attempt échoué | `outputDir` namespacé par `download_attempt` (miroir de `hls/{conversion_attempt}`) ; fichiers laissés sur disque, pas de purge automatique - cohérent avec le comportement déjà documenté pour `DELETE /downloads/:id` dans [API.md](API.md). ⚠️ **À revoir** : avec un dossier neuf par attempt, la reprise par revérification (ticket C) ne trouve jamais rien à reprendre. Proposition dans [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md#point-ouvert-pour-fx--outputdir-et-download-attempts-18) : réutiliser le dossier de l'attempt échoué. |
 | Ce qui compte comme échec | `status: "failed"` explicite **ou** Client Torrent injoignable (le service ne doit pas pouvoir bloquer silencieusement un téléchargement en redémarrant) - une annulation manuelle (`DELETE`) n'en fait **pas** partie, voir ci-dessus |
 | Détection de blocage | Pas de progression de `piecesCompleted` pendant 60s malgré `status: "downloading"` - valeur de départ, à ajuster selon retour terrain |
 | Polling recommandé | Toutes les 2s tant que `status == "downloading"` (même intervalle que l'exemple curl d'[API.md](API.md)) |
@@ -135,3 +137,107 @@ Le détail complet de chaque transition (endpoints exacts, timings, critères) e
 - Le déclenchement manuel après `Exhausted` (bouton UI, endpoint exact) - dépend de #15 (état visible du pipeline), pas encore conçu
 - L'affichage temps réel de l'état (#15) - sujet frontend séparé, bloqué par #13/#14 comme #18
 - Persistance des jobs du Client Torrent après un redémarrage de conteneur - gap connu, noté dans [README.md](README.md#notes-pour-la-suite)
+
+## Conception sélection de fichiers, robustesse et streaming (tickets A, C, B)
+
+**Statut : conception uniquement, rien n'est implémenté.** Le contrat HTTP correspondant est dans [API.md](API.md) (sections marquées 🟡). Deux décisions structurantes ont leur ADR : [ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md) (streaming HTTP) et [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md) (état en mémoire + revérification).
+
+### Pourquoi
+
+Trois problèmes remontés en septembre 2026 :
+
+1. **Un torrent contient souvent bien plus que le film** (sqlite de métadonnées, mp3, ogv, sous-titres...). Aujourd'hui, `downloadTorrent()` télécharge toutes les pièces du torrent.
+2. **ffprobe a besoin des métadonnées du conteneur, parfois placées en fin de fichier** (`moov` pour MP4, `Cues` pour MKV), et la lecture ne peut commencer qu'avec assez de données au début du fichier. Or les pièces partent dans l'ordre des index, et une pièce en échec repart en fin de file.
+3. **Un téléchargement Mulan (archive.org, 2,98 Go) a échoué à 86 %** sur une seule pièce. Analyse ci-dessous.
+
+### Découpage et ordre
+
+| Ordre | Ticket | Contenu | Touche au code de Laravel ? |
+|---|---|---|---|
+| 1 | **A - Sélection de fichiers** | `POST /torrents/inspect`, `fileIndexes`, `expectedInfoHash`, détail par fichier dans le statut. L'ordre de téléchargement ne change pas. | Non (Laravel peut continuer d'appeler `POST /downloads` sans `fileIndexes`) |
+| 2 | **C - Robustesse des sources + reprise** | Sources mortes écartées, réannonce au tracker, backoff par pièce, abandon seulement sans source vivante, cause réseau dans les erreurs, revérification des fichiers au démarrage. | Non |
+| 3 | **B - Streaming** | `GET /downloads/:id/files/:index` avec `Range`, priorités de pièces, `contiguousBytesFromStart`, `availableRanges`, `pieces`. | **Oui** : `MediaProbe`/`HlsConverter` lisent une URL pendant le téléchargement. À lancer après validation de l'ADR-0007 par FX. |
+
+C passe avant B parce que le streaming suppose qu'une pièce bloquée finit par arriver : avec la règle actuelle, une seule pièce en échec fait tomber tout le téléchargement, donc toute lecture en cours.
+
+### Ticket A - sélection de fichiers
+
+- **Proposition du client** : la vidéo principale (le plus gros fichier dont l'extension est vidéo) et tous les fichiers de sous-titres non vides (archive.org publie parfois des sous-titres de 0 octet). Sur Discord, FX a noté que les sous-titres d'un MP4 sont parfois des fichiers séparés, parfois des pistes du conteneur ; un MKV les contient en général. Proposer tous les sous-titres couvre les deux cas, Laravel décoche ce qu'il ne veut pas.
+- **Laravel décide** : il renvoie les index qu'il veut. L'utilisateur final ne choisit pas (le sujet ne le demande pas).
+- **Pièces de bord** : une pièce peut contenir la fin d'un fichier choisi et le début d'un fichier non choisi. Elle est téléchargée en entier (le hash porte sur la pièce entière), mais seuls les octets du fichier choisi sont écrits. `computeOverlaps()` découpe déjà chaque pièce par fichier : il suffit de filtrer sur les fichiers choisis.
+- **Pièces à télécharger** : uniquement celles qui chevauchent au moins un fichier choisi.
+
+### Ticket C - robustesse des sources et reprise
+
+**Analyse de l'échec Mulan** (log partagé par FX le 28/09/2026) :
+
+```
+Piece 12 failed after 12 attempt(s) across the source pool:
+  connect ECONNREFUSED 62.167.71.172:6881 | Connection to 178.151.119.187:6881 timed out |
+  Connection to 98.232.172.136:6881 timed out | Web-seed request failed for http://ia601300.us.archive.org/...: fetch failed
+```
+
+- Ce n'est **pas** un problème de format de données : les quatre raisons sont réseau. Une donnée mal formée donnerait `returned X bytes, expected Y` (web-seed) ou un rejet au hash.
+- Le budget de 12 tentatives (`max(4, sources × 2)`) a été consommé en tournant sur **toutes** les sources, y compris des pairs qui refusent la connexion à chaque fois. Aucune source n'est jamais écartée.
+- Une seule pièce épuisée fait échouer **tout** le téléchargement, alors que 1229 pièces sur 1421 étaient reçues.
+- La vraie cause de `fetch failed` est perdue : Node la met dans `err.cause`, et `downloadPieceFromWebSeed.js` ne garde que `err.message`.
+
+**Nouvelle règle** (valeurs de départ, à ajuster sur le terrain) :
+
+| Sujet | Règle |
+|---|---|
+| Source morte | Écartée après 3 échecs de connexion d'affilée (refus, timeout de connexion, hôte injoignable) ou 2 pièces rejetées au hash. Un succès remet son compteur à zéro. |
+| Nouvelles sources | Réannonce au tracker quand il reste moins de 3 sources actives, au plus une fois toutes les 2 min (ou selon l'`interval` renvoyé par le tracker). |
+| Backoff par pièce | Après chaque échec, la pièce attend `min(2^n, 60)` s avant d'être reprise, pour ne pas épuiser son budget en quelques secondes sur une panne passagère. |
+| Abandon | Plus de budget fixe par pièce. Le téléchargement échoue seulement s'il ne reste **aucune source active** pendant 2 min, réannonce comprise. |
+| Erreurs | Chaque raison d'échec inclut `err.cause.code` quand il existe (ex. `fetch failed (ECONNRESET)`). |
+| Reprise | Au démarrage, revérification SHA-1 des pièces déjà présentes dans `outputDir` (état `"checking"`), voir [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md). |
+
+Cette règle est interne au Client Torrent : elle remplace le **piece retry** de [CONTEXT.md](../CONTEXT.md#language) et ne change rien au **reenqueue** de #18, qui reste côté Laravel.
+
+### Ticket B - streaming et priorités
+
+Ce qui change côté Laravel, fonction par fonction, avec du code prototype et les résultats d'un prototype exécuté avec les vraies commandes ffmpeg : [docs/torrent-streaming-laravel-integration.md](../docs/torrent-streaming-laravel-integration.md).
+
+Trois niveaux de priorité, du plus urgent au moins urgent :
+
+1. **Plages demandées en HTTP** : les pièces qui couvrent la plage d'une requête `GET /downloads/:id/files/:index` en cours, plus une fenêtre d'avance de 8 Mo qui suit la lecture.
+2. **Début et fin de la vidéo principale** : dès le démarrage, sa première et sa dernière pièce. ffprobe trouve ainsi `moov`/`Cues` sans attendre, qu'ils soient au début ou à la fin.
+3. **Le reste**, dans l'ordre des index, fichier par fichier.
+
+Une pièce déjà en cours n'est pas interrompue quand une plus prioritaire arrive : le prochain worker libre prend la plus prioritaire.
+
+```mermaid
+sequenceDiagram
+    participant L as Laravel (DownloadMovie / ConvertMovie)
+    participant CT as Client Torrent
+    participant S as Pairs / web-seeds
+    participant FF as ffprobe / ffmpeg
+
+    L->>CT: POST /torrents/inspect {torrentUrl}
+    CT-->>L: 200 {infoHash, files[], mainVideoIndex}
+    L->>CT: POST /downloads {torrentUrl, outputDir, fileIndexes, expectedInfoHash}
+    CT-->>L: 202 {id}
+    Note over CT: checking : revérifie les fichiers déjà présents
+    CT->>S: pièces : début et fin de la vidéo d'abord, puis dans l'ordre
+    L->>FF: ConvertMovie avec l'URL /downloads/{id}/files/{index}
+    FF->>CT: GET Range: fin du fichier (moov / Cues)
+    Note over CT: plage manquante : priorité 1, la réponse attend
+    CT->>S: pièces de la plage demandée
+    S-->>CT: pièces
+    CT-->>FF: 206 octets
+    FF->>CT: GET Range: début du fichier, lecture séquentielle
+    CT-->>FF: 206 octets, au fil des pièces reçues
+    FF-->>L: segments HLS produits au fil de l'eau
+    loop toutes les 2 s
+        L->>CT: GET /downloads/{id}
+        CT-->>L: status, files[].contiguousBytesFromStart
+    end
+    Note over L: status completed : les conversions suivantes relisent le fichier sur disque
+```
+
+### Points ouverts pour FX
+
+1. **Valider l'[ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md)** : lecture HTTP pendant le téléchargement au lieu du fichier qui grossit. Remplace la décision "Pont de conversion" de #6 et le seuil de #14. Le ticket B n'est lancé qu'après.
+2. **`outputDir` par download attempt (#18)** : réutiliser le dossier de l'attempt échoué pour profiter de la reprise, voir [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md#point-ouvert-pour-fx--outputdir-et-download-attempts-18).
+3. **Sous-titres externes** : une fois téléchargés, comment le pipeline HLS les intègre-t-il ? Hors du périmètre du Client Torrent, mais ça conditionne l'intérêt de les proposer par défaut.

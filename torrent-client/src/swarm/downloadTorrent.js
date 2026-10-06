@@ -2,7 +2,12 @@ import { open, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { CancelledError } from '../cancelledError.js';
 import { downloadPieceFromPeer } from '../peer/downloadPiece.js';
-import { computeFileLayout, computePieceRanges, computeOverlaps } from '../torrentLayout.js';
+import {
+  computeFileLayout,
+  computePieceRanges,
+  computeOverlaps,
+  computeWantedPieces,
+} from '../torrentLayout.js';
 import { downloadPieceFromWebSeed } from '../webseed/downloadPieceFromWebSeed.js';
 
 export class SwarmDownloadError extends Error {
@@ -12,7 +17,9 @@ export class SwarmDownloadError extends Error {
   }
 }
 
-// Downloads every piece of `torrent` with a bounded pool of workers. Peers (peer-wire) and
+// Downloads the pieces of `torrent` covering `fileIndexes` (every file when omitted) with a
+// bounded pool of workers. Only bytes belonging to those files are written: the unwanted part
+// of a boundary piece is dropped, and unwanted files are never created. Peers (peer-wire) and
 // web-seeds (BEP19) share one source rotation, so both are used together rather than as a
 // fallback chain. Pieces are written to the real files under `outputDir`, since a piece can
 // straddle a file boundary in a multi-file torrent. A failing piece is requeued on another
@@ -26,6 +33,7 @@ export async function downloadTorrent(torrent, peers, options) {
     pieceTimeoutMs = 20000,
     connectTimeoutMs = 5000,
     webSeedUrls = [],
+    fileIndexes,
     maxAttemptsPerPiece = Math.max(4, (peers.length + webSeedUrls.length) * 2),
     onProgress,
     signal,
@@ -42,11 +50,13 @@ export async function downloadTorrent(torrent, peers, options) {
 
   const fileLayout = computeFileLayout(torrent);
   const pieceOffsets = computePieceRanges(torrent);
-  const numPieces = torrent.pieces.length;
-  const queue = [...Array(numPieces).keys()];
-  const attempts = new Array(numPieces).fill(0);
+  const wantedFileIndexes = new Set(fileIndexes ?? fileLayout.map((file) => file.index));
+  const wantedFiles = fileLayout.filter((file) => wantedFileIndexes.has(file.index));
+  const queue = computeWantedPieces(fileLayout, pieceOffsets, wantedFileIndexes);
+  const numPieces = queue.length;
+  const attempts = new Array(torrent.pieces.length).fill(0);
   // Keep each distinct failure: the last error alone can hide the real cause across sources.
-  const failureReasons = Array.from({ length: numPieces }, () => new Set());
+  const failureReasons = Array.from({ length: torrent.pieces.length }, () => new Set());
   let completed = 0;
   let sourceCursor = 0;
   let failure = null;
@@ -120,7 +130,7 @@ export async function downloadTorrent(torrent, peers, options) {
                   signal,
                 });
 
-          for (const overlap of computeOverlaps(fileLayout, offset, buffer.length)) {
+          for (const overlap of computeOverlaps(wantedFiles, offset, buffer.length)) {
             const handle = await handleFor(overlap.file);
             const data = buffer.subarray(overlap.rangeOffset, overlap.rangeOffset + overlap.length);
             await handle.write(data, 0, data.length, overlap.fileOffset);
@@ -149,7 +159,7 @@ export async function downloadTorrent(torrent, peers, options) {
       }
     }
 
-    const workerCount = Math.max(1, Math.min(concurrency, numPieces));
+    const workerCount = Math.min(concurrency, numPieces);
     await Promise.all(Array.from({ length: workerCount }, worker));
 
     if (signal?.aborted) {
@@ -165,9 +175,9 @@ export async function downloadTorrent(torrent, peers, options) {
     }
 
     // Zero-length files overlap no piece, so touch every file to make sure they all exist.
-    await Promise.all(fileLayout.map((file) => handleFor(file)));
+    await Promise.all(wantedFiles.map((file) => handleFor(file)));
 
-    return { outputDir, piecesDownloaded: completed, files: fileLayout.map((f) => f.path) };
+    return { outputDir, piecesDownloaded: completed, files: wantedFiles.map((f) => f.path) };
   } finally {
     await Promise.all(
       [...fileHandlePromises.values()].map((promise) => promise.then((handle) => handle.close())),
