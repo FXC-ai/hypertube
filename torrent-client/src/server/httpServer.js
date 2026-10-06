@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDownloadManager, DownloadManagerError } from './downloadManager.js';
+import { TorrentFileError } from '../torrentFile.js';
+import {
+  createDownloadManager,
+  DownloadManagerError,
+  TorrentFetchError,
+} from './downloadManager.js';
 
 const DOWNLOAD_ID_PATTERN = /^\/downloads\/([^/]+)$/;
 
@@ -46,6 +51,12 @@ async function handleRequest(req, res, manager) {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/torrents/inspect') {
+    await handleInspect(req, res, manager);
+
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/downloads') {
     await handleStart(req, res, manager);
 
@@ -69,27 +80,48 @@ async function handleRequest(req, res, manager) {
   sendJson(res, 404, { error: 'Not found' });
 }
 
-async function handleStart(req, res, manager) {
-  let body;
+async function handleInspect(req, res, manager) {
+  const body = await readJsonBody(req, res);
 
-  try {
-    const raw = await readBody(req);
-    body = raw.length > 0 ? JSON.parse(raw) : {};
-  } catch {
-    sendJson(res, 400, { error: 'Invalid JSON body' });
-
+  if (body === undefined) {
     return;
   }
 
-  const { torrentUrl, torrentBase64, outputDir } = body ?? {};
-  let torrentBytes;
+  try {
+    sendJson(res, 200, await manager.inspectTorrent(torrentSource(body)));
+  } catch (err) {
+    if (err instanceof TorrentFetchError) {
+      sendJson(res, 502, { error: err.message });
 
-  if (torrentBase64 !== undefined) {
-    torrentBytes = Buffer.from(torrentBase64, 'base64');
+      return;
+    }
+
+    if (err instanceof DownloadManagerError || err instanceof TorrentFileError) {
+      sendJson(res, 400, { error: err.message });
+
+      return;
+    }
+
+    throw err;
+  }
+}
+
+async function handleStart(req, res, manager) {
+  const body = await readJsonBody(req, res);
+
+  if (body === undefined) {
+    return;
   }
 
+  const { outputDir, fileIndexes, expectedInfoHash } = body;
+
   try {
-    const id = await manager.startDownload({ torrentBytes, torrentUrl, outputDir });
+    const id = await manager.startDownload({
+      ...torrentSource(body),
+      outputDir,
+      fileIndexes,
+      expectedInfoHash,
+    });
     sendJson(res, 202, { id });
   } catch (err) {
     if (err instanceof DownloadManagerError) {
@@ -124,6 +156,27 @@ function handleCancel(res, manager, id) {
   }
 
   sendJson(res, 200, status);
+}
+
+// Answers 400 itself and returns undefined when the body is not valid JSON.
+async function readJsonBody(req, res) {
+  try {
+    const raw = await readBody(req);
+    const body = raw.length > 0 ? JSON.parse(raw) : {};
+
+    return body ?? {};
+  } catch {
+    sendJson(res, 400, { error: 'Invalid JSON body' });
+
+    return undefined;
+  }
+}
+
+function torrentSource({ torrentUrl, torrentBase64 }) {
+  return {
+    torrentUrl,
+    torrentBytes: torrentBase64 === undefined ? undefined : Buffer.from(torrentBase64, 'base64'),
+  };
 }
 
 function sendJson(res, statusCode, body) {

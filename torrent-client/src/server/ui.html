@@ -5,50 +5,102 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Client Torrent - page de test</title>
 <style>
-:root{--bg:#fafaf9;--card:#fff;--text:#1c1917;--muted:#78716c;--border:#e7e5e4;--accent:#2563eb;--ok:#15803d;--bad:#b91c1c;--warn:#a16207;color-scheme:light dark}
-@media (prefers-color-scheme:dark){:root{--bg:#1c1917;--card:#292524;--text:#fafaf9;--muted:#a8a29e;--border:#44403c;--accent:#60a5fa;--ok:#4ade80;--bad:#f87171;--warn:#facc15}}
+:root{--bg:#fafaf9;--card:#fff;--text:#1c1917;--muted:#78716c;--border:#e7e5e4;--accent:#2563eb;--ok:#15803d;--bad:#b91c1c;--warn:#a16207;--get:#0369a1;--post:#15803d;--del:#b91c1c;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1917;--card:#292524;--text:#fafaf9;--muted:#a8a29e;--border:#44403c;--accent:#60a5fa;--ok:#4ade80;--bad:#f87171;--warn:#facc15;--get:#38bdf8;--post:#4ade80;--del:#f87171}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,sans-serif}
-main{max-width:820px;margin:0 auto;padding:24px 16px 48px}
+main{max-width:880px;margin:0 auto;padding:24px 16px 48px}
 h1{font-size:22px;margin:0 0 4px}
 h2{font-size:17px;margin:0 0 12px}
+h3{font-size:14px;margin:16px 0 4px}
 .sub{color:var(--muted);margin:0 0 20px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px}
 label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
-input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:13px ui-monospace,monospace}
+label.inline{display:inline-flex;gap:6px;align-items:center;margin:0}
+label.inline input{width:auto}
+input,textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:13px ui-monospace,monospace}
+input:disabled{opacity:.5}
+textarea{resize:vertical}
 button{padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font:inherit;cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.small{padding:2px 10px;font-size:13px}
 button:disabled{opacity:.5;cursor:not-allowed}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.row.tight{margin-top:8px}
 .pill{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid var(--border);font-size:13px}
 .pill.ok{color:var(--ok);border-color:var(--ok)}.pill.bad{color:var(--bad);border-color:var(--bad)}.pill.warn{color:var(--warn);border-color:var(--warn)}
 .bar{height:10px;border-radius:5px;background:var(--border);overflow:hidden;margin:12px 0 6px}
 .bar>div{height:100%;width:0;background:var(--accent);transition:width .4s}
 pre{margin:8px 0 0;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow-x:auto;font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;word-break:break-all}
+.scroll{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
-code{font:13px ui-monospace,monospace}
+code{font:13px ui-monospace,monospace;overflow-wrap:break-word}
+td:last-child code{overflow-wrap:anywhere}
 .muted{color:var(--muted)}
+.small{font-size:12px}
 .err{color:var(--bad)}
 details{margin-top:8px}summary{cursor:pointer}
 ol{padding-left:20px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:12px 0 0;font-size:14px}
+dt{color:var(--muted)}dd{margin:0;min-width:0;word-break:break-all}
+.files td:first-child{width:28px}
+.num{text-align:right;white-space:nowrap}
+.kind{font-size:12px;padding:0 8px}
+.files tr.pad{opacity:.45}
+.mini{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:4px}
+.mini>div{height:100%;width:0;background:var(--accent);transition:width .4s}
+.mini.done>div{background:var(--ok)}
+.route{border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:8px}
+.route>summary{list-style:none;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.route>summary::-webkit-details-marker{display:none}
+.route[open]>summary{margin-bottom:8px}
+.method{display:inline-block;min-width:64px;text-align:center;font:600 12px ui-monospace,monospace;padding:2px 8px;border-radius:6px;border:1px solid currentColor}
+.m-get{color:var(--get)}.m-post{color:var(--post)}.m-delete{color:var(--del)}
+.try{border-top:1px dashed var(--border);margin-top:16px;padding-top:4px}
 </style>
 </head>
 <body>
 <main>
 <h1>Client Torrent - page de test</h1>
-<p class="sub">Lance un vrai téléchargement depuis le navigateur, sans écrire de curl. <span id="health" class="pill warn">service : vérification...</span></p>
+<p class="sub">Lance un vrai téléchargement depuis le navigateur, sans écrire de curl, et essaie chaque route de l'API. <span id="health" class="pill warn">service : vérification...</span></p>
 
 <section class="card">
 <h2>Lancer un téléchargement</h2>
 <label for="url">torrentUrl (torrent archive.org court, environ 2 Mo, pré-rempli)</label>
 <input id="url" value="https://archive.org/download/1953_Movie_Trailers_Starting_Monday/1953_Movie_Trailers_Starting_Monday_archive.torrent">
+<label for="torrentFile">ou un fichier .torrent local, envoyé en torrentBase64 (prend le dessus sur torrentUrl)</label>
+<input id="torrentFile" type="file" accept=".torrent,application/x-bittorrent">
+<div id="fileSource" class="row tight" hidden><span id="fileSourceName" class="muted"></span><button id="clearFile" type="button" class="small">Retirer</button></div>
 <label for="dir">outputDir (chemin dans le conteneur ou sur la machine où tourne le service)</label>
 <input id="dir" value="__DEFAULT_OUTPUT_DIR__">
 <div class="row">
+<button id="inspect">Inspecter</button>
 <button id="start" class="primary">Lancer</button>
 <button id="cancel" disabled>Annuler</button>
+<span id="selection" class="muted">sans inspection : le client choisit les fichiers suggérés</span>
 </div>
+<div id="formError" class="err"></div>
+
+<div id="inspectBox" hidden>
+<h3>Réponse de POST /torrents/inspect</h3>
+<dl id="summary"></dl>
+<label class="inline" style="margin-top:12px"><input id="verifyHash" type="checkbox" checked> envoyer <code>expectedInfoHash</code> avec le lancement (refus si le .torrent a changé depuis l'inspection)</label>
+<div class="row">
+<span class="muted small">Sélection rapide :</span>
+<button type="button" class="small" data-preset="suggested">Suggestion</button>
+<button type="button" class="small" data-preset="main">Vidéo principale</button>
+<button type="button" class="small" data-preset="media">Vidéos + sous-titres</button>
+<button type="button" class="small" data-preset="all">Tout</button>
+<button type="button" class="small" data-preset="none">Aucun</button>
+<label class="inline small"><input id="hidePadding" type="checkbox" checked> masquer le bourrage <span id="padCount"></span></label>
+</div>
+<div class="scroll"><table class="files"><thead><tr><th></th><th class="num">#</th><th>Fichier</th><th>Type</th><th class="num">Taille</th></tr></thead><tbody id="files"></tbody></table></div>
+<p class="muted small">Cochés = téléchargés. Suggestion du client : la vidéo principale et les sous-titres non vides. Les fichiers de bourrage (BEP 47, <code>.____padding_file/N</code>) ne contiennent que des zéros : ils sont grisés et jamais cochés.</p>
+<details><summary class="muted">JSON brut de l'inspection</summary><pre id="inspectRaw"></pre></details>
+</div>
+
 <details open><summary class="muted">Équivalent curl</summary><pre id="curl"></pre></details>
 </section>
 
@@ -57,26 +109,36 @@ ol{padding-left:20px}
 <div><span id="status" class="pill">aucun téléchargement</span> <span id="jobid" class="muted"></span></div>
 <div class="bar"><div id="fill"></div></div>
 <div id="counts" class="muted">-</div>
+<table class="files" id="progressFiles" hidden><tbody id="progressRows"></tbody></table>
 <div id="error" class="err"></div>
 <details><summary class="muted">Réponse brute de GET /downloads/:id</summary><pre id="raw">-</pre></details>
 </section>
 
 <section class="card">
+<h2>Historique de la session</h2>
+<p id="historyEmpty" class="muted">Aucun téléchargement lancé depuis cette page dans cet onglet.</p>
+<div class="scroll"><table id="historyTable" hidden><thead><tr><th>Heure</th><th>Source et id</th><th>Statut</th><th></th></tr></thead><tbody id="historyRows"></tbody></table></div>
+<label for="followId">Suivre un téléchargement par son id (lancé ailleurs, par Laravel ou curl)</label>
+<div class="row tight"><input id="followId" placeholder="2ce4f502-b325-444f-9053-da3174fb94b5" style="flex:1;min-width:200px"><button id="followBtn" type="button">Suivre</button><button id="clearHistory" type="button">Vider l'historique</button></div>
+<p class="muted small">L'état des téléchargements vit en mémoire dans le service : après un redémarrage, les anciens id répondent 404.</p>
+</section>
+
+<section class="card">
+<h2>Référence de l'API</h2>
+<p class="muted">Contrat complet : <code>torrent-client/API.md</code>. Chaque route se déplie, avec un exemple et un bouton pour l'essayer contre ce service.</p>
+<div id="routes"></div>
+</section>
+
+<section class="card">
 <h2>Comment ça marche</h2>
 <ol>
+<li><code>POST /torrents/inspect</code> (bouton Inspecter, facultatif) lit le <code>.torrent</code> et liste ses fichiers, sans rien télécharger d'autre. Les index cochés partent dans <code>fileIndexes</code>, avec l'<code>expectedInfoHash</code> de l'inspection.</li>
 <li><code>POST /downloads</code> crée un job en mémoire et répond <code>202</code> avec son id tout de suite. Le travail continue en arrière-plan.</li>
 <li>Le <code>.torrent</code> est téléchargé puis décodé (bencode). Le SHA-1 du dictionnaire <code>info</code> donne l'info-hash.</li>
 <li>Les trackers (HTTP ou UDP) sont interrogés pour obtenir une liste de pairs.</li>
 <li>Pairs et web-seeds (serveurs HTTP de l'<code>url-list</code>) sont mélangés dans une seule liste de sources. Un pool de 10 workers télécharge les pièces en parallèle, chacune vérifiée par SHA-1, et retentée sur une autre source si elle échoue.</li>
-<li>Chaque pièce valide est écrite à son offset dans le ou les fichiers qu'elle recouvre. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
+<li>Seules les pièces qui touchent un fichier choisi sont téléchargées. Chaque pièce valide est écrite à son offset dans le ou les fichiers choisis qu'elle recouvre ; la part d'une pièce qui appartient à un fichier non choisi est jetée. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
 </ol>
-<table>
-<tr><th>Route</th><th>Rôle</th></tr>
-<tr><td><code>GET /health</code></td><td>le service répond</td></tr>
-<tr><td><code>POST /downloads</code></td><td>démarre (<code>outputDir</code> et <code>torrentUrl</code> ou <code>torrentBase64</code>)</td></tr>
-<tr><td><code>GET /downloads/:id</code></td><td>statut : <code>downloading</code>, <code>completed</code>, <code>failed</code> ou <code>cancelled</code>, plus la progression</td></tr>
-<tr><td><code>DELETE /downloads/:id</code></td><td>annule un téléchargement en cours</td></tr>
-</table>
 <p class="muted">Cet item archive.org n'a quasiment aucun pair : le contenu vient du web-seed (HTTP Range) des serveurs d'archive.org. Il faut donc que le service ait accès à Internet, et que archive.org soit disponible.</p>
 <p class="muted">Tous les items archive.org ne se téléchargent pas : ceux dont le <code>_meta.xml</code> a été régénéré après la création du torrent échouent toujours (hash de pièce différent, refus voulu), et un nœud de stockage archive.org peut être injoignable. Le message d'erreur liste alors chaque cause distincte.</p>
 <p class="muted">Dans Docker, un outputDir sous <code>/var/www/html/storage/app/public/movies/</code> atterrit dans le volume partagé avec le conteneur <code>app</code>. Ailleurs, les fichiers restent dans le conteneur <code>client-torrent</code>.</p>
@@ -84,68 +146,410 @@ ol{padding-left:20px}
 </section>
 </main>
 <script>
+var EXAMPLE_ID='2ce4f502-b325-444f-9053-da3174fb94b5';
+var EXAMPLE_HASH='3f4c8a0b9d2e7f61a5c4b3d2e1f0a9b8c7d6e5f4';
+var EXAMPLE_DIR='/var/www/html/storage/app/public/movies/42';
+var EXAMPLE_URL='https://archive.org/download/some_item/some_item_archive.torrent';
+var STATUS_VALUES='<code>"downloading"</code>, <code>"completed"</code>, <code>"failed"</code> ou <code>"cancelled"</code>';
+
+// Single source of truth for the API reference, the curl examples and the "Essayer" forms.
+// Keep it in line with torrent-client/API.md.
+var ROUTES=[
+{id:'health',method:'GET',path:'/health',summary:'le service répond',
+ role:'Vérification de vie, utilisée par le healthcheck Docker.',
+ responses:[['200','toujours, tant que le service tourne']],
+ example:{status:200,response:{status:'ok'}}},
+{id:'page',method:'GET',path:'/',summary:'cette page de test',noTry:true,
+ role:'Sert cette page HTML, avec <code>outputDir</code> pré-rempli : un dossier temporaire hors Docker, le volume partagé avec <code>app</code> dans Docker. Pas destinée à Laravel.',
+ responses:[['200','page HTML']]},
+{id:'inspect',method:'POST',path:'/torrents/inspect',summary:'liste les fichiers du torrent et propose lesquels télécharger',
+ role:'Lit un <code>.torrent</code> et renvoie la liste de ses fichiers, sans rien télécharger d\'autre que le <code>.torrent</code> lui-même. Réponse synchrone. Sert à choisir les fichiers avant <code>POST /downloads</code>.',
+ body:[
+  {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code>, que le service télécharge lui-même.'},
+  {name:'torrentBase64',type:'string',required:'un des deux',def:'-',desc:'Contenu brut du <code>.torrent</code> en base64. Si les deux sont présents, <code>torrentBase64</code> prend le dessus.'}],
+ fields:[
+  ['infoHash','SHA-1 du dictionnaire <code>info</code>, 40 caractères hexadécimaux. À renvoyer tel quel dans <code>expectedInfoHash</code>.'],
+  ['name','nom du torrent'],
+  ['pieceLength','taille d\'une pièce en octets'],
+  ['totalPieces','nombre de pièces du torrent entier'],
+  ['totalLength','taille totale du torrent en octets, tous fichiers compris'],
+  ['mainVideoIndex','index du plus gros fichier <code>"video"</code>, ou <code>null</code> s\'il n\'y en a aucun'],
+  ['files[].index','position dans la liste du <code>.torrent</code>, à utiliser dans <code>fileIndexes</code>'],
+  ['files[].path, files[].length','chemin relatif et taille en octets'],
+  ['files[].kind','<code>"video"</code>, <code>"subtitle"</code> ou <code>"other"</code>, déduit de l\'extension'],
+  ['files[].container','<code>"mp4"</code>, <code>"matroska"</code>, <code>"ogg"</code>, <code>"avi"</code> ou <code>null</code>, déduit de l\'extension'],
+  ['files[].suggested','proposition du client : la vidéo principale et les sous-titres non vides (tout si aucune vidéo)']],
+ responses:[['200','inspection réussie'],['400','JSON invalide, ni <code>torrentUrl</code> ni <code>torrentBase64</code>, ou <code>.torrent</code> malformé'],['502','<code>torrentUrl</code> injoignable ou réponse HTTP non-2xx']],
+ notes:'archive.org peut régénérer le <code>.torrent</code> servi à la même URL : entre l\'inspection et le lancement, les index peuvent changer de sens. D\'où <code>expectedInfoHash</code>.',
+ example:{request:{torrentUrl:EXAMPLE_URL},status:200,response:{infoHash:EXAMPLE_HASH,name:'some_item',pieceLength:2097152,totalPieces:1421,totalLength:2980052992,mainVideoIndex:0,files:[
+  {index:0,path:'Movie.mp4',length:2961234567,kind:'video',container:'mp4',suggested:true},
+  {index:1,path:'Movie.en.srt',length:81234,kind:'subtitle',container:null,suggested:true},
+  {index:2,path:'some_item_meta.sqlite',length:20480,kind:'other',container:null,suggested:false},
+  {index:3,path:'Movie.ogv',length:18716711,kind:'video',container:'ogg',suggested:false}]}},
+ tryBody:function(){return sourceBody()}},
+{id:'start',method:'POST',path:'/downloads',summary:'démarre un téléchargement en arrière-plan',
+ role:'Crée un job en mémoire et répond tout de suite avec son id. Récupération du <code>.torrent</code>, trackers et pièces se font ensuite, en arrière-plan : suivre avec <code>GET /downloads/:id</code>.',
+ body:[
+  {name:'outputDir',type:'string',required:'oui',def:'-',desc:'Chemin absolu où écrire les fichiers. Pour un film : <code>'+EXAMPLE_DIR.replace('42','{movieId}')+'</code>.'},
+  {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code>.'},
+  {name:'torrentBase64',type:'string',required:'un des deux',def:'-',desc:'Contenu du <code>.torrent</code> en base64, prend le dessus sur <code>torrentUrl</code>.'},
+  {name:'fileIndexes',type:'int[]',required:'non',def:'fichiers <code>suggested</code>',desc:'Index des fichiers à télécharger. Liste non vide d\'entiers positifs sans doublon, sinon <code>400</code>. Index hors bornes : le job passe en <code>"failed"</code>.'},
+  {name:'expectedInfoHash',type:'string',required:'non (recommandé avec fileIndexes)',def:'aucune vérification',desc:'<code>infoHash</code> de l\'inspection, 40 caractères hexadécimaux, sinon <code>400</code>. S\'il ne correspond pas au <code>.torrent</code> récupéré, le job passe en <code>"failed"</code>.'}],
+ fields:[['id','UUID du job, seule façon de le suivre ou de l\'annuler']],
+ responses:[['202','job créé'],['400','JSON invalide, <code>outputDir</code> manquant, ni <code>torrentUrl</code> ni <code>torrentBase64</code>, <code>fileIndexes</code> ou <code>expectedInfoHash</code> malformé']],
+ notes:'Ne pas lancer deux jobs sur le même <code>outputDir</code> en même temps : ils écriraient dans les mêmes fichiers.',
+ example:{request:{torrentUrl:EXAMPLE_URL,outputDir:EXAMPLE_DIR,fileIndexes:[0,1],expectedInfoHash:EXAMPLE_HASH},status:202,response:{id:EXAMPLE_ID}},
+ tryBody:function(){return startBody()}},
+{id:'status',method:'GET',path:'/downloads/:id',summary:'état et progression d\'un téléchargement',
+ role:'État courant d\'un job. Pas de notification : l\'appelant sonde cette route (toutes les 1 à 2 s) tant que <code>status</code> vaut <code>"downloading"</code>.',
+ params:[['id','UUID renvoyé par <code>POST /downloads</code>']],
+ fields:[
+  ['status',STATUS_VALUES],
+  ['downloadedBytes, totalBytes','progression en octets, fichiers choisis seulement. <code>totalBytes</code> vaut <code>null</code> tant que le <code>.torrent</code> n\'est pas parsé.'],
+  ['piecesCompleted, totalPieces','progression en pièces qui couvrent les fichiers choisis'],
+  ['infoHash, pieceLength','<code>null</code> tant que le <code>.torrent</code> n\'est pas parsé'],
+  ['files[]','un élément par fichier choisi : <code>index</code>, <code>path</code>, <code>length</code>, <code>downloadedBytes</code>, <code>complete</code>'],
+  ['error','<code>null</code>, ou la cause de l\'échec quand <code>status</code> vaut <code>"failed"</code>'],
+  ['outputDir','tel que reçu au lancement']],
+ responses:[['200','job connu'],['404','id inconnu, y compris après un redémarrage du service (état en mémoire)']],
+ example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[
+  {index:0,path:'Movie.mp4',length:2961234567,downloadedBytes:6210222,complete:false},
+  {index:1,path:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true}],error:null,outputDir:EXAMPLE_DIR}}},
+{id:'cancel',method:'DELETE',path:'/downloads/:id',summary:'annule un téléchargement en cours',
+ role:'Annule un job en cours. La réponse donne le statut au moment de l\'appel : elle peut encore dire <code>"downloading"</code>, un <code>GET</code> quelques centaines de ms plus tard confirme <code>"cancelled"</code>. Sur un job déjà terminé, ne fait rien et renvoie son statut final.',
+ params:[['id','UUID renvoyé par <code>POST /downloads</code>']],
+ responses:[['200','même corps que <code>GET /downloads/:id</code>'],['404','id inconnu']],
+ notes:'Les fichiers déjà écrits restent sur disque, partiels : à supprimer côté appelant si besoin.',
+ example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[],error:null,outputDir:EXAMPLE_DIR}}}
+];
+
 var $=function(id){return document.getElementById(id)};
-var url=$('url'),dir=$('dir'),startBtn=$('start'),cancelBtn=$('cancel');
-var jobId=null,timer=null;
+var url=$('url'),dir=$('dir'),startBtn=$('start'),cancelBtn=$('cancel'),inspectBtn=$('inspect');
+var jobId=null,timer=null,inspection=null,selected={},torrentFile=null;
+var KIND_LABEL={video:'vidéo',subtitle:'sous-titre',other:'autre'};
 var TERMINAL=['completed','failed','cancelled'];
+var B64_MARK='__TORRENT_BASE64__';
+var HISTORY_KEY='torrentClient.jobs';
+var PRESETS={
+  suggested:function(f){return f.suggested},
+  main:function(f){return f.index===inspection.mainVideoIndex},
+  media:function(f){return f.kind==='video'||(f.kind==='subtitle'&&f.length>0)},
+  all:function(){return true},
+  none:function(){return false}
+};
 
 function fmtBytes(n){
   if(n===null||n===undefined){return '?'}
   if(n<1024){return n+' o'}
   if(n<1048576){return (n/1024).toFixed(1)+' Ko'}
-  return (n/1048576).toFixed(1)+' Mo';
+  if(n<1073741824){return (n/1048576).toFixed(1)+' Mo'}
+  return (n/1073741824).toFixed(2)+' Go';
+}
+function esc(t){var d=document.createElement('div');d.textContent=String(t);return d.innerHTML}
+function json(v){return JSON.stringify(v,null,2)}
+function isPadding(path){return /(^|\/)\.?_{4,}padding_file/.test(path)}
+function statusClass(s){return s==='completed'?'ok':(s==='failed'||s==='inconnu'?'bad':(s==='cancelled'?'warn':''))}
+
+function sourceBody(){return torrentFile?{torrentBase64:torrentFile.base64}:{torrentUrl:url.value}}
+function sourceLabel(){return torrentFile?torrentFile.name:(url.value.split('/').pop()||url.value)}
+function checkedIndexes(){
+  return inspection.files.filter(function(f){return selected[f.index]}).map(function(f){return f.index});
+}
+function startBody(){
+  var body=sourceBody();
+  body.outputDir=dir.value;
+  if(inspection){
+    body.fileIndexes=checkedIndexes();
+    if($('verifyHash').checked){body.expectedInfoHash=inspection.infoHash}
+  }
+  return body;
+}
+// A local .torrent is not inlined: the curl reads it with base64 into $B64.
+function curlFor(method,path,body){
+  var cmd='curl'+(method==='GET'?'':' -X '+method)+' '+location.origin+path;
+  if(body===undefined){return cmd}
+  var copy=Object.assign({},body);
+  if(copy.torrentBase64!==undefined&&torrentFile&&copy.torrentBase64===torrentFile.base64){copy.torrentBase64=B64_MARK}
+  var data=JSON.stringify(copy).replace(/'/g,"'\\''");
+  var prefix='';
+  if(data.indexOf(B64_MARK)!==-1){
+    data=data.replace(B64_MARK,"'\"$B64\"'");
+    prefix="B64=$(base64 < '"+torrentFile.name.replace(/'/g,"'\\''")+"' | tr -d '\\n')\n";
+  }
+  return prefix+cmd+" \\\n  -H 'Content-Type: application/json' \\\n  -d '"+data+"'";
 }
 function renderCurl(){
-  var body=JSON.stringify({torrentUrl:url.value,outputDir:dir.value});
-  $('curl').textContent="curl -X POST "+location.origin+"/downloads \\\n  -H 'Content-Type: application/json' \\\n  -d '"+body+"'";
+  var inspectCurl=curlFor('POST','/torrents/inspect',sourceBody());
+  var startCurl=curlFor('POST','/downloads',startBody());
+  // Both commands share the B64= line when a local .torrent is used: print it once.
+  var shared=inspectCurl.indexOf('B64=')===0?inspectCurl.split('\n')[0]+'\n':'';
+  $('curl').textContent=inspectCurl+"\n\n"+startCurl.slice(shared.length);
+  var n=inspection?checkedIndexes().length:null;
+  if(inspection){
+    var size=inspection.files.reduce(function(sum,f){return sum+(selected[f.index]?f.length:0)},0);
+    $('selection').textContent=n+' fichier(s) sur '+inspection.files.length+' sélectionné(s), '+fmtBytes(size);
+  }else{
+    $('selection').textContent='sans inspection : le client choisit les fichiers suggérés';
+  }
+  startBtn.disabled=!!timer||(inspection!==null&&n===0);
 }
+
+function renderSource(){
+  url.disabled=!!torrentFile;
+  $('fileSource').hidden=!torrentFile;
+  $('fileSourceName').textContent=torrentFile?torrentFile.name+' ('+fmtBytes(torrentFile.size)+'), envoyé en torrentBase64':'';
+}
+function resetInspection(){inspection=null;selected={};$('inspectBox').hidden=true;renderCurl()}
+
+function copyText(text,btn){
+  var done=function(){var old=btn.textContent;btn.textContent='Copié';setTimeout(function(){btn.textContent=old},1200)};
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done);return}
+  var t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();
+  try{document.execCommand('copy');done()}catch(e){}
+  t.remove();
+}
+function renderInspection(){
+  var i=inspection;
+  var pads=i.files.filter(function(f){return isPadding(f.path)}).length;
+  var main=i.mainVideoIndex===null?'<code>null</code> <span class="muted">(aucune vidéo : tout est suggéré)</span>':'<code>'+i.mainVideoIndex+'</code> : <code>'+esc(i.files[i.mainVideoIndex].path)+'</code>';
+  $('summary').innerHTML=[
+    ['name','<code>'+esc(i.name)+'</code>'],
+    ['infoHash','<code>'+esc(i.infoHash)+'</code> <button type="button" class="small" id="copyHash">Copier</button>'],
+    ['totalLength',fmtBytes(i.totalLength)+' <span class="muted">('+i.totalLength+' octets)</span>'],
+    ['pieceLength',fmtBytes(i.pieceLength)+' <span class="muted">('+i.pieceLength+' octets)</span>'],
+    ['totalPieces',String(i.totalPieces)],
+    ['mainVideoIndex',main],
+    ['files',i.files.length+' fichier(s)'+(pads?', dont '+pads+' de bourrage':'')]
+  ].map(function(r){return '<dt><code>'+r[0]+'</code></dt><dd>'+r[1]+'</dd>'}).join('');
+  $('copyHash').onclick=function(){copyText(i.infoHash,this)};
+  $('padCount').textContent=pads?'('+pads+')':'(aucun)';
+  $('inspectRaw').textContent=json(i);
+  renderFiles();
+  $('inspectBox').hidden=false;
+}
+function renderFiles(){
+  var hidePad=$('hidePadding').checked;
+  $('files').innerHTML=inspection.files.map(function(f){
+    var pad=isPadding(f.path);
+    if(pad&&hidePad){return ''}
+    var badges=(f.index===inspection.mainVideoIndex?' <span class="pill ok kind">principale</span>':'')+(f.length===0?' <span class="pill warn kind">vide</span>':'');
+    var kind=pad?'bourrage':KIND_LABEL[f.kind]+(f.container?' · '+f.container:'');
+    return '<tr'+(pad?' class="pad"':'')+'><td><input type="checkbox" value="'+f.index+'"'+(selected[f.index]?' checked':'')+(pad?' disabled':'')+'></td><td class="num muted">'+f.index+'</td><td><code>'+esc(f.path)+'</code>'+badges+'</td><td><span class="pill kind">'+kind+'</span></td><td class="num">'+fmtBytes(f.length)+'</td></tr>';
+  }).join('');
+  Array.prototype.forEach.call(document.querySelectorAll('#files input'),function(c){
+    c.onchange=function(){selected[Number(c.value)]=c.checked;renderCurl()};
+  });
+}
+function applyPreset(name){
+  inspection.files.forEach(function(f){selected[f.index]=!isPadding(f.path)&&PRESETS[name](f)});
+  renderFiles();
+  renderCurl();
+}
+
 function setStatus(text,cls){
   var s=$('status');
   s.textContent=text;
   s.className='pill'+(cls?' '+cls:'');
 }
 function render(job){
-  var cls=job.status==='completed'?'ok':(job.status==='failed'?'bad':(job.status==='cancelled'?'warn':''));
-  setStatus(job.status,cls);
+  setStatus(job.status,statusClass(job.status));
   var pct=job.totalBytes?Math.min(100,job.downloadedBytes/job.totalBytes*100):0;
   $('fill').style.width=pct+'%';
   $('counts').textContent=fmtBytes(job.downloadedBytes)+' sur '+fmtBytes(job.totalBytes)+' - pièces '+job.piecesCompleted+' sur '+(job.totalPieces===null?'?':job.totalPieces);
   $('error').textContent=job.error||'';
-  $('raw').textContent=JSON.stringify(job,null,2);
+  $('raw').textContent=json(job);
+  var files=job.files||[];
+  $('progressFiles').hidden=files.length===0;
+  $('progressRows').innerHTML=files.map(function(f){
+    var p=f.length?f.downloadedBytes/f.length*100:100;
+    return '<tr><td><code>'+esc(f.path)+'</code><div class="mini'+(f.complete?' done':'')+'"><div style="width:'+p+'%"></div></div></td><td class="num">'+fmtBytes(f.downloadedBytes)+' / '+fmtBytes(f.length)+'</td></tr>';
+  }).join('');
 }
 function stopPolling(){
   if(timer){clearInterval(timer);timer=null}
-  startBtn.disabled=false;
   cancelBtn.disabled=true;
+  renderCurl();
 }
 function poll(){
-  fetch('/downloads/'+encodeURIComponent(jobId)).then(function(r){return r.json()}).then(function(job){
-    render(job);
-    if(TERMINAL.indexOf(job.status)!==-1){stopPolling()}
-  }).catch(function(e){$('error').textContent='Erreur de polling : '+e.message});
+  var id=jobId;
+  fetch('/downloads/'+encodeURIComponent(id))
+    .then(function(r){return r.json().then(function(b){return {code:r.status,body:b}})})
+    .then(function(res){
+      if(id!==jobId){return}
+      if(res.code===404){
+        stopPolling();
+        setStatus('inconnu','bad');
+        $('error').textContent='id inconnu : le service a peut-être redémarré (état en mémoire).';
+        updateHistory(id,'inconnu');
+        return;
+      }
+      render(res.body);
+      updateHistory(id,res.body.status);
+      if(TERMINAL.indexOf(res.body.status)!==-1){stopPolling()}
+    })
+    .catch(function(e){$('error').textContent='Erreur de polling : '+e.message});
 }
-startBtn.onclick=function(){
+function follow(id){
+  if(timer){clearInterval(timer);timer=null}
+  jobId=id;
+  $('jobid').textContent='id '+id;
   $('error').textContent='';
+  $('raw').textContent='-';
+  cancelBtn.disabled=false;
+  setStatus('...','');
+  timer=setInterval(poll,1000);
+  poll();
+  renderCurl();
+}
+
+// Per-tab history: sessionStorage may be unavailable (private mode), the page works without it.
+var jobs=(function(){try{return JSON.parse(sessionStorage.getItem(HISTORY_KEY))||[]}catch(e){return []}})();
+function saveHistory(){try{sessionStorage.setItem(HISTORY_KEY,JSON.stringify(jobs))}catch(e){}}
+function addHistory(id,label){
+  jobs.unshift({id:id,label:label,time:new Date().toLocaleTimeString('fr-FR'),status:'downloading'});
+  saveHistory();
+  renderHistory();
+}
+function updateHistory(id,status){
+  var entry=jobs.filter(function(j){return j.id===id})[0];
+  if(!entry||entry.status===status){return}
+  entry.status=status;
+  saveHistory();
+  renderHistory();
+}
+function renderHistory(){
+  $('historyEmpty').hidden=jobs.length>0;
+  $('historyTable').hidden=jobs.length===0;
+  $('historyRows').innerHTML=jobs.map(function(j){
+    return '<tr><td class="muted">'+esc(j.time)+'</td><td><code>'+esc(j.label)+'</code><div class="muted small"><code>'+esc(j.id)+'</code></div></td><td><span class="pill '+statusClass(j.status)+'">'+esc(j.status)+'</span></td><td><button type="button" class="small" data-follow="'+esc(j.id)+'">Suivre</button></td></tr>';
+  }).join('');
+}
+
+function table(head,rows){
+  return '<div class="scroll"><table><thead><tr>'+head.map(function(h){return '<th>'+h+'</th>'}).join('')+'</tr></thead><tbody>'+rows.map(function(r){
+    return '<tr>'+r.map(function(c){return '<td>'+c+'</td>'}).join('')+'</tr>';
+  }).join('')+'</tbody></table></div>';
+}
+function renderRoutes(){
+  $('routes').innerHTML=ROUTES.map(function(r,i){
+    var h='<details class="route" id="route-'+r.id+'"><summary><span class="method m-'+r.method.toLowerCase()+'">'+r.method+'</span><code>'+r.path+'</code><span class="muted">'+r.summary+'</span></summary>';
+    h+='<p>'+r.role+'</p>';
+    if(r.params){h+='<h3>Paramètres d\'URL</h3>'+table(['Nom','Description'],r.params.map(function(p){return ['<code>'+p[0]+'</code>',p[1]]}))}
+    if(r.body){h+='<h3>Corps JSON</h3>'+table(['Champ','Type','Obligatoire','Défaut','Description'],r.body.map(function(f){return ['<code>'+f.name+'</code>','<code>'+f.type+'</code>',f.required,f.def,f.desc]}))}
+    if(r.fields){h+='<h3>Champs de la réponse</h3>'+table(['Champ','Description'],r.fields.map(function(f){return ['<code>'+f[0]+'</code>',f[1]]}))}
+    h+='<h3>Réponses</h3>'+table(['Code','Cas'],r.responses.map(function(c){return ['<code>'+c[0]+'</code>',c[1]]}));
+    if(r.responses.some(function(c){return c[0]>='400'})){h+='<p class="muted small">Toute erreur répond en JSON : <code>{ "error": "message" }</code>.</p>'}
+    if(r.notes){h+='<p class="muted">'+r.notes+'</p>'}
+    if(r.example){
+      h+='<h3>Exemple</h3><pre>'+esc(curlFor(r.method,r.example.path||r.path,r.example.request))+'</pre>';
+      if(r.example.response){h+='<pre>'+esc(r.example.status+'\n'+json(r.example.response))+'</pre>'}
+    }
+    if(!r.noTry){
+      h+='<div class="try" data-route="'+i+'"><h3>Essayer</h3>';
+      (r.params||[]).forEach(function(p){h+='<label>'+p[0]+'</label><input data-param="'+p[0]+'">'});
+      if(r.tryBody){h+='<label>Corps JSON (envoyé tel quel, même invalide)</label><textarea rows="6" spellcheck="false"></textarea>'}
+      h+='<div class="row"><button type="button" class="primary" data-send>Envoyer</button>';
+      if(r.params||r.tryBody){h+='<button type="button" data-refill>Reprendre l\'état de la page</button>'}
+      h+='<span data-meta class="muted"></span></div><pre data-out hidden></pre></div>';
+    }
+    return h+'</details>';
+  }).join('');
+  Array.prototype.forEach.call(document.querySelectorAll('.try'),refillTry);
+}
+function refillTry(box){
+  var r=ROUTES[Number(box.dataset.route)];
+  var area=box.querySelector('textarea');
+  if(area){area.value=json(r.tryBody())}
+  Array.prototype.forEach.call(box.querySelectorAll('[data-param]'),function(input){input.value=jobId||(jobs[0]&&jobs[0].id)||''});
+}
+function sendTry(box){
+  var r=ROUTES[Number(box.dataset.route)];
+  var meta=box.querySelector('[data-meta]'),out=box.querySelector('[data-out]');
+  var path=r.path.replace(/:(\w+)/g,function(_,name){return encodeURIComponent(box.querySelector('[data-param="'+name+'"]').value.trim())});
+  var opts={method:r.method};
+  var area=box.querySelector('textarea');
+  if(area){opts.headers={'Content-Type':'application/json'};opts.body=area.value}
+  meta.textContent='envoi de '+r.method+' '+path+'...';
+  var started=performance.now();
+  fetch(path,opts).then(function(res){
+    return res.text().then(function(text){
+      var ms=Math.round(performance.now()-started);
+      meta.innerHTML='<span class="pill '+(res.ok?'ok':'bad')+'">HTTP '+res.status+'</span> '+ms+' ms, <code>'+esc(r.method+' '+path)+'</code>';
+      var body=null;
+      try{body=JSON.parse(text)}catch(e){}
+      out.textContent=body===null?text:json(body);
+      out.hidden=false;
+      if(r.id==='start'&&res.status===202&&body){
+        var sent=null;
+        try{sent=JSON.parse(opts.body)}catch(e){}
+        addHistory(body.id,sent&&sent.torrentUrl&&!sent.torrentBase64?sent.torrentUrl.split('/').pop():'torrentBase64 (Essayer)');
+      }
+    });
+  }).catch(function(e){meta.innerHTML='<span class="pill bad">erreur réseau</span> '+esc(e.message);out.hidden=true});
+}
+
+startBtn.onclick=function(){
+  $('formError').textContent='';
   startBtn.disabled=true;
-  fetch('/downloads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({torrentUrl:url.value,outputDir:dir.value})})
+  var label=sourceLabel();
+  fetch('/downloads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(startBody())})
     .then(function(r){return r.json().then(function(b){return {ok:r.ok,body:b}})})
     .then(function(res){
       if(!res.ok){throw new Error(res.body.error||'requête refusée')}
-      jobId=res.body.id;
-      $('jobid').textContent='id '+jobId;
-      cancelBtn.disabled=false;
-      setStatus('downloading','');
-      poll();
-      timer=setInterval(poll,1000);
+      addHistory(res.body.id,label);
+      follow(res.body.id);
     })
-    .catch(function(e){startBtn.disabled=false;$('error').textContent=e.message});
+    .catch(function(e){startBtn.disabled=false;$('formError').textContent=e.message});
+};
+inspectBtn.onclick=function(){
+  $('formError').textContent='';
+  inspectBtn.disabled=true;
+  fetch('/torrents/inspect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sourceBody())})
+    .then(function(r){return r.json().then(function(b){return {ok:r.ok,code:r.status,body:b}})})
+    .then(function(res){
+      if(!res.ok){throw new Error('HTTP '+res.code+' : '+(res.body.error||'inspection refusée'))}
+      inspection=res.body;
+      selected={};
+      inspection.files.forEach(function(f){selected[f.index]=f.suggested&&!isPadding(f.path)});
+      renderInspection();
+      renderCurl();
+    })
+    .catch(function(e){$('formError').textContent=e.message})
+    .then(function(){inspectBtn.disabled=false});
 };
 cancelBtn.onclick=function(){
   if(!jobId){return}
   fetch('/downloads/'+encodeURIComponent(jobId),{method:'DELETE'}).then(function(){poll()});
 };
-url.oninput=renderCurl;
+$('torrentFile').onchange=function(){
+  var file=this.files[0];
+  if(!file){return}
+  var reader=new FileReader();
+  reader.onload=function(){
+    torrentFile={name:file.name,size:file.size,base64:String(reader.result).split(',')[1]||''};
+    renderSource();
+    resetInspection();
+  };
+  reader.readAsDataURL(file);
+};
+$('clearFile').onclick=function(){torrentFile=null;$('torrentFile').value='';renderSource();resetInspection()};
+$('hidePadding').onchange=renderFiles;
+$('verifyHash').onchange=renderCurl;
+Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'),function(b){b.onclick=function(){applyPreset(b.dataset.preset)}});
+$('followBtn').onclick=function(){var id=$('followId').value.trim();if(id){follow(id)}};
+$('followId').onkeydown=function(e){if(e.key==='Enter'){$('followBtn').click()}};
+$('clearHistory').onclick=function(){jobs=[];saveHistory();renderHistory()};
+$('historyRows').onclick=function(e){var b=e.target.closest('[data-follow]');if(b){follow(b.dataset.follow)}};
+$('routes').onclick=function(e){
+  var box=e.target.closest('.try');
+  if(!box){return}
+  if(e.target.closest('[data-send]')){sendTry(box)}
+  if(e.target.closest('[data-refill]')){refillTry(box)}
+};
+url.oninput=resetInspection;
 dir.oninput=renderCurl;
+renderRoutes();
+renderHistory();
 renderCurl();
 fetch('/health').then(function(r){return r.json()}).then(function(){
   var h=$('health');h.textContent='service : en ligne';h.className='pill ok';

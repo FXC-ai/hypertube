@@ -162,7 +162,7 @@ C passe avant B parce que le streaming suppose qu'une pièce bloquée finit par 
 
 ### Ticket A - sélection de fichiers
 
-- **Proposition du client** : la vidéo principale (le plus gros fichier dont l'extension est vidéo) et tous les fichiers de sous-titres. Sur Discord, FX a noté que les sous-titres d'un MP4 sont parfois des fichiers séparés, parfois des pistes du conteneur ; un MKV les contient en général. Proposer tous les sous-titres couvre les deux cas, Laravel décoche ce qu'il ne veut pas.
+- **Proposition du client** : la vidéo principale (le plus gros fichier dont l'extension est vidéo) et tous les fichiers de sous-titres non vides (archive.org publie parfois des sous-titres de 0 octet). Sur Discord, FX a noté que les sous-titres d'un MP4 sont parfois des fichiers séparés, parfois des pistes du conteneur ; un MKV les contient en général. Proposer tous les sous-titres couvre les deux cas, Laravel décoche ce qu'il ne veut pas.
 - **Laravel décide** : il renvoie les index qu'il veut. L'utilisateur final ne choisit pas (le sujet ne le demande pas).
 - **Pièces de bord** : une pièce peut contenir la fin d'un fichier choisi et le début d'un fichier non choisi. Elle est téléchargée en entier (le hash porte sur la pièce entière), mais seuls les octets du fichier choisi sont écrits. `computeOverlaps()` découpe déjà chaque pièce par fichier : il suffit de filtrer sur les fichiers choisis.
 - **Pièces à télécharger** : uniquement celles qui chevauchent au moins un fichier choisi.
