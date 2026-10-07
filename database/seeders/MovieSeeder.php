@@ -4,11 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\ConversionStatus;
 use App\Models\Movie;
-use Database\Factories\MovieFactory;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-
-
 
 class MovieSeeder extends Seeder
 {
@@ -36,5 +32,14 @@ class MovieSeeder extends Seeder
         Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
             ->create(['filename' => 'test5.mkv']);
+
+        // Downloaded through the Client Torrent on "Prepare video" (public domain, archive.org).
+        Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'His Girl Friday (1940)',
+                'filename' => 'his_girl_friday.mp4',
+                'torrent_url' => 'https://archive.org/download/his_girl_friday/his_girl_friday_archive.torrent',
+            ]);
     }
 }

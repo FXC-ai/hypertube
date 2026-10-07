@@ -2,24 +2,32 @@
 
 namespace App\Http\Controllers;
 
-
 use App\Enums\ConversionStatus;
+use App\Enums\DownloadStatus;
 use App\Jobs\ConvertMovie;
+use App\Jobs\DownloadMovie;
 use App\Models\Movie;
-use Inertia\Inertia;
-use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Inertia\Response;
 
 final class MovieConversionController extends Controller
 {
     public function store(Movie $movie): RedirectResponse
     {
-        Log::channel("my_debug")->debug("Etape 1 : ", ["MovieConversionController" => "store"]);
+        Log::channel('my_debug')->debug('Etape 1 : ', ['MovieConversionController' => 'store']);
+
+        // Movie still to download: DownloadMovie starts the download, then the conversion.
+        if ($movie->torrent_url !== null && ! in_array($movie->download_status, [DownloadStatus::Downloading, DownloadStatus::Completed], true)) {
+            DownloadMovie::dispatch($movie->id)->afterCommit();
+
+            return to_route('movies.show', $movie);
+        }
 
         $queued = Movie::query()
             ->whereKey($movie->id)
-            ->whereIn('conversion_status', [ConversionStatus::Pending->value, ConversionStatus::Failed->value,])
+            ->whereIn('conversion_status', [ConversionStatus::Pending->value, ConversionStatus::Failed->value])
             ->update(
                 [
                     'conversion_status' => ConversionStatus::Queued->value,
@@ -32,10 +40,10 @@ final class MovieConversionController extends Controller
 
             );
 
-        Log::channel("my_debug")->debug("MovieConversionController : ", ["method" => "store", "queued = " => $queued]);
+        Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queued = ' => $queued]);
 
         if ($queued === 1) {
-            Log::channel("my_debug")->debug("MovieConversionController : ", ["method" => "store", "queueud = " => $queued]);
+            Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queueud = ' => $queued]);
 
             ConvertMovie::dispatch($movie->id)->afterCommit();
         }
@@ -48,14 +56,13 @@ final class MovieConversionController extends Controller
         return Inertia::render(
             'movies/show',
             [
-                'conversion' =>
-                [
+                'conversion' => [
 
                     'status' => $movie->conversion_status->value,
                     'attempt' => $movie->conversion_attempt,
                     'error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
                     'playable' => $movie->isPlayable(),
-                ]
+                ],
             ]
         );
     }

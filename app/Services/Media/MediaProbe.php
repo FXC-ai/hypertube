@@ -11,9 +11,9 @@ use Symfony\Component\Process\Process;
 
 final class MediaProbe
 {
-    public function probe(string $inputPath): MediaInfo
+    public function probe(MovieInput $input): MediaInfo
     {
-        if (! is_file($inputPath)) {
+        if (! $input->isStream && ! is_file($input->location)) {
             throw new MediaConversionException('Source file not found.');
         }
 
@@ -21,16 +21,17 @@ final class MediaProbe
             (string) config('media.ffprobe_binary'),
             '-v',
             'error',
+            ...$input->inputOptions(),
             '-show_streams',
             '-of',
             'json',
-            $inputPath,
+            $input->location,
         ]);
-        $process->setTimeout(60);
+        $process->setTimeout($input->isStream ? (int) config('media.stream.probe_timeout_s') : 60);
         $process->run();
 
         if (! $process->isSuccessful()) {
-            throw new MediaConversionException('FFprobe failed : ' . $this->errorSummary($process), previous: new ProcessFailedException($process));
+            throw new MediaConversionException('FFprobe failed : '.$this->errorSummary($process), previous: new ProcessFailedException($process));
         }
 
         try {

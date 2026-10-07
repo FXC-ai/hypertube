@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 final class HlsCommandBuilder
 {
     /**@return list<string> */
-    public function build(string $inputPath, string $outputDirectory, SelectedTracks $tracks): array
+    public function build(MovieInput $input, string $outputDirectory, SelectedTracks $tracks): array
     {
         $segmentDuration = (int) config('media.hls.segment_duration', 6);
         $separator = DIRECTORY_SEPARATOR;
@@ -17,11 +17,14 @@ final class HlsCommandBuilder
             (string) config('media.ffmpeg_binary'),
             '-hide_banner',
             '-y',
+            // Without -xerror, a cut input stream ends with exit code 0 and a truncated HLS.
+            '-xerror',
             '-progress',
             'pipe:1',
             '-nostats',
+            ...$input->inputOptions(),
             '-i',
-            $inputPath,
+            $input->location,
             '-map',
             "0:{$tracks->video->index}",
         ];
@@ -63,8 +66,8 @@ final class HlsCommandBuilder
             '-hls_flags',
             'independent_segments+temp_file',
             '-hls_segment_filename',
-            $outputDirectory . $separator . 'video_%05d.ts',
-            $outputDirectory . $separator . 'video.m3u8',
+            $outputDirectory.$separator.'video_%05d.ts',
+            $outputDirectory.$separator.'video.m3u8',
         );
 
         foreach ($tracks->subtitles as $position => $subtitle) {
@@ -81,18 +84,18 @@ final class HlsCommandBuilder
                 '-segment_time',
                 (string) $segmentDuration,
                 '-segment_list',
-                $outputDirectory . $separator . "{$prefix}.m3u8",
+                $outputDirectory.$separator."{$prefix}.m3u8",
                 '-segment_list_type',
                 'm3u8',
                 '-segment_list_flags',
                 '+live',
                 '-segment_list_size',
                 '0',
-                $outputDirectory . $separator . "{$prefix}_%05d.vtt",
+                $outputDirectory.$separator."{$prefix}_%05d.vtt",
             );
         }
 
-        Log::channel("my_debug")->debug("HlsCommandBuilder = ", [$arguments]);
+        Log::channel('my_debug')->debug('HlsCommandBuilder = ', [$arguments]);
 
         return $arguments;
     }

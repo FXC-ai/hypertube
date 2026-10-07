@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ConversionStatus;
+use App\Enums\DownloadStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'conversion_started_at',
     'conversion_playable_at',
     'conversion_completed_at',
+    'torrent_url',
+    'download_status',
+    'download_id',
+    'download_file_index',
+    'download_error',
 ])]
 class Movie extends Model
 {
@@ -31,6 +37,7 @@ class Movie extends Model
     {
         return [
             'conversion_status' => ConversionStatus::class,
+            'download_status' => DownloadStatus::class,
             'conversion_started_at' => 'datetime',
             'conversion_playable_at' => 'datetime',
             'conversion_completed_at' => 'datetime',

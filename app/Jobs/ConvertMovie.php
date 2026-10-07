@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Data\SelectedTracks;
 use App\Enums\ConversionStatus;
 use App\Models\Movie;
 use App\Services\Media\HlsCommandBuilder;
@@ -10,16 +9,14 @@ use App\Services\Media\HlsConverter;
 use App\Services\Media\HlsMasterPlaylistBuilder;
 use App\Services\Media\HlsReadinessChecker;
 use App\Services\Media\MediaProbe;
+use App\Services\Media\MovieInputResolver;
 use App\Services\Media\TrackSelector;
-use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
-
-
 
 final class ConvertMovie implements ShouldQueue
 {
@@ -37,10 +34,11 @@ final class ConvertMovie implements ShouldQueue
         HlsCommandBuilder $commands,
         HlsReadinessChecker $hlsReadinessChecker,
         HlsMasterPlaylistBuilder $hlsMasterPlaylistBuilder,
-        HlsConverter $hlsConverter
+        HlsConverter $hlsConverter,
+        MovieInputResolver $inputs,
     ): void {
 
-        Log::channel("my_debug")->debug("Etape 2 : ", ["ConvertMovie" => "handle"]);
+        Log::channel('my_debug')->debug('Etape 2 : ', ['ConvertMovie' => 'handle']);
 
         $attempt = (string) Str::uuid();
         $startedAt = now();
@@ -63,24 +61,24 @@ final class ConvertMovie implements ShouldQueue
 
         $movie = Movie::query()->findOrFail($this->movieId);
 
-        Log::channel("my_debug")->debug("ConvertMovie", ["movie" => json_encode($movie, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+        Log::channel('my_debug')->debug('ConvertMovie', ['movie' => json_encode($movie, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
 
         try {
 
-            if (preg_match('/[\\\\\/]/', $movie->filename) === 1 || $movie->filename !== basename($movie->filename)) {
+            if (! self::isInsideMovieDirectory($movie->filename)) {
                 throw new \RuntimeException('Invalid file name.');
             }
 
-            $inputPath = Storage::disk('public')->path("movies/{$movie->id}/{$movie->filename}");
+            $input = $inputs->resolve($movie);
             $outputDirectory = Storage::disk('public')->path("movies/{$movie->id}/hls/{$attempt}");
 
             if (! is_dir($outputDirectory) && ! mkdir($outputDirectory, 0755, true)) {
                 throw new \RuntimeException('Can not create hls directory.');
             }
 
-            $tracksSelected = $trackSelector->select($probe->probe($inputPath));
+            $tracksSelected = $trackSelector->select($probe->probe($input));
 
-            Log::channel("my_debug")->debug("ConvertMovie ", ["tracksSelected" => json_encode($tracksSelected, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)]);
+            Log::channel('my_debug')->debug('ConvertMovie ', ['tracksSelected' => json_encode($tracksSelected, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)]);
 
             $published = false;
 
@@ -94,10 +92,11 @@ final class ConvertMovie implements ShouldQueue
                 &$published,
             ): void {
 
-                Log::channel("my_debug")->debug("publishWhenReady", ["called"]);
+                Log::channel('my_debug')->debug('publishWhenReady', ['called']);
 
                 if ($published || ! $hlsReadinessChecker->isReady($outputDirectory, $tracksSelected)) {
-                    Log::channel("my_debug")->debug("publishWhenReady stops", [$tracksSelected]);
+                    Log::channel('my_debug')->debug('publishWhenReady stops', [$tracksSelected]);
+
                     return;
                 }
 
@@ -116,7 +115,7 @@ final class ConvertMovie implements ShouldQueue
             };
 
             $hlsConverter->convert(
-                $commands->build($inputPath, $outputDirectory, $tracksSelected),
+                $commands->build($input, $outputDirectory, $tracksSelected),
                 $publishWhenReady,
             );
 
@@ -136,14 +135,17 @@ final class ConvertMovie implements ShouldQueue
                     'conversion_completed_at' => now(),
                 ]);
 
-            Log::channel("my_debug")->debug("ConverMovie", ["handle ended, la conversion est terminée."]);
+            Log::channel('my_debug')->debug('ConverMovie', ['handle ended, la conversion est terminée.']);
         } catch (Throwable $exception) {
-            Log::channel("my_debug")->error("ConvertMovie", ["exception : ", $exception]);
+            Log::channel('my_debug')->error('ConvertMovie', ['exception : ', $exception]);
 
             Movie::query()
                 ->whereKey($movie->id)
                 ->where('conversion_attempt', $attempt)
-                ->update(['conversion_status' => ConversionStatus::Failed->value]);
+                ->update([
+                    'conversion_status' => ConversionStatus::Failed->value,
+                    'conversion_error' => mb_substr($exception->getMessage(), 0, 2000),
+                ]);
 
             Log::error('Échec de conversion HLS.', [
                 'movie_id' => $movie->id,
@@ -153,5 +155,24 @@ final class ConvertMovie implements ShouldQueue
 
             throw ($exception);
         }
+    }
+
+    /**
+     * A torrent may keep the movie in a subfolder ("M(1931)/M.1931.mp4"): relative segments are
+     * allowed, but nothing that could leave movies/{id}.
+     */
+    private static function isInsideMovieDirectory(string $filename): bool
+    {
+        if ($filename === '' || str_contains($filename, '\\') || str_starts_with($filename, '/')) {
+            return false;
+        }
+
+        foreach (explode('/', $filename) as $segment) {
+            if (in_array($segment, ['', '.', '..'], true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
