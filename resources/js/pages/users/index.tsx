@@ -1,14 +1,14 @@
+import { Form, Head, InfiniteScroll, Link } from '@inertiajs/react';
+import UserController from '@/actions/App/Http/Controllers/UserController';
+import Heading from '@/components/heading';
+import InputError from '@/components/input-error';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useInitials } from '@/hooks/use-initials';
 import { index } from '@/routes/users';
-import { Form, Head, InfiniteScroll, Link } from '@inertiajs/react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import Heading from '@/components/heading';
-import UserController from '@/actions/App/Http/Controllers/UserController'
-
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import InputError from '@/components/input-error';
 
 type User = {
     id: number;
@@ -53,9 +53,7 @@ function UserItem({ user }: { user: User }) {
                     className="object-cover"
                 />
 
-                <AvatarFallback>
-                    {getInitials(user.username)}
-                </AvatarFallback>
+                <AvatarFallback>{getInitials(user.username)}</AvatarFallback>
             </Avatar>
 
             <span className="min-w-0 flex-1 truncate font-medium">
@@ -68,22 +66,24 @@ function UserItem({ user }: { user: User }) {
             >
                 {formatRegistrationDate(user.created_at)}
             </time>
-
         </Link>
     );
 }
 
 export default function UsersIndex({ users, filters }: UserIndexProps) {
-
     console.log(filters, users);
+
     return (
         <>
             <Head title="Users" />
 
-            <div className='flex h-full flex-1 flex-col gap-6 p-4'>
-
+            <div className="flex h-full flex-1 flex-col gap-6 p-4">
                 <div className="space-y-4">
-                    <Heading variant="small" title="Search" description="Search for a user by username" />
+                    <Heading
+                        variant="small"
+                        title="Search"
+                        description="Search for a user by username"
+                    />
 
                     <Form
                         {...UserController.index.form()}
@@ -95,43 +95,37 @@ export default function UsersIndex({ users, filters }: UserIndexProps) {
                             replace: true,
                         }}
                     >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="min-w-0 flex-1">
+                                    <Label htmlFor="search" className="sr-only">
+                                        Username
+                                    </Label>
+                                    <Input
+                                        id="search"
+                                        type="search"
+                                        name="search"
+                                        defaultValue={filters.search ?? ''}
+                                        placeholder="Search by username..."
+                                        aria-invalid={Boolean(errors.search)}
+                                        autoComplete="off"
+                                        maxLength={100}
+                                    />
+                                    <InputError
+                                        className="mt-2"
+                                        message={errors.search}
+                                    />
+                                </div>
 
-                        {
-                            ({ processing, errors }) => (
-                                <>
-                                    <div className="min-w-0 flex-1">
-
-                                        <Label htmlFor="search" className="sr-only">
-                                            Username
-                                        </Label>
-                                        <Input
-                                            id="search"
-                                            type="search"
-                                            name="search"
-                                            defaultValue={filters.search ?? ''}
-                                            placeholder="Search by username..."
-                                            aria-invalid={Boolean(errors.search)}
-                                            autoComplete='off'
-                                            maxLength={100}
-                                        />
-                                        <InputError
-                                            className="mt-2"
-                                            message={errors.search}
-                                        />
-
-                                    </div>
-
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="sm:shrink-0"
-                                    >
-                                        {processing ? 'Searching…' : 'Search'}
-                                    </Button>
-                                </>
-                            )
-                        }
-
+                                <Button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="sm:shrink-0"
+                                >
+                                    {processing ? 'Searching…' : 'Search'}
+                                </Button>
+                            </>
+                        )}
                     </Form>
 
                     {filters.search && (
@@ -141,37 +135,24 @@ export default function UsersIndex({ users, filters }: UserIndexProps) {
                             </Link>
                         </Button>
                     )}
-
                 </div>
 
-                {
-                    users.data.length > 0 ?
-                        (
-                            <InfiniteScroll data="users" buffer={300} onlyNext>
-
-                                {
-                                    users.data.map((user) => (<UserItem key={user.id} user={user}></UserItem>))
-                                }
-
-                            </InfiniteScroll>
-                        ) : (
-                            filters.search != null ?
-                                (
-
-                                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                                        {`No user found for username ${filters.search}.`}
-                                    </div>
-
-                                ) :
-                                (
-                                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                                        No user found.
-                                    </div>
-                                )
-                        )
-                }
+                {users.data.length > 0 ? (
+                    <InfiniteScroll data="users" buffer={300} onlyNext>
+                        {users.data.map((user) => (
+                            <UserItem key={user.id} user={user}></UserItem>
+                        ))}
+                    </InfiniteScroll>
+                ) : filters.search != null ? (
+                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                        {`No user found for username ${filters.search}.`}
+                    </div>
+                ) : (
+                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                        No user found.
+                    </div>
+                )}
             </div>
-
         </>
     );
 }

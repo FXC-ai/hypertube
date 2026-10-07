@@ -4,11 +4,16 @@ namespace App\Models;
 
 use App\Enums\ConversionStatus;
 use App\Enums\DownloadStatus;
+use Database\Factories\MovieFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property ConversionStatus $conversion_status
+ * @property DownloadStatus|null $download_status
+ */
 #[Fillable([
     'title',
     'filename',
@@ -26,8 +31,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class Movie extends Model
 {
+    /** @use HasFactory<MovieFactory> */
     use HasFactory;
 
+    /**
+     * @return HasMany<Comment, $this>
+     */
     public function comments(): HasMany
     {
         return $this->hasMany(Comment::class)->orderByDesc('created_at');

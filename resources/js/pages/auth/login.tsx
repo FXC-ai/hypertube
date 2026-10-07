@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -19,13 +19,15 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword }: Props) {
-
-    const [redirectingProvider, setRedirectingProvider] = useState<'github' | 'fortytwo' | null>(null);
+    const [redirectingProvider, setRedirectingProvider] = useState<
+        'github' | 'fortytwo' | null
+    >(null);
 
     const redirectToProvider = (provider: 'github' | 'fortytwo') => {
         setRedirectingProvider(provider);
         window.location.assign(redirect.url(provider));
     };
+
     return (
         <>
             <Head title="Log in" />
@@ -102,7 +104,7 @@ export default function Login({ status, canResetPassword }: Props) {
                             type="button"
                             className="mt-4 w-full"
                             variant="secondary"
-                            onClick={() => redirectToProvider("github")}
+                            onClick={() => redirectToProvider('github')}
                             disabled={redirectingProvider !== null}
                         >
                             {redirectingProvider === 'github' && <Spinner />}
@@ -113,7 +115,7 @@ export default function Login({ status, canResetPassword }: Props) {
                             type="button"
                             className="mt-2 w-full"
                             variant="secondary"
-                            onClick={() => redirectToProvider("fortytwo")}
+                            onClick={() => redirectToProvider('fortytwo')}
                             disabled={redirectingProvider !== null}
                         >
                             {redirectingProvider === 'fortytwo' && <Spinner />}
@@ -126,7 +128,6 @@ export default function Login({ status, canResetPassword }: Props) {
                                 Register
                             </TextLink>
                         </div>
-
                     </>
                 )}
             </Form>

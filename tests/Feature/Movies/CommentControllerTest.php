@@ -13,7 +13,6 @@ describe('movie show page', function () {
             'user_id' => $user->id,
         ]);
 
-
         $this->actingAs($user);
 
         $response = $this->get(route('movies.show', $movie));

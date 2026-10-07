@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 
 final class HlsCommandBuilder
 {
-    /**@return list<string> */
+    /** @return list<string> */
     public function build(MovieInput $input, string $outputDirectory, SelectedTracks $tracks): array
     {
         $segmentDuration = (int) config('media.hls.segment_duration', 6);

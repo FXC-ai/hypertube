@@ -16,7 +16,7 @@ final class TorrentClient
     /**
      * Lists the files of a .torrent without downloading them.
      *
-     * @return array{infoHash: string, mainVideoIndex: int|null, files: list<array{index: int, path: string, length: int, kind: string, suggested: bool}>}
+     * @return array{infoHash: string, mainVideoIndex: int|null, files: list<array{index: int, path: string, fileName: string, length: int, kind: string, suggested: bool}>}
      */
     public function inspect(string $torrentUrl): array
     {

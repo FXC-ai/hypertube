@@ -6,9 +6,6 @@ use App\Concerns\ProfilepictureRules;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-use Illuminate\Support\Facades\Log;
-
-
 class ProfilepictureRequest extends FormRequest
 {
     use ProfilepictureRules;
@@ -22,7 +19,6 @@ class ProfilepictureRequest extends FormRequest
     {
 
         $test = ['profilepicture' => $this->profilepictureRules()];
-
 
         return $test;
     }

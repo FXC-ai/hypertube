@@ -8,7 +8,7 @@ use Override;
 final readonly class MediaStream implements JsonSerializable
 {
     /**
-     *@paramarray<string, mixed> $disposition
+     * @param  array<string, mixed>  $disposition
      */
     public function __construct(
         public int $index,
@@ -48,6 +48,9 @@ final readonly class MediaStream implements JsonSerializable
         };
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     #[Override]
     public function jsonSerialize(): array
     {

@@ -3,6 +3,4 @@ export type Movie = {
     title: string;
     filename: string;
     filepath: string;
-
 };
-

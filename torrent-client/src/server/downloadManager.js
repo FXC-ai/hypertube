@@ -8,9 +8,9 @@ import {
   resolveFileIndexes,
   validateFileIndexesShape,
 } from '../fileSelection.js';
-import { downloadTorrent as defaultDownloadTorrent } from '../swarm/downloadTorrent.js';
 import { recheckPieces } from '../recheck.js';
 import { createPieceAvailability, PRIORITY } from '../stream/pieceAvailability.js';
+import { downloadTorrent as defaultDownloadTorrent } from '../swarm/downloadTorrent.js';
 import { parseTorrentFile } from '../torrentFile.js';
 import {
   computeFileLayout,
@@ -397,7 +397,8 @@ export function createDownloadManager({
 
     delete status.controller;
     status.files = job.files.map((fileStatus) => {
-      const { sniffing, ...publicFields } = fileStatus;
+      const publicFields = { ...fileStatus };
+      delete publicFields.sniffing;
       const file = files?.find((f) => f.index === fileStatus.index);
 
       return {

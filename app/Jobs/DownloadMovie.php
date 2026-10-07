@@ -55,7 +55,10 @@ final class DownloadMovie implements ShouldQueue
             $downloadId = $torrentClient->startDownload(
                 $movie->torrent_url,
                 Storage::disk('public')->path("movies/{$movie->id}"),
-                collect($inspection['files'])->where('suggested', true)->pluck('index')->values()->all(),
+                array_values(array_map(
+                    fn (array $file): int => $file['index'],
+                    array_filter($inspection['files'], fn (array $file): bool => $file['suggested']),
+                )),
                 $inspection['infoHash'],
             );
 

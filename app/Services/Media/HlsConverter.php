@@ -9,12 +9,12 @@ use Symfony\Component\Process\Process;
 final class HlsConverter
 {
     /**
-     *@paramlist<string> $command
-     *@paramcallable(): void $onProgress
+     * @param  list<string>  $command
+     * @param  callable(): void  $onProgress
      */
     public function convert(array $command, callable $onProgress): void
     {
-        Log::channel("my_debug")->debug("convert", ["called"]);
+        Log::channel('my_debug')->debug('convert', ['called']);
 
         $process = new Process($command);
         $process->setTimeout(null);
@@ -37,7 +37,7 @@ final class HlsConverter
             $error = trim($process->getErrorOutput());
 
             throw new MediaConversionException(
-                'FFmpeg a échoué : ' . mb_substr($error !== '' ? $error : 'erreur inconnue', 0, 2000),
+                'FFmpeg a échoué : '.mb_substr($error !== '' ? $error : 'erreur inconnue', 0, 2000),
             );
         }
     }

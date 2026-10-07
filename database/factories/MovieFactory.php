@@ -20,7 +20,7 @@ class MovieFactory extends Factory
      */
     public function definition(): array
     {
-        $filename = fake()->unique()->slug(3) . '.mp4';
+        $filename = fake()->unique()->slug(3).'.mp4';
         /** @var ConversionStatus $status */
         $status = fake()->randomElement(ConversionStatus::cases());
 
@@ -31,10 +31,9 @@ class MovieFactory extends Factory
         ];
     }
 
-
     public function withConversionStatus(ConversionStatus $status): static
     {
-        return $this->state(fn(): array => $this->conversionAttributes($status));
+        return $this->state(fn (): array => $this->conversionAttributes($status));
     }
 
     /**
@@ -100,7 +99,6 @@ class MovieFactory extends Factory
                 'conversion_playable_at' => fake()->boolean() ? $playableAt : null,
                 'conversion_completed_at' => null,
             ],
-            default => unreachable(),
         };
     }
 }

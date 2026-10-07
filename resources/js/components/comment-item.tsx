@@ -40,7 +40,7 @@ export default function CommentItem({ comment }: CommentItemProps) {
                     </span>
                 </div>
 
-                <p className="wrap-break-words mt-1 text-sm text-foreground whitespace-pre-wrap">
+                <p className="wrap-break-words mt-1 text-sm whitespace-pre-wrap text-foreground">
                     {comment.content}
                 </p>
 

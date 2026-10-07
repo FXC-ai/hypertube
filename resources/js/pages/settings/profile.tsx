@@ -1,15 +1,14 @@
 import { Form, Head, usePage } from '@inertiajs/react';
 import { Link } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import ProfilePictureController from '@/actions/App/Http/Controllers/Settings/ProfilePictureController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/profile';
-import { send } from '@/routes/verification';
-import type { Auth } from '@/types';
 import {
     Select,
     SelectContent,
@@ -17,20 +16,25 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
-import ProfilePictureController from '@/actions/App/Http/Controllers/Settings/ProfilePictureController';
-
+import { edit } from '@/routes/profile';
+import { send } from '@/routes/verification';
+import type { Auth } from '@/types';
 
 type PageProps = {
     auth: Auth;
 };
 
-export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: boolean; status?: string; }) {
-
+export default function Profile({
+    mustVerifyEmail,
+    status,
+}: {
+    mustVerifyEmail: boolean;
+    status?: string;
+}) {
     const { auth } = usePage<PageProps>().props;
     const getInitials = useInitials();
+
     return (
         <>
             <Head title="Profile settings" />
@@ -109,7 +113,9 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="preferredlanguage">Preferred Language</Label>
+                                <Label htmlFor="preferredlanguage">
+                                    Preferred Language
+                                </Label>
 
                                 <Select
                                     name="preferredlanguage"
@@ -118,17 +124,27 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                                 >
                                     <SelectTrigger
                                         id="preferredlanguage"
-                                        className='mt-1 w-full'
-                                        aria-invalid={Boolean(errors.preferredlanguage)}
+                                        className="mt-1 w-full"
+                                        aria-invalid={Boolean(
+                                            errors.preferredlanguage,
+                                        )}
                                     >
                                         <SelectValue placeholder="Select a language" />
                                     </SelectTrigger>
 
                                     <SelectContent>
-                                        <SelectItem value="english">English</SelectItem>
-                                        <SelectItem value="french">French</SelectItem>
-                                        <SelectItem value="german">German</SelectItem>
-                                        <SelectItem value="italian">Italian</SelectItem>
+                                        <SelectItem value="english">
+                                            English
+                                        </SelectItem>
+                                        <SelectItem value="french">
+                                            French
+                                        </SelectItem>
+                                        <SelectItem value="german">
+                                            German
+                                        </SelectItem>
+                                        <SelectItem value="italian">
+                                            Italian
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
 
@@ -175,11 +191,11 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
 
                                         {status ===
                                             'verification-link-sent' && (
-                                                <div className="mt-2 text-sm font-medium text-green-600">
-                                                    A new verification link has been
-                                                    sent to your email address.
-                                                </div>
-                                            )}
+                                            <div className="mt-2 text-sm font-medium text-green-600">
+                                                A new verification link has been
+                                                sent to your email address.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -204,12 +220,15 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                 >
                     {({ processing, errors }) => (
                         <>
-
                             <div className="grid gap-2">
                                 <Label htmlFor="email">Profile picture</Label>
                                 <Avatar className="h-40 w-64 overflow-hidden rounded-xl">
                                     <AvatarImage
-                                        src={auth.user.profilepicture ? `/storage/${auth.user.profilepicture}` : undefined}
+                                        src={
+                                            auth.user.profilepicture
+                                                ? `/storage/${auth.user.profilepicture}`
+                                                : undefined
+                                        }
                                         alt={auth.user.username}
                                         className="h-full w-full object-contain"
                                     />

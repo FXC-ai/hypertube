@@ -1,15 +1,7 @@
 import { Link, router } from '@inertiajs/react';
-import { LogOut, BookOpen, Settings, LayoutGrid, User, Film } from 'lucide-react';
+import { LogOut, Settings, LayoutGrid, User, Film } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
-import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
-import { NavUser } from '@/components/nav-user';
-import { logout } from '@/routes';
-import { edit } from '@/routes/profile';
-import { index } from '@/routes/users/index'
-
-import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
-
 import {
     Sidebar,
     SidebarContent,
@@ -19,13 +11,18 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { logout } from '@/routes';
 import { dashboard } from '@/routes';
+import { edit } from '@/routes/profile';
+import { index } from '@/routes/users/index';
+
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
         title: 'Video',
-        href: "/",
+        href: '/',
         icon: Film,
     },
     {
@@ -40,15 +37,6 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
-const footerNavItems: NavItem[] = [
-
-    {
-        title: 'Repository',
-        href: "",
-        icon: BookOpen,
-    },
-];
-
 export function AppSidebar() {
     const cleanup = useMobileNavigation();
 
@@ -57,12 +45,8 @@ export function AppSidebar() {
         router.flushAll();
     };
 
-
-
-
     return (
         <Sidebar collapsible="icon" variant="inset">
-
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>

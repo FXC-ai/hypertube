@@ -11,6 +11,7 @@ use Laravel\Socialite\Two\User;
 
 class FortyTwoProvider extends AbstractProvider implements ProviderInterface
 {
+    /** @var list<string> */
     protected $scopes = ['public'];
 
     protected $scopeSeparator = ' ';
@@ -29,6 +30,9 @@ class FortyTwoProvider extends AbstractProvider implements ProviderInterface
         return 'https://api.intra.42.fr/oauth/token';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     protected function getUserByToken($token): array
     {
         Log::channel('my_debug')->debug('getUserByToken ', [$token]);
@@ -38,7 +42,7 @@ class FortyTwoProvider extends AbstractProvider implements ProviderInterface
             [
                 RequestOptions::HEADERS => [
                     'Accept' => 'application/json',
-                    'Authorization' => 'Bearer ' . $token,
+                    'Authorization' => 'Bearer '.$token,
                 ],
             ],
         );
@@ -52,6 +56,9 @@ class FortyTwoProvider extends AbstractProvider implements ProviderInterface
         );
     }
 
+    /**
+     * @param  array<string, mixed>  $user
+     */
     protected function mapUserToObject(array $user): User
     {
         Log::channel('my_debug')->debug('mapUserToObject user = ', [$user]);

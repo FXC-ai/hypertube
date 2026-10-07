@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use App\Enums\Languages;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -15,6 +16,10 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property string $username
+ * @property string $firstname
+ * @property string $lastname
+ * @property string|null $profilepicture
+ * @property Languages|null $preferredlanguage
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string $password
@@ -42,11 +47,14 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'preferredlanguage' => Languages::class
+            'preferredlanguage' => Languages::class,
         ];
     }
 
-    public function socialAccounts()
+    /**
+     * @return HasMany<SocialAccount, $this>
+     */
+    public function socialAccounts(): HasMany
     {
         return $this->hasMany(SocialAccount::class);
     }
