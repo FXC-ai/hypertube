@@ -38,7 +38,10 @@ Le seul risque est d'interprétation : un correcteur pourrait estimer qu'un clie
 | Torrent | Notre client (`feature/torrent-performance`) | Transmission 4.1.3 | qBittorrent 5.2.4 |
 |---|---|---|---|
 | Bandes-annonces 1953 (2,3 Mo, pièce partagée par 6 fichiers) | 6 s | 12 s, SHA-1 identique à la référence | bloqué à 4/5 pièces |
+| *His Girl Friday*, 575 Mo, 7 seeds | 14 s, lisible à 10 s | 34 s ; ffprobe sur le flux à 18 s, premier segment HLS à 19 s | 31 à 46 s |
 | *M* (1931), 929 Mo, 2 web-seeds sur 3 morts | 34 s | 1331/1773 pièces en 6 min, pièces 0 et 1 jamais obtenues | 1772/1773 en 3 min |
+
+Pour *His Girl Friday*, « lisible » est mesuré comme Laravel le ferait : ffprobe puis ffmpeg (commande HLS du projet, options de reconnexion) lancés dès le `POST /downloads` sur `GET /downloads/:id/files/:index`, et le fichier final relié à plat (`movies/{id}/his_girl_friday.mp4`, 2 liens physiques).
 
 Sur *M*, le `_meta.xml` d'archive.org a été régénéré après la création du torrent : la pièce 0, qu'il partage avec le début du film, ne peut venir que d'un pair, et Transmission n'en trouvait qu'un. Résultat : le début du film n'arrive jamais, donc rien n'est lisible, alors que le reste se télécharge. Notre client contourne ce cas (pairs gardés ouverts, web-seeds par plages).
 

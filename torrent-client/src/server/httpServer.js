@@ -182,9 +182,21 @@ async function handleStream(req, res, manager, streamOptions, [, rawId, rawIndex
   }
 
   const { job, file } = found;
+  const ended = job.status === 'failed' || job.status === 'cancelled';
+
+  // Right after POST /downloads the .torrent is still being fetched and handed to
+  // Transmission: ffprobe, started at once by Laravel, is asked to come back (5xx retries).
+  if (!file?.diskPath && !ended && (job.layout.length === 0 || file)) {
+    res.writeHead(503, { 'Content-Type': 'application/json', 'Retry-After': '2' });
+    res.end(JSON.stringify({ error: 'The download is starting, try again shortly' }));
+
+    return;
+  }
 
   if (!file?.diskPath) {
-    sendJson(res, 404, { error: 'This file is not part of the download (or not known yet)' });
+    sendJson(res, ended ? 410 : 404, {
+      error: ended ? `download ${job.status}` : 'This file is not part of the download',
+    });
 
     return;
   }

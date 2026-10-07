@@ -31,6 +31,7 @@ async function withStream(states, fn, { status = 'downloading', error = null } =
     length: 30,
     torrentOffset: 0,
   };
+  job.layout = [file];
   const manager = {
     getStreamSource: (id, index) =>
       id === 'job' ? { job, file: index === 0 ? file : null } : null,
@@ -124,4 +125,20 @@ test('the piece map gives contiguous bytes, ranges and the bitfield across file 
   assert.equal(map.downloadedBytes(b), 20);
   assert.equal(map.countDone([1, 2, 3]), 2);
   assert.equal(map.bitfieldBase64(), Buffer.from([0b10110000]).toString('base64'));
+});
+
+test('while the download is still starting, the stream answers 503 instead of 404', async () => {
+  await withStream([0, 0, 0], async (url, { job }) => {
+    const file = job.layout[0];
+    delete file.diskPath; // added to Transmission, path not known yet
+    const known = await fetch(url);
+    assert.equal(known.status, 503);
+    assert.equal(known.headers.get('retry-after'), '2');
+
+    job.layout = []; // .torrent not even parsed yet: any index may still exist
+    assert.equal((await fetch(url.replace(/0$/, '5'))).status, 503);
+
+    job.status = 'failed';
+    assert.equal((await fetch(url)).status, 410);
+  });
 });
