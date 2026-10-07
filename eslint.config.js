@@ -49,7 +49,7 @@ export default [
         },
     },
     {
-        files: ['torrent-client/**/*.js'],
+        files: ['torrent-client/**/*.{js,mjs}'],
         languageOptions: {
             globals: {
                 ...globals.node,
@@ -114,6 +114,7 @@ export default [
         ignores: [
             'vendor',
             'node_modules',
+            'storage',
             'public',
             'bootstrap/ssr',
             'tailwind.config.js',

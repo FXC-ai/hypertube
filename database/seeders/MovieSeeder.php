@@ -4,11 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\ConversionStatus;
 use App\Models\Movie;
-use Database\Factories\MovieFactory;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-
-
 
 class MovieSeeder extends Seeder
 {

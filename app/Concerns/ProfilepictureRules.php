@@ -2,12 +2,14 @@
 
 namespace App\Concerns;
 
-
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
 
 trait ProfilepictureRules
 {
+    /**
+     * @return array<int, mixed>
+     */
     protected function profilepictureRules(): array
     {
         return [

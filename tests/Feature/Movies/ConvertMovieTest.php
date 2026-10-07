@@ -1,23 +1,18 @@
 <?php
 
-use Illuminate\Support\Facades\Queue;
-use App\Models\Movie;
 use App\Enums\ConversionStatus;
 use App\Exceptions\MediaConversionException;
 use App\Http\Controllers\MovieConversionController;
 use App\Jobs\ConvertMovie;
-
+use App\Models\Movie;
+use App\Services\Media\HlsCommandBuilder;
+use App\Services\Media\HlsConverter;
+use App\Services\Media\HlsMasterPlaylistBuilder;
+use App\Services\Media\HlsReadinessChecker;
 use App\Services\Media\MediaProbe;
 use App\Services\Media\TrackSelector;
-use App\Services\Media\HlsCommandBuilder;
-use App\Services\Media\HlsReadinessChecker;
-use App\Services\Media\HlsMasterPlaylistBuilder;
-use App\Services\Media\HlsConverter;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
-
-use Illuminate\Foundation\Testing\RefreshDatabase;
-
-
 
 test('a pending movie is queued and a conversion job is dispatched', function () {
     Queue::fake();
@@ -72,7 +67,7 @@ test('a conversion failure marks the movie as failed and rethrows the exception'
 
     $movie = Movie::factory()->withConversionStatus(ConversionStatus::Queued)->create(['filename' => 'source.mkv']);
 
-    expect(fn() => (new ConvertMovie($movie->id))->handle(
+    expect(fn () => (new ConvertMovie($movie->id))->handle(
         new MediaProbe,
         new TrackSelector,
         new HlsCommandBuilder,

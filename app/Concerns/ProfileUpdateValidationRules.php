@@ -24,7 +24,7 @@ trait ProfileUpdateValidationRules
             'firstname' => $this->firstlastnameRules(),
             'lastname' => $this->firstlastnameRules(),
             'email' => $this->emailRules($userId),
-            'preferredlanguage' => $this->preferredlanguageRules()
+            'preferredlanguage' => $this->preferredlanguageRules(),
         ];
     }
 
@@ -79,7 +79,7 @@ trait ProfileUpdateValidationRules
     {
         return [
             'sometimes',
-            Rule::enum(Languages::class)
+            Rule::enum(Languages::class),
         ];
     }
 }

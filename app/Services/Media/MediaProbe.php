@@ -30,7 +30,7 @@ final class MediaProbe
         $process->run();
 
         if (! $process->isSuccessful()) {
-            throw new MediaConversionException('FFprobe failed : ' . $this->errorSummary($process), previous: new ProcessFailedException($process));
+            throw new MediaConversionException('FFprobe failed : '.$this->errorSummary($process), previous: new ProcessFailedException($process));
         }
 
         try {

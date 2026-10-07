@@ -2,10 +2,10 @@
 
 namespace App\Concerns;
 
+use App\Enums\Languages;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
-use App\Enums\Languages;
 
 trait ProfileValidationRules
 {
@@ -34,8 +34,6 @@ trait ProfileValidationRules
     {
         return ['required', 'lowercase', 'string', 'max:255', Rule::unique(User::class)];
     }
-
-
 
     /**
      * Get the validation rules used to validate user firstnames.
@@ -71,7 +69,7 @@ trait ProfileValidationRules
     protected function preferredlanguageRules(): array
     {
         return [
-            Rule::enum(Languages::class)
+            Rule::enum(Languages::class),
         ];
     }
 }

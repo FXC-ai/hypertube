@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\IndexMovieCommentRequest;
 use App\Http\Requests\StoreCommentRequest;
 use App\Http\Resources\CommentResource;
-use App\Http\Requests\IndexMovieCommentRequest;
 use App\Models\Comment;
 use App\Models\Movie;
 use Illuminate\Http\RedirectResponse;
@@ -20,10 +20,11 @@ class CommentController extends Controller
         return Inertia::render(
             'comments/show',
             [
-                "comment" => $commentResource
+                'comment' => $commentResource,
             ]
         );
     }
+
     /**
      * Store a newly created comment in storage.
      */
@@ -52,7 +53,7 @@ class CommentController extends Controller
     /**
      * Index movie comments
      */
-    public function index(Movie $movie, IndexMovieCommentRequest $request): InertiaResponse
+    public function index(Movie $movie, IndexMovieCommentRequest $request): Response
     {
         $params = $request->validated();
 

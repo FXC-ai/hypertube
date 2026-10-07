@@ -4,33 +4,33 @@ namespace App\Data;
 
 final readonly class MediaInfo
 {
-    /**@paramlist<MediaStream> $streams */
+    /** @param list<MediaStream> $streams */
     public function __construct(public array $streams) {}
 
-    /**@return list<MediaStream> */
+    /** @return list<MediaStream> */
     public function videos(): array
     {
         return array_values(array_filter(
             $this->streams,
-            fn(MediaStream $stream): bool => $stream->type === 'video' && ! $stream->isAttachedPicture(),
+            fn (MediaStream $stream): bool => $stream->type === 'video' && ! $stream->isAttachedPicture(),
         ));
     }
 
-    /**@return list<MediaStream> */
+    /** @return list<MediaStream> */
     public function audios(): array
     {
         return array_values(array_filter(
             $this->streams,
-            fn(MediaStream $stream): bool => $stream->type === 'audio',
+            fn (MediaStream $stream): bool => $stream->type === 'audio',
         ));
     }
 
-    /**@return list<MediaStream> */
+    /** @return list<MediaStream> */
     public function subtitles(): array
     {
         return array_values(array_filter(
             $this->streams,
-            fn(MediaStream $stream): bool => $stream->type === 'subtitle'
+            fn (MediaStream $stream): bool => $stream->type === 'subtitle'
                 && $stream->isTextSubtitle(),
         ));
     }

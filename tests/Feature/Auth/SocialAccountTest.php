@@ -6,10 +6,8 @@ use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as SocialiteUser;
 
-
-
 test('a user can create an account via github', function () {
-    $githubUser = (new SocialiteUser())->map([
+    $githubUser = (new SocialiteUser)->map([
         'id' => 'github-user-123',
         'nickname' => 'octocat',
         'name' => 'Octo Cat',
@@ -35,7 +33,7 @@ test('a user can create an account via github', function () {
         'provider' => 'github',
     ]));
 
-    $user = App\Models\User::query()
+    $user = User::query()
         ->where('email', 'octocat@example.com')
         ->first();
 
@@ -56,7 +54,6 @@ test('a user can create an account via github', function () {
 
     $response->assertRedirect('/dashboard');
 });
-
 
 test('a user can create an account via fortytwo', function () {
 
@@ -130,7 +127,6 @@ test('an existing user can sign in via fortytwo', function () {
     $response->assertRedirect('/dashboard');
 });
 
-
 test('an existing user can sign in via github', function () {
     $user = User::factory()->create([
         'email' => 'octocat@example.com',
@@ -164,7 +160,6 @@ test('an existing user can sign in via github', function () {
 
     $response->assertRedirect('/dashboard');
 });
-
 
 test('a user created via fortytwo can sign in via github', function () {
     Socialite::fake('fortytwo', SocialiteUser::fake([
@@ -491,7 +486,7 @@ test(
         $socialiteProvider
             ->shouldReceive('user')
             ->once()
-            ->andThrow(new InvalidStateException());
+            ->andThrow(new InvalidStateException);
 
         Socialite::shouldReceive('driver')
             ->once()
