@@ -148,6 +148,7 @@ export function createDownloadManager({
         const fileStatus = {
           index: file.index,
           path: file.path,
+          fileName: file.fileName,
           length: file.length,
           downloadedBytes: 0,
           complete: file.length === 0,
@@ -296,7 +297,7 @@ export function createDownloadManager({
       }
 
       fileStatus.sniffing = true;
-      readHead(join(job.outputDir, file.path), needed)
+      readHead(join(job.outputDir, file.fileName), needed)
         .then((head) => {
           const format = detectContainerFormat(head);
           fileStatus.detectedContainer = format === 'webm/mkv' ? 'matroska' : format;
@@ -344,7 +345,7 @@ export function createDownloadManager({
       kind: 'ready',
       source: {
         file,
-        path: join(job.outputDir, file.path),
+        path: join(job.outputDir, file.fileName),
         pieceLength: streamSource.pieceLength,
         availability: streamSource.availability,
         endedState: () =>

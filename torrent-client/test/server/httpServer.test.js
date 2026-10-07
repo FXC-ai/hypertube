@@ -42,6 +42,7 @@ test('POST /torrents/inspect lists the files of a real torrent and suggests the 
     const main = inspection.files[inspection.mainVideoIndex];
     assert.equal(main.path, 'Sintel.mp4');
     assert.equal(main.container, 'mp4');
+    assert.equal(main.fileName, 'Sintel.mp4');
     assert.ok(inspection.files.some((f) => f.kind === 'subtitle'));
     assert.ok(inspection.files.some((f) => f.kind === 'other' && !f.suggested));
     for (const file of inspection.files) {

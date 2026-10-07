@@ -31,9 +31,9 @@ function fakeClientTorrent(array $downloadResponse = ['id' => 'job-1'], int $dow
             'infoHash' => INFO_HASH,
             'mainVideoIndex' => 2,
             'files' => [
-                ['index' => 0, 'path' => 'item_meta.sqlite', 'length' => 20, 'kind' => 'other', 'suggested' => false],
-                ['index' => 1, 'path' => 'movie.srt', 'length' => 5, 'kind' => 'subtitle', 'suggested' => true],
-                ['index' => 2, 'path' => 'movie.mp4', 'length' => 900, 'kind' => 'video', 'suggested' => true],
+                ['index' => 0, 'path' => 'item_meta.sqlite', 'fileName' => 'item_meta.sqlite', 'length' => 20, 'kind' => 'other', 'suggested' => false],
+                ['index' => 1, 'path' => 'Movie (1931)/movie.srt', 'fileName' => 'movie.srt', 'length' => 5, 'kind' => 'subtitle', 'suggested' => true],
+                ['index' => 2, 'path' => 'Movie (1931)/movie.mp4', 'fileName' => 'movie.mp4', 'length' => 900, 'kind' => 'video', 'suggested' => true],
             ],
         ]),
         '*/downloads' => Http::response($downloadResponse, $downloadStatus),

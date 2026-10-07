@@ -22,10 +22,10 @@ export async function recheckPieces(torrent, { outputDir, fileIndexes, onPiece, 
   const valid = new Set();
 
   async function handleFor(file) {
-    if (!handles.has(file.path)) {
+    if (!handles.has(file.fileName)) {
       handles.set(
-        file.path,
-        await open(join(outputDir, file.path), 'r').catch((err) => {
+        file.fileName,
+        await open(join(outputDir, file.fileName), 'r').catch((err) => {
           if (err.code === 'ENOENT') {
             return null;
           }
@@ -35,7 +35,7 @@ export async function recheckPieces(torrent, { outputDir, fileIndexes, onPiece, 
       );
     }
 
-    return handles.get(file.path);
+    return handles.get(file.fileName);
   }
 
   try {

@@ -62,7 +62,7 @@ final class DownloadMovie implements ShouldQueue
             Movie::query()->whereKey($movie->id)->update([
                 'download_id' => $downloadId,
                 'download_file_index' => $mainVideo['index'],
-                'filename' => $mainVideo['path'],
+                'filename' => $mainVideo['fileName'],
             ]);
         } catch (Throwable $exception) {
             Movie::query()->whereKey($movie->id)->update([

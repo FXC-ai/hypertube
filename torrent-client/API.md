@@ -40,10 +40,10 @@ Corps JSON : `torrentUrl` **ou** `torrentBase64`, mêmes règles que pour `POST 
   "totalLength": 2980052992,
   "mainVideoIndex": 0,
   "files": [
-    { "index": 0, "path": "Movie.mp4", "length": 2961234567, "kind": "video", "container": "mp4", "suggested": true },
-    { "index": 1, "path": "Movie.en.srt", "length": 81234, "kind": "subtitle", "container": null, "suggested": true },
-    { "index": 2, "path": "some_item_meta.sqlite", "length": 20480, "kind": "other", "container": null, "suggested": false },
-    { "index": 3, "path": "Movie.ogv", "length": 18716711, "kind": "video", "container": "ogg", "suggested": false }
+    { "index": 0, "path": "Movie/Movie.mp4", "fileName": "Movie.mp4", "length": 2961234567, "kind": "video", "container": "mp4", "suggested": true },
+    { "index": 1, "path": "Movie/Subs/Movie.en.srt", "fileName": "Movie.en.srt", "length": 81234, "kind": "subtitle", "container": null, "suggested": true },
+    { "index": 2, "path": "some_item_meta.sqlite", "fileName": "some_item_meta.sqlite", "length": 20480, "kind": "other", "container": null, "suggested": false },
+    { "index": 3, "path": "Movie/Movie.ogv", "fileName": "Movie.ogv", "length": 18716711, "kind": "video", "container": "ogg", "suggested": false }
   ]
 }
 ```
@@ -52,6 +52,8 @@ Corps JSON : `torrentUrl` **ou** `torrentBase64`, mêmes règles que pour `POST 
 |---|---|
 | `infoHash` | À renvoyer tel quel dans `expectedInfoHash` au `POST /downloads`, voir plus bas. |
 | `files[].index` | Identifiant du fichier pour `fileIndexes` et pour `GET /downloads/:id/files/:index`. C'est sa position dans la liste `files` du `.torrent`. |
+| `files[].path` | Chemin du fichier **dans le torrent**, sous-dossiers compris. |
+| `files[].fileName` | Nom du fichier **sur disque**, directement dans `outputDir` : tous les fichiers sont écrits à plat, sans les sous-dossiers du torrent. Deux fichiers de même nom (casse ignorée) deviennent `nom.ext` et `nom (2).ext`, dans l'ordre du torrent ; un nom vide, `.` ou `..` devient `file-<index>`. C'est la valeur à stocker côté Laravel (`movies/{id}/{fileName}`). |
 | `files[].kind` | `"video"` \| `"subtitle"` \| `"other"`, déduit de l'extension uniquement (aucun octet du film n'est lu à ce stade). Vidéo : `mp4`, `m4v`, `mov`, `mkv`, `webm`, `avi`, `ogv`. Sous-titre : `srt`, `vtt`, `ass`, `ssa`, `sub`. |
 | `files[].container` | `"mp4"` \| `"matroska"` \| `"ogg"` \| `"avi"` \| `null`, déduit de l'extension. |
 | `mainVideoIndex` | Le plus gros fichier `"video"`, ou `null` s'il n'y en a aucun. |
@@ -92,7 +94,7 @@ Corps JSON - deux façons de fournir le torrent, une seule à la fois :
 
 | Champ | Type | Description |
 |---|---|---|
-| `outputDir` | string | **Obligatoire.** Chemin absolu où écrire les fichiers du torrent, à l'intérieur du volume partagé. Pour un film, utiliser exactement `storage/app/public/movies/{movieId}` (vu depuis `app`, donc `/var/www/html/storage/app/public/movies/{movieId}` côté conteneur) - c'est le chemin que `Storage::disk('public')->path("movies/{id}/{filename}")` va relire côté Laravel. |
+| `outputDir` | string | **Obligatoire.** Chemin absolu où écrire les fichiers du torrent, à l'intérieur du volume partagé. Pour un film, utiliser exactement `storage/app/public/movies/{movieId}` (vu depuis `app`, donc `/var/www/html/storage/app/public/movies/{movieId}` côté conteneur) - c'est le chemin que `Storage::disk('public')->path("movies/{id}/{filename}")` va relire côté Laravel. Les fichiers y sont écrits à plat, sous leur `fileName` (voir `POST /torrents/inspect`). |
 | `torrentUrl` | string | URL d'un `.torrent` que le service télécharge lui-même avant de démarrer. |
 | `torrentBase64` | string | Contenu brut du `.torrent`, encodé en base64, si vous l'avez déjà en mémoire côté Laravel plutôt qu'une URL à fetch. |
 
@@ -173,7 +175,8 @@ Tous ces champs sont implémentés.
   "files": [
     {
       "index": 0,
-      "path": "Movie.mp4",
+      "path": "Movie/Movie.mp4",
+      "fileName": "Movie.mp4",
       "length": 2961234567,
       "downloadedBytes": 6291456,
       "contiguousBytesFromStart": 4194304,
@@ -182,7 +185,8 @@ Tous ces champs sont implémentés.
     },
     {
       "index": 1,
-      "path": "Movie.en.srt",
+      "path": "Movie/Subs/Movie.en.srt",
+      "fileName": "Movie.en.srt",
       "length": 81234,
       "downloadedBytes": 81234,
       "contiguousBytesFromStart": 81234,
@@ -202,7 +206,7 @@ Tous ces champs sont implémentés.
 | `status` | C | Nouvelle valeur `"checking"`, **état initial** d'un job : récupération du `.torrent` puis vérification des fichiers déjà présents dans `outputDir`, avant `"downloading"`. `piecesCompleted` et `downloadedBytes` y progressent au fil des pièces valides trouvées. Si tout est déjà sur disque, le job passe directement à `"completed"` sans contacter de tracker. `DELETE` annule aussi un job en `"checking"`. |
 | `downloadedBytes`, `totalBytes`, `piecesCompleted`, `totalPieces` | A | **Changement de sens** : ne comptent plus que les fichiers choisis (et les pièces qui les couvrent), plus tout le torrent. `totalBytes` est la somme des `files[].length`. |
 | `infoHash`, `pieceLength` | A | Info-hash et taille de pièce du torrent, `null` tant que le `.torrent` n'a pas été parsé. |
-| `files[]` | A | Un élément par fichier **choisi**, dans l'ordre des index : `index`, `path`, `length`, `downloadedBytes`, `complete`. Vide tant que le `.torrent` n'a pas été parsé. |
+| `files[]` | A | Un élément par fichier **choisi**, dans l'ordre des index : `index`, `path`, `fileName`, `length`, `downloadedBytes`, `complete`. Vide tant que le `.torrent` n'a pas été parsé. |
 | `files[].contiguousBytesFromStart` | B | Octets disponibles d'un seul tenant depuis le début du fichier. Indicateur pour "prêt à regarder" côté UI. |
 | `files[].detectedContainer` | B | Format lu dans les premiers octets du fichier, sans ffmpeg : `"mp4"` (boîte `ftyp` aux octets 4 à 8), `"matroska"` (en-tête EBML `1A 45 DF A3`, MKV et WebM), `"unknown"`, ou `null` tant que la première pièce du fichier n'est pas arrivée. Permet de repérer un faux fichier (un `.mp4` qui n'en est pas un) sans attendre la fin du téléchargement. Le client ne décide rien : c'est à Laravel d'annuler s'il le veut. Les pistes et codecs restent l'affaire de ffprobe. |
 | `files[].availableRanges` | B | Plages d'octets disponibles, `[début, fin exclue]`, fusionnées et triées, relatives au fichier. |

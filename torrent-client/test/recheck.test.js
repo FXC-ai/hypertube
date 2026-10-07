@@ -91,3 +91,14 @@ test('a piece shared with an unchosen file cannot be verified from disk and is n
     assert.deepEqual([...all].sort(), [0, 1, 2]);
   });
 });
+
+test('a file nested in a folder of the torrent is rechecked where it was written, in outputDir', async () => {
+  const stream = Buffer.alloc(32, 7);
+  const torrent = torrentFor(stream, [{ path: 'M(1931)/movie.mp4', length: 32 }]);
+
+  await withTempDir(async (outputDir) => {
+    await writeFile(join(outputDir, 'movie.mp4'), stream);
+    const valid = await recheckPieces(torrent, { outputDir, fileIndexes: [0] });
+    assert.deepEqual([...valid].sort(), [0, 1]);
+  });
+});

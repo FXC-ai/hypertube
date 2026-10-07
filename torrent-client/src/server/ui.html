@@ -164,8 +164,8 @@ var EXAMPLE_HASH='3f4c8a0b9d2e7f61a5c4b3d2e1f0a9b8c7d6e5f4';
 var EXAMPLE_DIR='/var/www/html/storage/app/public/movies/42';
 var EXAMPLE_URL='https://archive.org/download/some_item/some_item_archive.torrent';
 var EXAMPLE_STATUS={id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[
-  {index:0,path:'Movie.mp4',length:2961234567,downloadedBytes:6291456,complete:false,detectedContainer:'mp4',contiguousBytesFromStart:4194304,availableRanges:[[0,4194304],[2959137415,2961234567]]},
-  {index:1,path:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true,detectedContainer:'unknown',contiguousBytesFromStart:81234,availableRanges:[[0,81234]]}],sources:{active:3,dropped:2},error:null,outputDir:EXAMPLE_DIR,pieces:'wAAAAAAAAAA...AAE='};
+  {index:0,path:'Movie/Movie.mp4',fileName:'Movie.mp4',length:2961234567,downloadedBytes:6291456,complete:false,detectedContainer:'mp4',contiguousBytesFromStart:4194304,availableRanges:[[0,4194304],[2959137415,2961234567]]},
+  {index:1,path:'Movie/Subs/Movie.en.srt',fileName:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true,detectedContainer:'unknown',contiguousBytesFromStart:81234,availableRanges:[[0,81234]]}],sources:{active:3,dropped:2},error:null,outputDir:EXAMPLE_DIR,pieces:'wAAAAAAAAAA...AAE='};
 var STATUS_VALUES='<code>"checking"</code>, <code>"downloading"</code>, <code>"completed"</code>, <code>"failed"</code> ou <code>"cancelled"</code>';
 
 // Single source of truth for the API reference, the curl examples and the "Essayer" forms.
@@ -191,17 +191,18 @@ var ROUTES=[
   ['totalLength','taille totale du torrent en octets, tous fichiers compris'],
   ['mainVideoIndex','index du plus gros fichier <code>"video"</code>, ou <code>null</code> s\'il n\'y en a aucun'],
   ['files[].index','position dans la liste du <code>.torrent</code>, à utiliser dans <code>fileIndexes</code>'],
-  ['files[].path, files[].length','chemin relatif et taille en octets'],
+  ['files[].path, files[].length','chemin dans le torrent (sous-dossiers compris) et taille en octets'],
+  ['files[].fileName','nom du fichier sur disque, directement dans <code>outputDir</code> : les sous-dossiers du torrent sont retirés, un doublon devient <code>nom (2).ext</code>. À stocker côté Laravel.'],
   ['files[].kind','<code>"video"</code>, <code>"subtitle"</code> ou <code>"other"</code>, déduit de l\'extension'],
   ['files[].container','<code>"mp4"</code>, <code>"matroska"</code>, <code>"ogg"</code>, <code>"avi"</code> ou <code>null</code>, déduit de l\'extension'],
   ['files[].suggested','proposition du client : la vidéo principale et les sous-titres non vides (tout si aucune vidéo)']],
  responses:[['200','inspection réussie'],['400','JSON invalide, ni <code>torrentUrl</code> ni <code>torrentBase64</code>, ou <code>.torrent</code> malformé'],['502','<code>torrentUrl</code> injoignable ou réponse HTTP non-2xx']],
  notes:'archive.org peut régénérer le <code>.torrent</code> servi à la même URL : entre l\'inspection et le lancement, les index peuvent changer de sens. D\'où <code>expectedInfoHash</code>.',
  example:{request:{torrentUrl:EXAMPLE_URL},status:200,response:{infoHash:EXAMPLE_HASH,name:'some_item',pieceLength:2097152,totalPieces:1421,totalLength:2980052992,mainVideoIndex:0,files:[
-  {index:0,path:'Movie.mp4',length:2961234567,kind:'video',container:'mp4',suggested:true},
-  {index:1,path:'Movie.en.srt',length:81234,kind:'subtitle',container:null,suggested:true},
-  {index:2,path:'some_item_meta.sqlite',length:20480,kind:'other',container:null,suggested:false},
-  {index:3,path:'Movie.ogv',length:18716711,kind:'video',container:'ogg',suggested:false}]}},
+  {index:0,path:'Movie/Movie.mp4',fileName:'Movie.mp4',length:2961234567,kind:'video',container:'mp4',suggested:true},
+  {index:1,path:'Movie/Subs/Movie.en.srt',fileName:'Movie.en.srt',length:81234,kind:'subtitle',container:null,suggested:true},
+  {index:2,path:'some_item_meta.sqlite',fileName:'some_item_meta.sqlite',length:20480,kind:'other',container:null,suggested:false},
+  {index:3,path:'Movie/Movie.ogv',fileName:'Movie.ogv',length:18716711,kind:'video',container:'ogg',suggested:false}]}},
  tryBody:function(){return sourceBody()}},
 {id:'start',method:'POST',path:'/downloads',summary:'démarre un téléchargement en arrière-plan',
  role:'Crée un job en mémoire et répond tout de suite avec son id. Récupération du <code>.torrent</code>, trackers et pièces se font ensuite, en arrière-plan : suivre avec <code>GET /downloads/:id</code>. Le job commence en <code>"checking"</code> : si <code>outputDir</code> contient déjà des fichiers de ce torrent, chaque pièce y est revérifiée et seules les manquantes ou corrompues sont retéléchargées. Relancer sur le même <code>outputDir</code> reprend donc un téléchargement interrompu.',
@@ -224,7 +225,7 @@ var ROUTES=[
   ['downloadedBytes, totalBytes','progression en octets, fichiers choisis seulement. <code>totalBytes</code> vaut <code>null</code> tant que le <code>.torrent</code> n\'est pas parsé.'],
   ['piecesCompleted, totalPieces','progression en pièces qui couvrent les fichiers choisis'],
   ['infoHash, pieceLength','<code>null</code> tant que le <code>.torrent</code> n\'est pas parsé'],
-  ['files[]','un élément par fichier choisi : <code>index</code>, <code>path</code>, <code>length</code>, <code>downloadedBytes</code>, <code>complete</code>'],
+  ['files[]','un élément par fichier choisi : <code>index</code>, <code>path</code>, <code>fileName</code>, <code>length</code>, <code>downloadedBytes</code>, <code>complete</code>'],
   ['files[].contiguousBytesFromStart','octets disponibles d\'un seul tenant depuis le début du fichier'],
   ['files[].availableRanges','plages disponibles <code>[début, fin exclue]</code>, fusionnées et triées, relatives au fichier'],
   ['files[].detectedContainer','format lu dans les premiers octets : <code>"mp4"</code>, <code>"matroska"</code>, <code>"unknown"</code>, ou <code>null</code> tant que la première pièce n\'est pas arrivée'],
@@ -274,6 +275,7 @@ function fmtBytes(n){
 }
 function esc(t){var d=document.createElement('div');d.textContent=String(t);return d.innerHTML}
 function json(v){return JSON.stringify(v,null,2)}
+function onDisk(f){return f.fileName&&f.fileName!==f.path?'<div class="muted small">sur disque : <code>'+esc(f.fileName)+'</code></div>':''}
 function isPadding(path){return /(^|\/)\.?_{4,}padding_file/.test(path)}
 function statusClass(s){return s==='completed'?'ok':(s==='failed'||s==='inconnu'?'bad':(s==='cancelled'?'warn':''))}
 
@@ -362,7 +364,7 @@ function renderFiles(){
     if(pad&&hidePad){return ''}
     var badges=(f.index===inspection.mainVideoIndex?' <span class="pill ok kind">principale</span>':'')+(f.length===0?' <span class="pill warn kind">vide</span>':'');
     var kind=pad?'bourrage':KIND_LABEL[f.kind]+(f.container?' · '+f.container:'');
-    return '<tr'+(pad?' class="pad"':'')+'><td><input type="checkbox" value="'+f.index+'"'+(selected[f.index]?' checked':'')+(pad?' disabled':'')+'></td><td class="num muted">'+f.index+'</td><td><code>'+esc(f.path)+'</code>'+badges+'</td><td><span class="pill kind">'+kind+'</span></td><td class="num">'+fmtBytes(f.length)+'</td></tr>';
+    return '<tr'+(pad?' class="pad"':'')+'><td><input type="checkbox" value="'+f.index+'"'+(selected[f.index]?' checked':'')+(pad?' disabled':'')+'></td><td class="num muted">'+f.index+'</td><td><code>'+esc(f.path)+'</code>'+badges+onDisk(f)+'</td><td><span class="pill kind">'+kind+'</span></td><td class="num">'+fmtBytes(f.length)+'</td></tr>';
   }).join('');
   Array.prototype.forEach.call(document.querySelectorAll('#files input'),function(c){
     c.onchange=function(){selected[Number(c.value)]=c.checked;renderCurl()};
@@ -394,7 +396,7 @@ function render(job){
   $('progressRows').innerHTML=files.map(function(f){
     var p=f.length?f.downloadedBytes/f.length*100:100;
     var info='lisible depuis le début : '+fmtBytes(f.contiguousBytesFromStart)+(f.detectedContainer?' - conteneur détecté : '+f.detectedContainer:'');
-    return '<tr><td><code>'+esc(f.path)+'</code><div class="mini'+(f.complete?' done':'')+'"><div style="width:'+p+'%"></div></div><div class="muted" style="font-size:12px">'+esc(info)+'</div></td><td class="num">'+fmtBytes(f.downloadedBytes)+' / '+fmtBytes(f.length)+'</td></tr>';
+    return '<tr><td><code>'+esc(f.path)+'</code>'+onDisk(f)+'<div class="mini'+(f.complete?' done':'')+'"><div style="width:'+p+'%"></div></div><div class="muted" style="font-size:12px">'+esc(info)+'</div></td><td class="num">'+fmtBytes(f.downloadedBytes)+' / '+fmtBytes(f.length)+'</td></tr>';
   }).join('');
   drawPieces(job.pieces,job.infoHash);
   attachPlayer(job);

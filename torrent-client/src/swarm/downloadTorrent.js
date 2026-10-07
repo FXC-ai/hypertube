@@ -162,11 +162,11 @@ export async function downloadTorrent(torrent, peers, options) {
   // keeps the pieces already verified on disk.
   const fileHandlePromises = new Map();
   function handleFor(file) {
-    let promise = fileHandlePromises.get(file.path);
+    let promise = fileHandlePromises.get(file.fileName);
 
     if (!promise) {
       promise = (async () => {
-        const fullPath = join(outputDir, file.path);
+        const fullPath = join(outputDir, file.fileName);
         await mkdir(dirname(fullPath), { recursive: true });
 
         return open(fullPath, 'r+').catch((err) => {
@@ -177,7 +177,7 @@ export async function downloadTorrent(torrent, peers, options) {
           throw err;
         });
       })();
-      fileHandlePromises.set(file.path, promise);
+      fileHandlePromises.set(file.fileName, promise);
     }
 
     return promise;
@@ -288,7 +288,7 @@ export async function downloadTorrent(torrent, peers, options) {
     // Zero-length files overlap no piece, so touch every file to make sure they all exist.
     await Promise.all(wantedFiles.map((file) => handleFor(file)));
 
-    return { outputDir, piecesDownloaded: completed, files: wantedFiles.map((f) => f.path) };
+    return { outputDir, piecesDownloaded: completed, files: wantedFiles.map((f) => f.fileName) };
   } finally {
     await refreshing;
     await Promise.all(

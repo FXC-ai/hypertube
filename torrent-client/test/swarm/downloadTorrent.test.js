@@ -238,6 +238,35 @@ test('with fileIndexes, only the pieces covering the chosen file are fetched and
   }
 });
 
+test('files nested in folders of the torrent are written straight into outputDir', async () => {
+  const pieces = buildPieces(2);
+  const stream = Buffer.concat(pieces);
+  const torrent = {
+    ...torrentFor(pieces),
+    files: [
+      { path: 'M(1931)/movie.mp4', length: 20000 },
+      { path: 'M(1931)/Subs/movie.en.srt', length: stream.length - 20000 },
+    ],
+  };
+  const server = await startFakePeer(pieces);
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(
+        torrent,
+        [{ ip: '127.0.0.1', port: server.address().port }],
+        { infoHash: INFO_HASH, peerId: CLIENT_PEER_ID, outputDir, concurrency: 2 },
+      );
+      assert.deepEqual(result.files, ['movie.mp4', 'movie.en.srt']);
+      assert.ok((await readFile(join(outputDir, 'movie.mp4'))).equals(stream.subarray(0, 20000)));
+      assert.ok((await readFile(join(outputDir, 'movie.en.srt'))).equals(stream.subarray(20000)));
+      await assert.rejects(access(join(outputDir, 'M(1931)')), { code: 'ENOENT' });
+    });
+  } finally {
+    server.close();
+  }
+});
+
 test('combines a real peer and a web-seed in the same download rather than picking one', async () => {
   const pieces = buildPieces(10);
   const torrent = torrentFor(pieces);

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeOverlaps, computeWantedPieces } from '../src/torrentLayout.js';
+import {
+  computeFileLayout,
+  computeFileNames,
+  computeOverlaps,
+  computeWantedPieces,
+} from '../src/torrentLayout.js';
 
 test('computeOverlaps: a range straddling two files', () => {
   const layout = [
@@ -27,4 +32,46 @@ test('computeWantedPieces: only pieces touching a wanted file, boundary pieces i
   assert.deepEqual(computeWantedPieces(layout, pieceRanges, new Set([1])), [0, 1, 2]);
   assert.deepEqual(computeWantedPieces(layout, pieceRanges, new Set([0])), [0]);
   assert.deepEqual(computeWantedPieces(layout, pieceRanges, new Set([2])), []);
+});
+
+test('computeFileNames: every file goes straight into outputDir, clashes get a number', () => {
+  assert.deepEqual(
+    computeFileNames([
+      'M(1931)/M.1931.mp4',
+      'M(1931)/M.1931.English.srt',
+      'Subs/English.srt',
+      'Extras/english.SRT',
+      'Extras/English.srt',
+      '../../evil.sh',
+      'dir/..',
+      '.____padding_file/0',
+    ]),
+    [
+      'M.1931.mp4',
+      'M.1931.English.srt',
+      'English.srt',
+      'english (2).SRT',
+      'English (3).srt',
+      'evil.sh',
+      'file-6',
+      '0',
+    ],
+  );
+});
+
+test('computeFileLayout: each entry carries its flat fileName next to its torrent path', () => {
+  const layout = computeFileLayout({
+    files: [
+      { path: 'M(1931)/M.1931.mp4', length: 10 },
+      { path: 'M(1931)/M.1931.English.srt', length: 5 },
+    ],
+  });
+
+  assert.deepEqual(
+    layout.map((f) => [f.path, f.fileName, f.torrentOffset]),
+    [
+      ['M(1931)/M.1931.mp4', 'M.1931.mp4', 0],
+      ['M(1931)/M.1931.English.srt', 'M.1931.English.srt', 10],
+    ],
+  );
 });
