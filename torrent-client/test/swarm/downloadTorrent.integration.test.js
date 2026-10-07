@@ -71,7 +71,6 @@ test(
         concurrency: Math.min(40, reachablePeers.length * 4),
         pieceTimeoutMs: 15000,
         connectTimeoutMs: 5000,
-        maxAttemptsPerPiece: Math.max(6, reachablePeers.length * 3),
       });
 
       assert.equal(result.piecesDownloaded, torrent.pieces.length);

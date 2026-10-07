@@ -133,10 +133,10 @@ dt{color:var(--muted)}dd{margin:0;min-width:0;word-break:break-all}
 <h2>Comment ça marche</h2>
 <ol>
 <li><code>POST /torrents/inspect</code> (bouton Inspecter, facultatif) lit le <code>.torrent</code> et liste ses fichiers, sans rien télécharger d'autre. Les index cochés partent dans <code>fileIndexes</code>, avec l'<code>expectedInfoHash</code> de l'inspection.</li>
-<li><code>POST /downloads</code> crée un job en mémoire et répond <code>202</code> avec son id tout de suite. Le travail continue en arrière-plan.</li>
+<li><code>POST /downloads</code> crée un job en mémoire (état <code>checking</code> : si <code>outputDir</code> contient déjà des fichiers de ce torrent, chaque pièce y est revérifiée par SHA-1 et celles qui sont bonnes ne sont pas retéléchargées ; relancer sur le même dossier reprend donc un téléchargement interrompu) et répond <code>202</code> avec son id tout de suite. Le travail continue en arrière-plan.</li>
 <li>Le <code>.torrent</code> est téléchargé puis décodé (bencode). Le SHA-1 du dictionnaire <code>info</code> donne l'info-hash.</li>
 <li>Les trackers (HTTP ou UDP) sont interrogés pour obtenir une liste de pairs.</li>
-<li>Pairs et web-seeds (serveurs HTTP de l'<code>url-list</code>) sont mélangés dans une seule liste de sources. Un pool de 10 workers télécharge les pièces en parallèle, chacune vérifiée par SHA-1, et retentée sur une autre source si elle échoue.</li>
+<li>Pairs et web-seeds (serveurs HTTP de l'<code>url-list</code>) sont mélangés dans une seule liste de sources. Un pool de 10 workers télécharge les pièces en parallèle, chacune vérifiée par SHA-1. Une pièce en échec attend un délai croissant puis repart vers la source qui l'a le moins ratée. Une source injoignable 3 fois de suite est mise de côté 30 s, une source qui envoie 2 pièces corrompues est écartée pour de bon, et les trackers sont réinterrogés quand il reste moins de 3 sources. Le téléchargement n'échoue que si aucune pièce n'aboutit pendant 2 min.</li>
 <li>Seules les pièces qui touchent un fichier choisi sont téléchargées. Chaque pièce valide est écrite à son offset dans le ou les fichiers choisis qu'elle recouvre ; la part d'une pièce qui appartient à un fichier non choisi est jetée. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
 </ol>
 <p class="muted">Cet item archive.org n'a quasiment aucun pair : le contenu vient du web-seed (HTTP Range) des serveurs d'archive.org. Il faut donc que le service ait accès à Internet, et que archive.org soit disponible.</p>
@@ -150,7 +150,7 @@ var EXAMPLE_ID='2ce4f502-b325-444f-9053-da3174fb94b5';
 var EXAMPLE_HASH='3f4c8a0b9d2e7f61a5c4b3d2e1f0a9b8c7d6e5f4';
 var EXAMPLE_DIR='/var/www/html/storage/app/public/movies/42';
 var EXAMPLE_URL='https://archive.org/download/some_item/some_item_archive.torrent';
-var STATUS_VALUES='<code>"downloading"</code>, <code>"completed"</code>, <code>"failed"</code> ou <code>"cancelled"</code>';
+var STATUS_VALUES='<code>"checking"</code>, <code>"downloading"</code>, <code>"completed"</code>, <code>"failed"</code> ou <code>"cancelled"</code>';
 
 // Single source of truth for the API reference, the curl examples and the "Essayer" forms.
 // Keep it in line with torrent-client/API.md.
@@ -188,7 +188,7 @@ var ROUTES=[
   {index:3,path:'Movie.ogv',length:18716711,kind:'video',container:'ogg',suggested:false}]}},
  tryBody:function(){return sourceBody()}},
 {id:'start',method:'POST',path:'/downloads',summary:'démarre un téléchargement en arrière-plan',
- role:'Crée un job en mémoire et répond tout de suite avec son id. Récupération du <code>.torrent</code>, trackers et pièces se font ensuite, en arrière-plan : suivre avec <code>GET /downloads/:id</code>.',
+ role:'Crée un job en mémoire et répond tout de suite avec son id. Récupération du <code>.torrent</code>, trackers et pièces se font ensuite, en arrière-plan : suivre avec <code>GET /downloads/:id</code>. Le job commence en <code>"checking"</code> : si <code>outputDir</code> contient déjà des fichiers de ce torrent, chaque pièce y est revérifiée et seules les manquantes ou corrompues sont retéléchargées. Relancer sur le même <code>outputDir</code> reprend donc un téléchargement interrompu.',
  body:[
   {name:'outputDir',type:'string',required:'oui',def:'-',desc:'Chemin absolu où écrire les fichiers. Pour un film : <code>'+EXAMPLE_DIR.replace('42','{movieId}')+'</code>.'},
   {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code>.'},
@@ -201,26 +201,27 @@ var ROUTES=[
  example:{request:{torrentUrl:EXAMPLE_URL,outputDir:EXAMPLE_DIR,fileIndexes:[0,1],expectedInfoHash:EXAMPLE_HASH},status:202,response:{id:EXAMPLE_ID}},
  tryBody:function(){return startBody()}},
 {id:'status',method:'GET',path:'/downloads/:id',summary:'état et progression d\'un téléchargement',
- role:'État courant d\'un job. Pas de notification : l\'appelant sonde cette route (toutes les 1 à 2 s) tant que <code>status</code> vaut <code>"downloading"</code>.',
+ role:'État courant d\'un job. Pas de notification : l\'appelant sonde cette route (toutes les 1 à 2 s) tant que <code>status</code> vaut <code>"checking"</code> ou <code>"downloading"</code>.',
  params:[['id','UUID renvoyé par <code>POST /downloads</code>']],
  fields:[
-  ['status',STATUS_VALUES],
+  ['status',STATUS_VALUES+'. <code>"checking"</code> est l\'état initial : récupération du <code>.torrent</code> puis revérification des fichiers déjà dans <code>outputDir</code>.'],
   ['downloadedBytes, totalBytes','progression en octets, fichiers choisis seulement. <code>totalBytes</code> vaut <code>null</code> tant que le <code>.torrent</code> n\'est pas parsé.'],
   ['piecesCompleted, totalPieces','progression en pièces qui couvrent les fichiers choisis'],
   ['infoHash, pieceLength','<code>null</code> tant que le <code>.torrent</code> n\'est pas parsé'],
   ['files[]','un élément par fichier choisi : <code>index</code>, <code>path</code>, <code>length</code>, <code>downloadedBytes</code>, <code>complete</code>'],
-  ['error','<code>null</code>, ou la cause de l\'échec quand <code>status</code> vaut <code>"failed"</code>'],
+  ['sources','<code>{ active, dropped }</code> : sources utilisables et écartées, pairs et web-seeds confondus. <code>null</code> avant le début du téléchargement.'],
+  ['error','<code>null</code>, ou la cause de l\'échec quand <code>status</code> vaut <code>"failed"</code> (cause réseau précise, pièces bloquées et sources écartées)'],
   ['outputDir','tel que reçu au lancement']],
  responses:[['200','job connu'],['404','id inconnu, y compris après un redémarrage du service (état en mémoire)']],
  example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[
   {index:0,path:'Movie.mp4',length:2961234567,downloadedBytes:6210222,complete:false},
-  {index:1,path:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true}],error:null,outputDir:EXAMPLE_DIR}}},
+  {index:1,path:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true}],sources:{active:3,dropped:2},error:null,outputDir:EXAMPLE_DIR}}},
 {id:'cancel',method:'DELETE',path:'/downloads/:id',summary:'annule un téléchargement en cours',
  role:'Annule un job en cours. La réponse donne le statut au moment de l\'appel : elle peut encore dire <code>"downloading"</code>, un <code>GET</code> quelques centaines de ms plus tard confirme <code>"cancelled"</code>. Sur un job déjà terminé, ne fait rien et renvoie son statut final.',
  params:[['id','UUID renvoyé par <code>POST /downloads</code>']],
  responses:[['200','même corps que <code>GET /downloads/:id</code>'],['404','id inconnu']],
  notes:'Les fichiers déjà écrits restent sur disque, partiels : à supprimer côté appelant si besoin.',
- example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[],error:null,outputDir:EXAMPLE_DIR}}}
+ example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[],sources:{active:3,dropped:2},error:null,outputDir:EXAMPLE_DIR}}}
 ];
 
 var $=function(id){return document.getElementById(id)};
@@ -355,7 +356,9 @@ function render(job){
   setStatus(job.status,statusClass(job.status));
   var pct=job.totalBytes?Math.min(100,job.downloadedBytes/job.totalBytes*100):0;
   $('fill').style.width=pct+'%';
-  $('counts').textContent=fmtBytes(job.downloadedBytes)+' sur '+fmtBytes(job.totalBytes)+' - pièces '+job.piecesCompleted+' sur '+(job.totalPieces===null?'?':job.totalPieces);
+  var sources=job.sources?' - sources : '+job.sources.active+' actives, '+job.sources.dropped+' écartées':'';
+  var checking=job.status==='checking'?' (vérification des fichiers déjà sur disque)':'';
+  $('counts').textContent=fmtBytes(job.downloadedBytes)+' sur '+fmtBytes(job.totalBytes)+' - pièces '+job.piecesCompleted+' sur '+(job.totalPieces===null?'?':job.totalPieces)+sources+checking;
   $('error').textContent=job.error||'';
   $('raw').textContent=json(job);
   var files=job.files||[];
@@ -406,7 +409,7 @@ function follow(id){
 var jobs=(function(){try{return JSON.parse(sessionStorage.getItem(HISTORY_KEY))||[]}catch(e){return []}})();
 function saveHistory(){try{sessionStorage.setItem(HISTORY_KEY,JSON.stringify(jobs))}catch(e){}}
 function addHistory(id,label){
-  jobs.unshift({id:id,label:label,time:new Date().toLocaleTimeString('fr-FR'),status:'downloading'});
+  jobs.unshift({id:id,label:label,time:new Date().toLocaleTimeString('fr-FR'),status:'checking'});
   saveHistory();
   renderHistory();
 }

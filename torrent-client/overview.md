@@ -89,7 +89,7 @@ Le Client Torrent n'écrit jamais en base de données et ne connaît aucune noti
 
 **Statut : conception uniquement, rien n'est implémenté.** Ce qui suit vise à faire passer #18 de `needs-triage` à `ready-for-dev`, pas à documenter du code existant. Vocabulaire complet dans [CONTEXT.md](../CONTEXT.md#language) - résumé rapide :
 
-- **Piece retry** (déjà construit, interne au Client Torrent) : une pièce qui échoue est retentée contre une autre source, jusqu'à `maxAttemptsPerPiece`. Ne concerne pas ce qui suit.
+- **Piece retry** (déjà construit, interne au Client Torrent) : une pièce qui échoue est retentée contre une autre source, avec backoff, tant que le téléchargement progresse (règles de #27, voir plus bas). Ne concerne pas ce qui suit.
 - **Download attempt** : une tentative complète de téléchargement, namespacée par un UUID côté Laravel - même mécanique que `conversion_attempt`.
 - **Reenqueue** : le redémarrage automatique d'un download attempt après échec, borné et avec backoff - **diverge volontairement** du retry (manuel, non borné) de la conversion, voir [ADR-0006](../docs/adr/0006-download-retry-diverges-from-conversion-retry.md).
 - **Exhausted** : l'état après 3 échecs consécutifs - plus de reenqueue automatique, seule une action manuelle peut relancer.
@@ -182,18 +182,30 @@ Piece 12 failed after 12 attempt(s) across the source pool:
 - Une seule pièce épuisée fait échouer **tout** le téléchargement, alors que 1229 pièces sur 1421 étaient reçues.
 - La vraie cause de `fetch failed` est perdue : Node la met dans `err.cause`, et `downloadPieceFromWebSeed.js` ne garde que `err.message`.
 
-**Nouvelle règle** (valeurs de départ, à ajuster sur le terrain) :
+**Règle implémentée** (`src/swarm/sourcePool.js`, `src/swarm/downloadTorrent.js`, `src/recheck.js` ; valeurs par défaut, toutes réglables en option) :
 
 | Sujet | Règle |
 |---|---|
-| Source morte | Écartée après 3 échecs de connexion d'affilée (refus, timeout de connexion, hôte injoignable) ou 2 pièces rejetées au hash. Un succès remet son compteur à zéro. |
-| Nouvelles sources | Réannonce au tracker quand il reste moins de 3 sources actives, au plus une fois toutes les 2 min (ou selon l'`interval` renvoyé par le tracker). |
-| Backoff par pièce | Après chaque échec, la pièce attend `min(2^n, 60)` s avant d'être reprise, pour ne pas épuiser son budget en quelques secondes sur une panne passagère. |
-| Abandon | Plus de budget fixe par pièce. Le téléchargement échoue seulement s'il ne reste **aucune source active** pendant 2 min, réannonce comprise. |
-| Erreurs | Chaque raison d'échec inclut `err.cause.code` quand il existe (ex. `fetch failed (ECONNRESET)`). |
-| Reprise | Au démarrage, revérification SHA-1 des pièces déjà présentes dans `outputDir` (état `"checking"`), voir [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md). |
+| Source injoignable | Après 3 **échecs de connexion** d'affilée (refus, timeout de connexion, `fetch failed`), la source est mise de côté 30 s, puis retentée ; au retour, un seul nouvel échec la remet de côté. Un succès remet son compteur à zéro. |
+| Source corrompue | 2 pièces rejetées au hash : écartée pour de bon. |
+| Échecs qui ne comptent pas contre la source | Pair qui n'a pas la pièce, qui ferme la connexion en cours de pièce, web-seed qui répond 404/503, timeout de notre côté : seule la pièce est retentée. Sinon des workers parallèles feraient écarter un pair parfaitement sain. |
+| Choix de la source | Pour une pièce, la source active qui l'a le moins ratée, en rotation entre ex-aequo. |
+| Nouvelles sources | Réannonce au tracker quand il reste moins de 3 sources actives, au plus une fois par minute. |
+| Backoff par pièce | Après le n-ième échec, la pièce attend `min(2^(n-1), 60)` s. |
+| Abandon | Plus de budget fixe par pièce. Le téléchargement échoue quand **aucune pièce n'a abouti pendant 2 min**. Ça couvre le swarm mort comme la pièce qui échoue partout, sans boucler à l'infini ; le message liste les pièces bloquées avec leurs causes et les sources écartées. |
+| Erreurs | Chaque raison d'échec web-seed inclut `err.cause.code` (ex. `fetch failed (ECONNRESET)`) ; les erreurs de socket des pairs l'incluaient déjà. |
+| Reprise | Au démarrage, revérification SHA-1 des pièces déjà présentes dans `outputDir` (état `"checking"`), voir [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md). Les fichiers existants sont ouverts en place (`r+`) et plus tronqués. |
 
-Cette règle est interne au Client Torrent : elle remplace le **piece retry** de [CONTEXT.md](../CONTEXT.md#language) et ne change rien au **reenqueue** de #18, qui reste côté Laravel.
+**Écarts avec la conception initiale**, constatés en implémentant :
+
+- *"Source écartée après 3 échecs d'affilée"* comptait tous les échecs. Avec 10 workers en parallèle, un pair qui n'a pas certaines pièces enchaîne des échecs alors qu'il sert très bien les autres : seuls les échecs de connexion comptent désormais.
+- *"Écartée"* était définitif. Pour archive.org, le web-seed est souvent la **seule** source : l'écarter pour de bon après trois `fetch failed` passagers tuerait le téléchargement. D'où la mise de côté temporaire.
+- *"Abandon quand il ne reste aucune source active pendant 2 min"* laissait boucler pour toujours une pièce qui échoue sur une source par ailleurs vivante. La règle "aucune pièce n'a abouti depuis 2 min" couvre les deux cas.
+- Réannonce au plus une fois par **minute** (au lieu de 2), pour qu'au moins une réannonce ait lieu avant le délai d'abandon.
+
+Vérifié sur de vraies sources : le torrent archive.org de la page de test, téléchargé puis relancé (tout est revérifié et le job se termine sans télécharger), puis avec 1000 octets mis à zéro dans le mp4 (5 pièces sur 6 revalidées, une seule retéléchargée, SHA-1 final identique à celui d'archive.org). Sur Sintel, la vitesse est identique au code d'avant ce ticket, dans le même swarm au même moment.
+
+Ces règles sont internes au Client Torrent : elles remplacent le **piece retry** de [CONTEXT.md](../CONTEXT.md#language) et ne change rien au **reenqueue** de #18, qui reste côté Laravel.
 
 ### Ticket B - streaming et priorités
 
