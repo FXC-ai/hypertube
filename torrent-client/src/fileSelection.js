@@ -1,3 +1,5 @@
+import { computeFileNames } from './torrentLayout.js';
+
 // Which files of a torrent we actually want. Everything is guessed from file extensions: at
 // inspection time no byte of the content has been downloaded yet.
 
@@ -38,9 +40,11 @@ export function classifyFile(path) {
 // MP4s, and Laravel can still untick them; archive.org ships empty ones). A torrent without any video keeps every file, so a
 // caller that sends no fileIndexes never ends up downloading nothing.
 export function inspectTorrent(torrent) {
+  const fileNames = computeFileNames(torrent.files.map((file) => file.path));
   const files = torrent.files.map((file, index) => ({
     index,
     path: file.path,
+    fileName: fileNames[index],
     length: file.length,
     ...classifyFile(file.path),
   }));

@@ -49,6 +49,7 @@ test('inspectTorrent: suggests the largest video and every subtitle, nothing els
   assert.deepEqual(inspection.files[1], {
     index: 1,
     path: 'Movie.ogv',
+    fileName: 'Movie.ogv',
     length: 300,
     kind: 'video',
     container: 'ogg',

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeOverlaps, computeWantedPieces } from '../src/torrentLayout.js';
+import { computeFileNames, computeOverlaps, computeWantedPieces } from '../src/torrentLayout.js';
 
 test('computeOverlaps: a range straddling two files', () => {
   const layout = [
@@ -27,4 +27,29 @@ test('computeWantedPieces: only pieces touching a wanted file, boundary pieces i
   assert.deepEqual(computeWantedPieces(layout, pieceRanges, new Set([1])), [0, 1, 2]);
   assert.deepEqual(computeWantedPieces(layout, pieceRanges, new Set([0])), [0]);
   assert.deepEqual(computeWantedPieces(layout, pieceRanges, new Set([2])), []);
+});
+
+test('computeFileNames: every file goes straight into outputDir, clashes get a number', () => {
+  assert.deepEqual(
+    computeFileNames([
+      'M(1931)/M.1931.mp4',
+      'M(1931)/M.1931.English.srt',
+      'Subs/English.srt',
+      'Extras/english.SRT',
+      'Extras/English.srt',
+      '../../evil.sh',
+      'dir/..',
+      '',
+    ]),
+    [
+      'M.1931.mp4',
+      'M.1931.English.srt',
+      'English.srt',
+      'english (2).SRT',
+      'English (3).srt',
+      'evil.sh',
+      'file-6',
+      'file-7',
+    ],
+  );
 });

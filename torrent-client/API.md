@@ -9,6 +9,8 @@ Service HTTP séparé (voir [docs/architecture.md](../docs/architecture.md) et [
 
 Pas d'authentification - le service n'est censé être joignable que depuis le réseau Docker interne, jamais exposé publiquement.
 
+Le téléchargement lui-même est fait par Transmission (service `transmission`, [ADR-0009](../docs/adr/0009-transmission-as-torrent-engine.md)) ; ce contrat ne change pas pour Laravel. Transmission range les fichiers dans les dossiers du torrent (`outputDir/<nom>/<chemin>`) : à la fin du téléchargement, chaque fichier choisi reçoit un lien physique à plat, `outputDir/<files[].fileName>`, le chemin que Laravel relit.
+
 ## Évolutions en cours
 
 Les parties marquées **🟡 Proposé** décrivent le contrat visé par des tickets pas encore implémentés, pas le comportement actuel. Le ticket A est implémenté. Conception complète dans [overview.md](overview.md#conception-sélection-de-fichiers-robustesse-et-streaming-tickets-a-c-b).

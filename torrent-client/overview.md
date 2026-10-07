@@ -1,5 +1,7 @@
 # Vue d'ensemble - Client Torrent
 
+> **Sur cette branche, le téléchargement est délégué à Transmission** ([ADR-0009](../docs/adr/0009-transmission-as-torrent-engine.md)). Ce document décrit le client BitTorrent écrit de zéro, conservé sur `feature/torrent-performance` ; l'API et le streaming qu'il décrit restent valables.
+
 Ce document donne la vue architecture du Client Torrent : ce qui est construit (#7–#12, #17) et la conception retenue pour la suite (#18, pas encore implémentée). Pour les autres angles :
 
 - [README.md](README.md) - guide de test, module par module, avec les pièges réels rencontrés

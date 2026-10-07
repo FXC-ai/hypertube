@@ -134,15 +134,15 @@ dt{color:var(--muted)}dd{margin:0;min-width:0;word-break:break-all}
 <ol>
 <li><code>POST /torrents/inspect</code> (bouton Inspecter, facultatif) lit le <code>.torrent</code> et liste ses fichiers, sans rien télécharger d'autre. Les index cochés partent dans <code>fileIndexes</code>, avec l'<code>expectedInfoHash</code> de l'inspection.</li>
 <li><code>POST /downloads</code> crée un job en mémoire et répond <code>202</code> avec son id tout de suite. Le travail continue en arrière-plan.</li>
-<li>Le <code>.torrent</code> est téléchargé puis décodé (bencode). Le SHA-1 du dictionnaire <code>info</code> donne l'info-hash.</li>
-<li>Les trackers (HTTP ou UDP) sont interrogés pour obtenir une liste de pairs.</li>
-<li>Pairs et web-seeds (serveurs HTTP de l'<code>url-list</code>) sont mélangés dans une seule liste de sources. Un pool de 10 workers télécharge les pièces en parallèle, chacune vérifiée par SHA-1, et retentée sur une autre source si elle échoue.</li>
-<li>Seules les pièces qui touchent un fichier choisi sont téléchargées. Chaque pièce valide est écrite à son offset dans le ou les fichiers choisis qu'elle recouvre ; la part d'une pièce qui appartient à un fichier non choisi est jetée. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
+<li>Le <code>.torrent</code> est téléchargé puis décodé (bencode) par ce service. Le SHA-1 du dictionnaire <code>info</code> donne l'info-hash.</li>
+<li>Le <code>.torrent</code> est confié à Transmission (conteneur <code>transmission</code>, API RPC), à l'arrêt, avec <code>outputDir</code> comme dossier de destination. Les fichiers non choisis sont marqués non voulus, puis le téléchargement démarre en mode séquentiel.</li>
+<li>Transmission fait tout le BitTorrent : trackers, pairs, web-seeds, vérification SHA-1 des pièces, écriture sur disque. Ce service lit chaque seconde l'état de chaque pièce et en déduit la progression par fichier. Cette page interroge <code>GET /downloads/:id</code> chaque seconde.</li>
+<li><code>GET /downloads/:id/files/:index</code> sert un fichier pendant son téléchargement, avec <code>Range</code>, mais seulement les octets des pièces vérifiées : un fichier incomplet a des trous qui se lisent comme des zéros.</li>
 </ol>
-<p class="muted">Cet item archive.org n'a quasiment aucun pair : le contenu vient du web-seed (HTTP Range) des serveurs d'archive.org. Il faut donc que le service ait accès à Internet, et que archive.org soit disponible.</p>
-<p class="muted">Tous les items archive.org ne se téléchargent pas : ceux dont le <code>_meta.xml</code> a été régénéré après la création du torrent échouent toujours (hash de pièce différent, refus voulu), et un nœud de stockage archive.org peut être injoignable. Le message d'erreur liste alors chaque cause distincte.</p>
-<p class="muted">Dans Docker, un outputDir sous <code>/var/www/html/storage/app/public/movies/</code> atterrit dans le volume partagé avec le conteneur <code>app</code>. Ailleurs, les fichiers restent dans le conteneur <code>client-torrent</code>.</p>
-<p class="muted">Détails des protocoles avec extraits de code : <code>torrent-client/PROTOCOLS.md</code>. Contrat de l'API : <code>torrent-client/API.md</code>.</p>
+<p class="muted">Transmission garde les dossiers du torrent (<code>outputDir/&lt;nom&gt;/&lt;chemin&gt;</code>) : le streaming lit le fichier là. À la fin, chaque fichier choisi reçoit un lien physique à plat, <code>outputDir/&lt;fileName&gt;</code>, que Laravel relit.</p>
+<p class="muted">Si Transmission connaît déjà ce torrent dans le même dossier, il le reprend ; sinon il revérifie les fichiers déjà sur disque avant de télécharger le reste (état <code>"checking"</code>).</p>
+<p class="muted">Dans Docker, un outputDir sous <code>/var/www/html/storage/app/public/movies/</code> atterrit dans le volume partagé avec <code>app</code> et <code>transmission</code>.</p>
+<p class="muted">Contrat de l'API : <code>torrent-client/API.md</code>. Choix de Transmission : <code>docs/adr/0009-transmission-as-torrent-engine.md</code>.</p>
 </section>
 </main>
 <script>
@@ -150,7 +150,7 @@ var EXAMPLE_ID='2ce4f502-b325-444f-9053-da3174fb94b5';
 var EXAMPLE_HASH='3f4c8a0b9d2e7f61a5c4b3d2e1f0a9b8c7d6e5f4';
 var EXAMPLE_DIR='/var/www/html/storage/app/public/movies/42';
 var EXAMPLE_URL='https://archive.org/download/some_item/some_item_archive.torrent';
-var STATUS_VALUES='<code>"downloading"</code>, <code>"completed"</code>, <code>"failed"</code> ou <code>"cancelled"</code>';
+var STATUS_VALUES='<code>"checking"</code>, <code>"downloading"</code>, <code>"completed"</code>, <code>"failed"</code> ou <code>"cancelled"</code>';
 
 // Single source of truth for the API reference, the curl examples and the "Essayer" forms.
 // Keep it in line with torrent-client/API.md.
@@ -188,7 +188,7 @@ var ROUTES=[
   {index:3,path:'Movie.ogv',length:18716711,kind:'video',container:'ogg',suggested:false}]}},
  tryBody:function(){return sourceBody()}},
 {id:'start',method:'POST',path:'/downloads',summary:'démarre un téléchargement en arrière-plan',
- role:'Crée un job en mémoire et répond tout de suite avec son id. Récupération du <code>.torrent</code>, trackers et pièces se font ensuite, en arrière-plan : suivre avec <code>GET /downloads/:id</code>.',
+ role:'Crée un job en mémoire et répond tout de suite avec son id. Récupération du <code>.torrent</code> et téléchargement par Transmission se font ensuite, en arrière-plan : suivre avec <code>GET /downloads/:id</code>.',
  body:[
   {name:'outputDir',type:'string',required:'oui',def:'-',desc:'Chemin absolu où écrire les fichiers. Pour un film : <code>'+EXAMPLE_DIR.replace('42','{movieId}')+'</code>.'},
   {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code>.'},
@@ -201,20 +201,26 @@ var ROUTES=[
  example:{request:{torrentUrl:EXAMPLE_URL,outputDir:EXAMPLE_DIR,fileIndexes:[0,1],expectedInfoHash:EXAMPLE_HASH},status:202,response:{id:EXAMPLE_ID}},
  tryBody:function(){return startBody()}},
 {id:'status',method:'GET',path:'/downloads/:id',summary:'état et progression d\'un téléchargement',
- role:'État courant d\'un job. Pas de notification : l\'appelant sonde cette route (toutes les 1 à 2 s) tant que <code>status</code> vaut <code>"downloading"</code>.',
+ role:'État courant d\'un job. Pas de notification : l\'appelant sonde cette route (toutes les 1 à 2 s) tant que <code>status</code> vaut <code>"checking"</code> ou <code>"downloading"</code>.',
  params:[['id','UUID renvoyé par <code>POST /downloads</code>']],
  fields:[
   ['status',STATUS_VALUES],
   ['downloadedBytes, totalBytes','progression en octets, fichiers choisis seulement. <code>totalBytes</code> vaut <code>null</code> tant que le <code>.torrent</code> n\'est pas parsé.'],
   ['piecesCompleted, totalPieces','progression en pièces qui couvrent les fichiers choisis'],
   ['infoHash, pieceLength','<code>null</code> tant que le <code>.torrent</code> n\'est pas parsé'],
-  ['files[]','un élément par fichier choisi : <code>index</code>, <code>path</code>, <code>length</code>, <code>downloadedBytes</code>, <code>complete</code>'],
+  ['files[]','un élément par fichier choisi : <code>index</code>, <code>path</code>, <code>fileName</code> (nom à plat dans <code>outputDir</code>, lien créé à la fin du téléchargement), <code>length</code>, <code>downloadedBytes</code>, <code>contiguousBytesFromStart</code>, <code>availableRanges</code>, <code>complete</code>'],
+  ['pieces','bitfield base64 des pièces vérifiées (pièce 0 = bit de poids fort du premier octet)'],
   ['error','<code>null</code>, ou la cause de l\'échec quand <code>status</code> vaut <code>"failed"</code>'],
   ['outputDir','tel que reçu au lancement']],
  responses:[['200','job connu'],['404','id inconnu, y compris après un redémarrage du service (état en mémoire)']],
  example:{path:'/downloads/'+EXAMPLE_ID,status:200,response:{id:EXAMPLE_ID,status:'downloading',downloadedBytes:6291456,totalBytes:2961315801,piecesCompleted:3,totalPieces:1413,infoHash:EXAMPLE_HASH,pieceLength:2097152,files:[
-  {index:0,path:'Movie.mp4',length:2961234567,downloadedBytes:6210222,complete:false},
-  {index:1,path:'Movie.en.srt',length:81234,downloadedBytes:81234,complete:true}],error:null,outputDir:EXAMPLE_DIR}}},
+  {index:0,path:'Movie/Movie.mp4',fileName:'Movie.mp4',length:2961234567,downloadedBytes:6210222,contiguousBytesFromStart:4194304,availableRanges:[[0,4194304],[2959137415,2961234567]],complete:false},
+  {index:1,path:'Movie/Movie.en.srt',fileName:'Movie.en.srt',length:81234,downloadedBytes:81234,contiguousBytesFromStart:81234,availableRanges:[[0,81234]],complete:true}],pieces:'4AAAAAAAAAE=',error:null,outputDir:EXAMPLE_DIR}}},
+{id:'stream',method:'GET',path:'/downloads/:id/files/:index',summary:'lit un fichier pendant son téléchargement (HTTP Range)',noTry:true,
+ role:'Sert un fichier choisi, en entier ou par <code>Range: bytes=a-b</code>, <code>a-</code> ou <code>-N</code>, même pendant le téléchargement : les octets manquants sont attendus. Seuls les octets de pièces vérifiées sont envoyés. C\'est l\'entrée de ffprobe et ffmpeg pendant le téléchargement (ADR-0007).',
+ params:[['id','UUID renvoyé par <code>POST /downloads</code>'],['index','<code>files[].index</code> d\'un fichier choisi']],
+ responses:[['200 / 206','fichier entier / plage demandée'],['404','id inconnu ou fichier non choisi'],['416','plage hors du fichier'],['503','rien de nouveau depuis 30 s, réessayer après <code>Retry-After</code>'],['410','le job a échoué ou a été annulé : ces octets ne viendront pas']],
+ notes:'Transmission télécharge dans l\'ordre : lire vers l\'avant est rapide, sauter loin devant attend que le téléchargement y arrive.'},
 {id:'cancel',method:'DELETE',path:'/downloads/:id',summary:'annule un téléchargement en cours',
  role:'Annule un job en cours. La réponse donne le statut au moment de l\'appel : elle peut encore dire <code>"downloading"</code>, un <code>GET</code> quelques centaines de ms plus tard confirme <code>"cancelled"</code>. Sur un job déjà terminé, ne fait rien et renvoie son statut final.',
  params:[['id','UUID renvoyé par <code>POST /downloads</code>']],

@@ -30,8 +30,33 @@ services:
       dockerfile: Dockerfile
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     container_name: torrent-client
+    environment:
+      TRANSMISSION_URL: http://transmission:9091
     ports:
       - "7881:7881"
     volumes:
       - ./storage:/var/www/html/storage
+    depends_on:
+      - transmission
 
+  # Downloads for the Client Torrent (ADR-0009). Writes into the same storage path as app,
+  # so outputDir means the same folder in all three containers.
+  transmission:
+    build:
+      context: ./docker/transmission
+    environment:
+      PUID: "${HOST_UID:-1000}"
+      PGID: "${HOST_GID:-1000}"
+      # RPC without login, from the Docker network and localhost only.
+      WHITELIST: "127.0.0.1,10.*.*.*,172.*.*.*,192.168.*.*"
+      PEERPORT: "51413"
+    ports:
+      - "127.0.0.1:9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    volumes:
+      - transmission-config:/config
+      - ./storage:/var/www/html/storage
+
+volumes:
+  transmission-config:

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { streamFile } from '../stream/streamFile.js';
 import { TorrentFileError } from '../torrentFile.js';
 import {
   createDownloadManager,
@@ -10,6 +11,8 @@ import {
 } from './downloadManager.js';
 
 const DOWNLOAD_ID_PATTERN = /^\/downloads\/([^/]+)$/;
+const FILE_STREAM_PATTERN = /^\/downloads\/([^/]+)\/files\/(\d+)$/;
+const DEFAULT_STREAM_OPTIONS = { stallTimeoutMs: 30000 };
 
 // In Docker the shared volume exists: pre-fill the page with the path Laravel reads from.
 const DOCKER_STORAGE_DIR = '/var/www/html/storage';
@@ -24,16 +27,19 @@ function renderUiPage() {
   return UI_TEMPLATE.replace('__DEFAULT_OUTPUT_DIR__', outputDir);
 }
 
-// Plain node:http, no framework. The manager is injectable for tests.
-export function createServer({ manager = createDownloadManager() } = {}) {
+// Plain node:http, no framework. The manager and the stream timings are injectable for tests.
+export function createServer({
+  manager = createDownloadManager(),
+  streamOptions = DEFAULT_STREAM_OPTIONS,
+} = {}) {
   return createHttpServer((req, res) => {
-    handleRequest(req, res, manager).catch((err) => {
+    handleRequest(req, res, manager, streamOptions).catch((err) => {
       sendJson(res, 500, { error: err.message });
     });
   });
 }
 
-async function handleRequest(req, res, manager) {
+async function handleRequest(req, res, manager, streamOptions) {
   if (req.method === 'GET' && req.url === '/health') {
     sendJson(res, 200, { status: 'ok' });
 
@@ -59,6 +65,14 @@ async function handleRequest(req, res, manager) {
 
   if (req.method === 'POST' && req.url === '/downloads') {
     await handleStart(req, res, manager);
+
+    return;
+  }
+
+  const streamMatch = req.url?.match(FILE_STREAM_PATTERN);
+
+  if (streamMatch && (req.method === 'GET' || req.method === 'HEAD')) {
+    await handleStream(req, res, manager, streamOptions, streamMatch);
 
     return;
   }
@@ -156,6 +170,39 @@ function handleCancel(res, manager, id) {
   }
 
   sendJson(res, 200, status);
+}
+
+async function handleStream(req, res, manager, streamOptions, [, rawId, rawIndex]) {
+  const found = manager.getStreamSource(decodeURIComponent(rawId), Number(rawIndex));
+
+  if (!found) {
+    sendJson(res, 404, { error: 'Unknown download id' });
+
+    return;
+  }
+
+  const { job, file } = found;
+
+  if (!file?.diskPath) {
+    sendJson(res, 404, { error: 'This file is not part of the download (or not known yet)' });
+
+    return;
+  }
+
+  await streamFile(
+    req,
+    res,
+    {
+      file,
+      path: join(job.outputDir, file.diskPath),
+      pieceMap: () => job.pieceMap,
+      endedState: () =>
+        job.status === 'failed' || job.status === 'cancelled'
+          ? { status: job.status, error: job.error }
+          : null,
+    },
+    streamOptions,
+  );
 }
 
 // Answers 400 itself and returns undefined when the body is not valid JSON.
