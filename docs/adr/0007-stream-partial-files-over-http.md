@@ -1,6 +1,6 @@
 # ffmpeg lit un film en cours de téléchargement via HTTP, pas directement le fichier qui grossit
 
-**Statut : proposé, à valider par FX.** Remplace la décision "Pont de conversion" de l'[issue #6](https://github.com/FXC-ai/hypertube/issues/6) ("`ffmpeg` lit directement le même fichier que le Client Torrent écrit, pendant qu'il grossit") et le mécanisme de seuil de l'[issue #14](https://github.com/FXC-ai/hypertube/issues/14).
+**Statut : implémenté (#28), reste à relire par FX.** Remplace la décision "Pont de conversion" de l'[issue #6](https://github.com/FXC-ai/hypertube/issues/6) ("`ffmpeg` lit directement le même fichier que le Client Torrent écrit, pendant qu'il grossit") et le mécanisme de seuil de l'[issue #14](https://github.com/FXC-ai/hypertube/issues/14).
 
 Pendant un téléchargement, `ConvertMovie` (ffprobe puis ffmpeg) lit le film via un endpoint HTTP du Client Torrent, `GET /downloads/:id/files/:index`, qui supporte les requêtes `Range`. Si les octets demandés ne sont pas encore téléchargés, le Client Torrent passe les pièces correspondantes en priorité et **retient la réponse** jusqu'à les avoir. Une fois le téléchargement terminé, ffmpeg relit le fichier sur disque comme aujourd'hui. Contrat détaillé dans [torrent-client/API.md](../../torrent-client/API.md), séquence complète dans [torrent-client/overview.md](../../torrent-client/overview.md#conception-sélection-de-fichiers-robustesse-et-streaming-tickets-a-c-b).
 

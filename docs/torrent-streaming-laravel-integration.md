@@ -1,6 +1,6 @@
 # Streaming HTTP : ce qui change côté Laravel (ticket B)
 
-**Statut : proposé, à valider par FX.** Complète l'[ADR-0007](adr/0007-stream-partial-files-over-http.md) (le *pourquoi*) avec le *comment* : quelles classes et fonctions du pipeline de conversion changent, avec du code prototype, les résultats d'un prototype exécuté avec les vraies commandes ffmpeg du projet, et les avantages et inconvénients de l'approche. Le contrat de l'endpoint est dans [torrent-client/API.md](../torrent-client/API.md#get-downloadsidfilesindex--proposé-ticket-b).
+**Statut : implémenté** (côté Client Torrent et côté Laravel : `MovieInput`, `MovieInputResolver`, `MediaProbe`, `HlsCommandBuilder`, `ConvertMovie`, avec les options ffmpeg et `-xerror` ci-dessous), reste à relire par FX. Complète l'[ADR-0007](adr/0007-stream-partial-files-over-http.md) (le *pourquoi*) avec le *comment* : quelles classes et fonctions du pipeline de conversion changent, avec du code prototype, les résultats d'un prototype exécuté avec les vraies commandes ffmpeg du projet, et les avantages et inconvénients de l'approche. Le contrat de l'endpoint est dans [torrent-client/API.md](../torrent-client/API.md#get-downloadsidfilesindex).
 
 ## En une phrase
 

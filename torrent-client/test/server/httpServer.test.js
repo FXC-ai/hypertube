@@ -9,6 +9,7 @@ const SINTEL = new URL('../fixtures/sintel.webtorrent.io.torrent', import.meta.u
 // Real parsing and routing, no network: fetch always fails, nothing is ever downloaded.
 async function withServer(fn) {
   const manager = createDownloadManager({
+    torrentFetchRetryDelayMs: 0,
     fetchImpl: async () => {
       throw new Error('getaddrinfo ENOTFOUND example.test');
     },

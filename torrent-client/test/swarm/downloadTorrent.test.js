@@ -536,3 +536,98 @@ test('by default a set-aside source comes back well before the download is given
 
   assert.ok(cooldown * 3 <= stall, `cooldown ${cooldown} ms vs stall ${stall} ms`);
 });
+
+test('every piece from a peer goes over one long-lived connection', async () => {
+  const pieces = buildPieces(10);
+  const server = await startFakePeer(pieces);
+  let connections = 0;
+  server.on('connection', () => {
+    connections += 1;
+  });
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(
+        torrentFor(pieces),
+        [{ ip: '127.0.0.1', port: server.address().port }],
+        {
+          ...FAST,
+          concurrency: 8,
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+        },
+      );
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(Buffer.concat(pieces)));
+      assert.equal(connections, 1);
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('a web-seed serves a run of consecutive pieces in one request', async () => {
+  const pieces = buildPieces(10);
+  const content = Buffer.concat(pieces);
+  let requests = 0;
+  const webSeed = createHttpServer((req, res) => {
+    requests += 1;
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    res.writeHead(206, { 'Content-Length': end - start + 1 });
+    res.end(content.subarray(start, end + 1));
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [], {
+        ...FAST,
+        concurrency: 1,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+      assert.equal(requests, 1);
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('end-game: a piece a peer never sends is also asked elsewhere instead of waiting its timeout', async () => {
+  const pieces = buildPieces(4);
+  const content = Buffer.concat(pieces);
+  // the peer silently never answers piece 3: only the end-game copy from the web-seed gets it
+  const peer = await startFakePeer(pieces, { failPieceIndexes: new Set([3]) });
+  const webSeed = createHttpServer((req, res) => {
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    // slow enough that the peer takes every piece first
+    setTimeout(() => {
+      res.writeHead(206, { 'Content-Length': end - start + 1 });
+      res.end(content.subarray(start, end + 1));
+    }, 300);
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+  const started = Date.now();
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [{ ip: '127.0.0.1', port: peer.address().port }], {
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        concurrency: 4,
+        pieceTimeoutMs: 30000,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+        priorityOf: () => 0,
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+      assert.ok(Date.now() - started < 10000, `took ${Date.now() - started} ms`);
+    });
+  } finally {
+    peer.close();
+    webSeed.close();
+  }
+});

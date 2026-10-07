@@ -4,9 +4,18 @@
 // written off for a network hiccup. A source that sends `maxHashFailures` corrupted pieces is
 // banned for good. Failing a piece for another reason (peer without that piece, HTTP 404) does
 // not count against the source.
+//
+// `capacityOf(source)` caps how many pieces one source fetches at once: a source with every
+// slot taken (acquire/release) is skipped, so the load follows each source's speed.
 export function createSourcePool(
   initialSources,
-  { maxConnectionFailures = 3, maxHashFailures = 2, cooldownMs = 30000, now = Date.now } = {},
+  {
+    maxConnectionFailures = 3,
+    maxHashFailures = 2,
+    cooldownMs = 30000,
+    capacityOf = () => Infinity,
+    now = Date.now,
+  } = {},
 ) {
   const sources = [];
   let cursor = 0;
@@ -24,7 +33,10 @@ export function createSourcePool(
     for (const source of newSources) {
       const key = keyOf(source);
 
-      if (sources.some((known) => known.key === key)) {
+      if (
+        (source.kind === 'peer' && !isUsableAddress(source.peer)) ||
+        sources.some((known) => known.key === key)
+      ) {
         continue;
       }
 
@@ -37,6 +49,7 @@ export function createSourcePool(
         suspendedUntil: 0,
         banned: false,
         lastError: null,
+        inFlight: 0,
       });
       added += 1;
     }
@@ -53,7 +66,9 @@ export function createSourcePool(
   // it failed this piece. With `preferProven` (a piece someone is waiting for), ties go to the
   // source with the most successful pieces, then to web-seeds: no gamble on an untested peer.
   function pick(failuresBySource, { preferProven = false } = {}) {
-    const active = sources.filter(isActive);
+    const active = sources.filter(
+      (source) => isActive(source) && source.inFlight < capacityOf(source),
+    );
 
     if (active.length === 0) {
       return null;
@@ -87,6 +102,14 @@ export function createSourcePool(
     }
 
     return candidate.kind === 'webseed' && current.kind !== 'webseed';
+  }
+
+  function acquire(source) {
+    source.inFlight += 1;
+  }
+
+  function release(source) {
+    source.inFlight = Math.max(0, source.inFlight - 1);
   }
 
   function reportSuccess(source) {
@@ -137,5 +160,27 @@ export function createSourcePool(
       );
   }
 
-  return { add, pick, reportSuccess, reportFailure, counts, nextReactivationAt, describeDropped };
+  return {
+    add,
+    pick,
+    acquire,
+    release,
+    reportSuccess,
+    reportFailure,
+    counts,
+    nextReactivationAt,
+    describeDropped,
+  };
+}
+
+// Trackers list peers they cannot vouch for: port 0 or 1 (seen with archive.org's tracker),
+// the unspecified address, broadcast and multicast. Connecting to them only wastes a slot.
+function isUsableAddress({ ip, port }) {
+  if (!Number.isInteger(port) || port < 2 || port > 65535) {
+    return false;
+  }
+
+  const firstOctet = Number(ip.split('.')[0]);
+
+  return ip !== '0.0.0.0' && ip !== '255.255.255.255' && !(firstOctet >= 224 && firstOctet <= 239);
 }

@@ -84,6 +84,8 @@ function buildAnnounceUrl(announceUrl, params) {
     ['downloaded', String(params.downloaded ?? 0)],
     ['left', String(params.left)],
     ['compact', '1'],
+    // Trackers default to about 50 peers; many of them are dead, so ask for more.
+    ['numwant', '200'],
   ];
 
   if (params.event) {

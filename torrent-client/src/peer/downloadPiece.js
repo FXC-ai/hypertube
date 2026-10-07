@@ -1,34 +1,14 @@
-import { createHash } from 'node:crypto';
-import { connect } from 'node:net';
 import { CancelledError } from '../cancelledError.js';
-import { buildHandshake, parseHandshake } from './handshake.js';
-import {
-  extractMessages,
-  encodeInterested,
-  encodeRequest,
-  parsePiece,
-  MESSAGE_ID,
-  KEEP_ALIVE,
-} from './messages.js';
+import { PeerError } from './peerError.js';
+import { createPeerSession } from './peerSession.js';
 
-const BLOCK_SIZE = 16384;
-const MAX_PIPELINED_REQUESTS = 5;
-const HANDSHAKE_LENGTH = 68;
+export { PeerError };
 
-// connectionFailure: the peer could not be reached at all (as opposed to failing a piece).
-// hashMismatch: the peer sent data that does not match the piece hash.
-export class PeerError extends Error {
-  constructor(message, { connectionFailure = false, hashMismatch = false } = {}) {
-    super(message);
-    this.name = 'PeerError';
-    this.connectionFailure = connectionFailure;
-    this.hashMismatch = hashMismatch;
-  }
-}
-
-// Downloads one piece from one peer: handshake, wait for unchoke, request each 16KB block,
-// verify the SHA-1. A hash mismatch is retried from scratch up to `maxAttempts`, never accepted.
-export function downloadPieceFromPeer(peer, options) {
+// Downloads one piece from one peer over a short-lived session: handshake, wait for unchoke,
+// request its blocks, verify the SHA-1. A hash mismatch is retried up to `maxAttempts`, never
+// accepted. The swarm keeps sessions open across pieces instead (see peerSession.js); this is
+// for a single piece, e.g. the integration tests.
+export async function downloadPieceFromPeer(peer, options) {
   const {
     infoHash,
     peerId,
@@ -41,205 +21,37 @@ export function downloadPieceFromPeer(peer, options) {
     signal,
   } = options;
 
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new CancelledError());
+  if (signal?.aborted) {
+    throw new CancelledError();
+  }
 
-      return;
-    }
+  const session = createPeerSession(peer, { infoHash, peerId, connectTimeoutMs });
+  const timeout = AbortSignal.timeout(overallTimeoutMs);
+  const pieceSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
-    const socket = connect({ host: peer.ip, port: peer.port, timeout: connectTimeoutMs });
-
-    let buffer = Buffer.alloc(0);
-    let connected = false;
-    let handshakeDone = false;
-    let unchoked = false;
-    let settled = false;
-    let attemptsLeft = maxAttempts;
-    let blocks = new Map();
-    let nextRequestBegin = 0;
-    let outstanding = 0;
-
-    const overallTimer = setTimeout(
-      () => fail(new PeerError('Timed out downloading piece from peer')),
-      overallTimeoutMs,
-    );
-
-    function cleanup() {
-      clearTimeout(overallTimer);
-      signal?.removeEventListener('abort', onAbort);
-      socket.removeAllListeners();
-      socket.destroy();
-    }
-
-    function fail(err) {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      cleanup();
-      reject(err);
-    }
-
-    function succeed(pieceBuffer) {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      cleanup();
-      resolve(pieceBuffer);
-    }
-
-    function onAbort() {
-      fail(new CancelledError());
-    }
-    signal?.addEventListener('abort', onAbort);
-
-    socket.on('connect', () => {
-      connected = true;
-      socket.setTimeout(0);
-      socket.write(buildHandshake(infoHash, peerId));
-    });
-    // The socket timeout is only armed until 'connect', so it always means "unreachable".
-    socket.on('timeout', () =>
-      fail(
-        new PeerError(`Connection to ${peer.ip}:${peer.port} timed out`, {
-          connectionFailure: true,
-        }),
-      ),
-    );
-    socket.on('error', (err) =>
-      fail(
-        new PeerError(`Socket error with ${peer.ip}:${peer.port}: ${err.message}`, {
-          connectionFailure: !connected,
-        }),
-      ),
-    );
-    socket.on('close', () =>
-      fail(
-        new PeerError(`Connection to ${peer.ip}:${peer.port} closed before the piece was complete`),
-      ),
-    );
-
-    socket.on('data', (chunk) => {
-      buffer = Buffer.concat([buffer, chunk]);
-
-      if (!handshakeDone) {
-        if (buffer.length < HANDSHAKE_LENGTH) {
-          return;
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await session.requestPiece(pieceIndex, pieceLength, pieceHash, {
+          timeoutMs: overallTimeoutMs,
+          signal: pieceSignal,
+        });
+      } catch (err) {
+        if (err instanceof CancelledError && !signal?.aborted && timeout.aborted) {
+          throw new PeerError('Timed out downloading piece from peer');
         }
 
-        let parsed;
-
-        try {
-          parsed = parseHandshake(buffer);
-        } catch (err) {
-          fail(new PeerError(`Malformed handshake from ${peer.ip}:${peer.port}: ${err.message}`));
-
-          return;
+        if (!err.hashMismatch || attempt >= maxAttempts) {
+          throw err.hashMismatch
+            ? new PeerError(
+                `Piece ${pieceIndex} hash mismatch after ${maxAttempts} attempt(s): ${err.message}`,
+                { hashMismatch: true },
+              )
+            : err;
         }
-
-        if (!parsed.infoHash.equals(infoHash)) {
-          fail(new PeerError(`Peer ${peer.ip}:${peer.port} handshake info_hash mismatch`));
-
-          return;
-        }
-
-        handshakeDone = true;
-        buffer = buffer.subarray(parsed.length);
-        socket.write(encodeInterested());
-      }
-
-      const { messages, remaining } = extractMessages(buffer);
-      buffer = remaining;
-
-      for (const message of messages) {
-        if (settled) {
-          return;
-        }
-
-        if (message.id === KEEP_ALIVE) {
-          continue;
-        }
-
-        if (message.id === MESSAGE_ID.UNCHOKE) {
-          unchoked = true;
-          requestMore();
-        } else if (message.id === MESSAGE_ID.CHOKE) {
-          unchoked = false;
-        } else if (message.id === MESSAGE_ID.PIECE) {
-          const { index, begin, block } = parsePiece(message.payload);
-
-          if (index !== pieceIndex) {
-            continue;
-          }
-
-          outstanding = Math.max(0, outstanding - 1);
-          blocks.set(begin, block);
-
-          if (isComplete()) {
-            handlePieceComplete();
-          } else {
-            requestMore();
-          }
-        }
-      }
-    });
-
-    function isComplete() {
-      let have = 0;
-
-      for (const block of blocks.values()) {
-        have += block.length;
-      }
-
-      return have >= pieceLength;
-    }
-
-    function requestMore() {
-      if (!unchoked || settled) {
-        return;
-      }
-
-      while (outstanding < MAX_PIPELINED_REQUESTS && nextRequestBegin < pieceLength) {
-        const length = Math.min(BLOCK_SIZE, pieceLength - nextRequestBegin);
-        socket.write(encodeRequest(pieceIndex, nextRequestBegin, length));
-        outstanding += 1;
-        nextRequestBegin += length;
       }
     }
-
-    function handlePieceComplete() {
-      const sortedBegins = [...blocks.keys()].sort((a, b) => a - b);
-      const pieceBuffer = Buffer.concat(sortedBegins.map((begin) => blocks.get(begin)));
-      const actualHash = createHash('sha1').update(pieceBuffer).digest('hex');
-
-      if (actualHash === pieceHash) {
-        succeed(pieceBuffer);
-
-        return;
-      }
-
-      attemptsLeft -= 1;
-
-      if (attemptsLeft <= 0) {
-        fail(
-          new PeerError(
-            `Piece ${pieceIndex} hash mismatch after ${maxAttempts} attempt(s): expected ${pieceHash}, got ${actualHash}`,
-            { hashMismatch: true },
-          ),
-        );
-
-        return;
-      }
-
-      // Corrupt piece: discard the blocks and start over.
-      blocks = new Map();
-      nextRequestBegin = 0;
-      outstanding = 0;
-      requestMore();
-    }
-  });
+  } finally {
+    session.close();
+  }
 }

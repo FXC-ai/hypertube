@@ -281,3 +281,37 @@ async function waitFor(predicate, { timeoutMs = 2000, intervalMs = 5 } = {}) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }
+
+test('fetching the .torrent is retried after a network error, never after an HTTP error', async () => {
+  let calls = 0;
+  const flaky = managerFor(multiFileTorrent(), {
+    torrentFetchRetryDelayMs: 0,
+    fetchImpl: async () => {
+      calls += 1;
+
+      if (calls < 3) {
+        throw new TypeError('fetch failed');
+      }
+
+      return new Response(Buffer.from('x'));
+    },
+  });
+  const inspection = await flaky.inspectTorrent({ torrentUrl: 'http://example.test/x.torrent' });
+  assert.equal(inspection.mainVideoIndex, 1);
+  assert.equal(calls, 3);
+
+  let httpCalls = 0;
+  const refused = managerFor(multiFileTorrent(), {
+    torrentFetchRetryDelayMs: 0,
+    fetchImpl: async () => {
+      httpCalls += 1;
+
+      return new Response(null, { status: 404 });
+    },
+  });
+  await assert.rejects(
+    refused.inspectTorrent({ torrentUrl: 'http://example.test/x.torrent' }),
+    TorrentFetchError,
+  );
+  assert.equal(httpCalls, 1);
+});

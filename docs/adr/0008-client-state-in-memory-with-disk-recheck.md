@@ -1,6 +1,6 @@
 # L'état du Client Torrent reste en mémoire, la reprise se fait en revérifiant les fichiers sur disque
 
-**Statut : proposé, à valider par FX** (le point ouvert en bas touche la conception de l'[issue #18](https://github.com/FXC-ai/hypertube/issues/18)).
+**Statut : implémenté (#27), reste à relire par FX** (le point ouvert en bas touche la conception de l'[issue #18](https://github.com/FXC-ai/hypertube/issues/18)).
 
 Le Client Torrent ne persiste aucun état de téléchargement : ni fichier d'état, ni base de données. Pour reprendre un téléchargement interrompu (échec, annulation, redémarrage du conteneur), un nouveau `POST /downloads` sur le **même `outputDir`** commence par **revérifier les fichiers déjà présents** : il calcule le SHA-1 de chaque pièce sur disque et le compare au hash du `.torrent`. Toute pièce valide est comptée comme reçue et n'est pas retéléchargée. C'est le "recheck" que font tous les clients BitTorrent classiques.
 

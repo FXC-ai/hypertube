@@ -140,7 +140,7 @@ Le détail complet de chaque transition (endpoints exacts, timings, critères) e
 
 ## Conception sélection de fichiers, robustesse et streaming (tickets A, C, B)
 
-**Statut : conception uniquement, rien n'est implémenté.** Le contrat HTTP correspondant est dans [API.md](API.md) (sections marquées 🟡). Deux décisions structurantes ont leur ADR : [ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md) (streaming HTTP) et [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md) (état en mémoire + revérification).
+**Statut : implémenté** (A #26, C #27, B #28 ; le moteur a ensuite été accéléré, voir la section "Débit" du [README](README.md)). Cette section garde la conception telle qu'elle a été décidée ; le contrat HTTP à jour est dans [API.md](API.md). Deux décisions structurantes ont leur ADR : [ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md) (streaming HTTP) et [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md) (état en mémoire + revérification).
 
 ### Pourquoi
 

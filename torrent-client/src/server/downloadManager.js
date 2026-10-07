@@ -21,6 +21,7 @@ import {
 import { announce as defaultAnnounce, flattenTrackerUrls } from '../trackers/announce.js';
 import { generatePeerId } from '../trackers/peerId.js';
 import { detectContainerFormat } from '../videoSignature.js';
+import { describeFetchError } from '../webseed/downloadPieceFromWebSeed.js';
 
 export class DownloadManagerError extends Error {
   constructor(message) {
@@ -52,6 +53,8 @@ export function createDownloadManager({
   generatePeerIdFn = generatePeerId,
   fetchImpl = fetch,
   trackerPort = DEFAULT_TRACKER_PORT,
+  torrentFetchAttempts = 3,
+  torrentFetchRetryDelayMs = 1000,
 } = {}) {
   const jobs = new Map();
   // Per job, what the streaming endpoint needs once the .torrent is parsed (not in the status).
@@ -354,13 +357,23 @@ export function createDownloadManager({
     };
   }
 
+  // A network error is retried (a dropped connection is common, and failing here fails the whole
+  // job); an HTTP error is the server's answer and is not.
   async function fetchTorrentBytes(torrentUrl) {
     let response;
 
-    try {
-      response = await fetchImpl(torrentUrl);
-    } catch (err) {
-      throw new TorrentFetchError(`Failed to fetch torrent from ${torrentUrl}: ${err.message}`);
+    for (let attempt = 1; !response; attempt += 1) {
+      try {
+        response = await fetchImpl(torrentUrl);
+      } catch (err) {
+        if (attempt >= torrentFetchAttempts) {
+          throw new TorrentFetchError(
+            `Failed to fetch torrent from ${torrentUrl} after ${attempt} attempt(s): ${describeFetchError(err)}`,
+          );
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, torrentFetchRetryDelayMs * attempt));
+      }
     }
 
     if (!response.ok) {
