@@ -32,6 +32,7 @@ export function createSourcePool(
         ...source,
         key,
         connectionFailures: 0,
+        successes: 0,
         hashFailures: 0,
         suspendedUntil: 0,
         banned: false,
@@ -48,8 +49,10 @@ export function createSourcePool(
   }
 
   // The active source that failed this piece the least, rotating among ties so the load
-  // spreads. `failuresBySource` maps a source key to how often it failed this piece.
-  function pick(failuresBySource) {
+  // spreads and unknown sources get tried. `failuresBySource` maps a source key to how often
+  // it failed this piece. With `preferProven` (a piece someone is waiting for), ties go to the
+  // source with the most successful pieces, then to web-seeds: no gamble on an untested peer.
+  function pick(failuresBySource, { preferProven = false } = {}) {
     const active = sources.filter(isActive);
 
     if (active.length === 0) {
@@ -57,15 +60,12 @@ export function createSourcePool(
     }
 
     let best = null;
-    let bestFailures = Infinity;
 
     for (let i = 0; i < active.length; i += 1) {
       const source = active[(cursor + i) % active.length];
-      const failures = failuresBySource.get(source.key) ?? 0;
 
-      if (failures < bestFailures) {
+      if (best === null || isBetter(source, best, failuresBySource, preferProven)) {
         best = source;
-        bestFailures = failures;
       }
     }
 
@@ -74,8 +74,24 @@ export function createSourcePool(
     return best;
   }
 
+  function isBetter(candidate, current, failuresBySource, preferProven) {
+    const failureDiff =
+      (failuresBySource.get(candidate.key) ?? 0) - (failuresBySource.get(current.key) ?? 0);
+
+    if (failureDiff !== 0 || !preferProven) {
+      return failureDiff < 0;
+    }
+
+    if (candidate.successes !== current.successes) {
+      return candidate.successes > current.successes;
+    }
+
+    return candidate.kind === 'webseed' && current.kind !== 'webseed';
+  }
+
   function reportSuccess(source) {
     source.connectionFailures = 0;
+    source.successes += 1;
   }
 
   function reportFailure(source, err) {

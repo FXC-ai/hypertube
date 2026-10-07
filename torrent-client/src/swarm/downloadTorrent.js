@@ -34,6 +34,11 @@ const MAX_PIECES_IN_STALL_MESSAGE = 3;
 // `refreshIntervalMs`. There is no fixed budget per piece: the download fails only when no
 // piece has completed for `stallTimeoutMs`, which covers a dead swarm and a piece that keeps
 // failing everywhere alike.
+//
+// `priorityOf(pieceIndex)` (lower first, default 0 for all) lets the caller reorder the queue
+// while it runs, e.g. to fetch first the bytes ffmpeg is waiting for. Ties keep queue order.
+// Pieces with a priority below `provenSourcesBelowPriority` go to sources that already
+// delivered pieces rather than to the next untested one in the rotation.
 export async function downloadTorrent(torrent, peers, options) {
   const {
     infoHash,
@@ -54,6 +59,8 @@ export async function downloadTorrent(torrent, peers, options) {
     sourceCooldownMs = 30000,
     onProgress,
     onSourcesChange,
+    priorityOf = () => 0,
+    provenSourcesBelowPriority = -Infinity,
     signal,
   } = options;
 
@@ -211,8 +218,13 @@ export async function downloadTorrent(torrent, peers, options) {
 
       maybeRefreshSources();
       const now = Date.now();
-      const readyIndex = pending.findIndex((piece) => piece.readyAt <= now);
-      const source = readyIndex === -1 ? null : pool.pick(pending[readyIndex].failuresBySource);
+      const readyIndex = pickReadyPiece(pending, now, priorityOf);
+      const source =
+        readyIndex === -1
+          ? null
+          : pool.pick(pending[readyIndex].failuresBySource, {
+              preferProven: priorityOf(pending[readyIndex].pieceIndex) < provenSourcesBelowPriority,
+            });
 
       if (!source) {
         await sleep(idleDelay(), signal);
@@ -283,6 +295,27 @@ export async function downloadTorrent(torrent, peers, options) {
       [...fileHandlePromises.values()].map((promise) => promise.then((handle) => handle.close())),
     );
   }
+}
+
+// Index in `pending` of the ready piece with the lowest priority value, or -1.
+function pickReadyPiece(pending, now, priorityOf) {
+  let best = -1;
+  let bestPriority = Infinity;
+
+  for (let i = 0; i < pending.length; i += 1) {
+    if (pending[i].readyAt > now) {
+      continue;
+    }
+
+    const priority = priorityOf(pending[i].pieceIndex);
+
+    if (priority < bestPriority) {
+      best = i;
+      bestPriority = priority;
+    }
+  }
+
+  return best;
 }
 
 function sleep(ms, signal) {

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { streamFile } from '../stream/streamFile.js';
 import { TorrentFileError } from '../torrentFile.js';
 import {
   createDownloadManager,
@@ -10,6 +11,11 @@ import {
 } from './downloadManager.js';
 
 const DOWNLOAD_ID_PATTERN = /^\/downloads\/([^/]+)$/;
+const FILE_STREAM_PATTERN = /^\/downloads\/([^/]+)\/files\/(\d+)$/;
+const DEFAULT_STREAM_OPTIONS = {
+  readaheadBytes: Number(process.env.STREAM_READAHEAD_BYTES ?? 8 * 1024 * 1024),
+  stallTimeoutMs: Number(process.env.STREAM_STALL_TIMEOUT_MS ?? 60000),
+};
 
 // In Docker the shared volume exists: pre-fill the page with the path Laravel reads from.
 const DOCKER_STORAGE_DIR = '/var/www/html/storage';
@@ -24,16 +30,25 @@ function renderUiPage() {
   return UI_TEMPLATE.replace('__DEFAULT_OUTPUT_DIR__', outputDir);
 }
 
-// Plain node:http, no framework. The manager is injectable for tests.
-export function createServer({ manager = createDownloadManager() } = {}) {
+// Plain node:http, no framework. The manager and the stream timings are injectable for tests.
+export function createServer({
+  manager = createDownloadManager(),
+  streamOptions = DEFAULT_STREAM_OPTIONS,
+} = {}) {
   return createHttpServer((req, res) => {
-    handleRequest(req, res, manager).catch((err) => {
+    handleRequest(req, res, manager, streamOptions).catch((err) => {
+      if (res.headersSent) {
+        res.destroy(err);
+
+        return;
+      }
+
       sendJson(res, 500, { error: err.message });
     });
   });
 }
 
-async function handleRequest(req, res, manager) {
+async function handleRequest(req, res, manager, streamOptions) {
   if (req.method === 'GET' && req.url === '/health') {
     sendJson(res, 200, { status: 'ok' });
 
@@ -59,6 +74,14 @@ async function handleRequest(req, res, manager) {
 
   if (req.method === 'POST' && req.url === '/downloads') {
     await handleStart(req, res, manager);
+
+    return;
+  }
+
+  const streamMatch = req.url?.match(FILE_STREAM_PATTERN);
+
+  if (streamMatch && (req.method === 'GET' || req.method === 'HEAD')) {
+    await handleStream(req, res, manager, streamOptions, streamMatch);
 
     return;
   }
@@ -177,6 +200,25 @@ function torrentSource({ torrentUrl, torrentBase64 }) {
     torrentUrl,
     torrentBytes: torrentBase64 === undefined ? undefined : Buffer.from(torrentBase64, 'base64'),
   };
+}
+
+async function handleStream(req, res, manager, streamOptions, [, rawId, rawIndex]) {
+  const opened = await manager.openStream(
+    decodeURIComponent(rawId),
+    Number(rawIndex),
+    streamOptions,
+  );
+
+  if (opened.kind === 'notFound') {
+    sendJson(res, 404, { error: 'Unknown download id or file index not selected' });
+  } else if (opened.kind === 'gone') {
+    sendJson(res, 410, { status: opened.status, error: opened.error });
+  } else if (opened.kind === 'stalled') {
+    res.setHeader('Retry-After', '5');
+    sendJson(res, 503, { error: 'The .torrent is not parsed yet' });
+  } else {
+    await streamFile(req, res, opened.source, streamOptions);
+  }
 }
 
 function sendJson(res, statusCode, body) {

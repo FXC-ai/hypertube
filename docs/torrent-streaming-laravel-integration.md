@@ -23,6 +23,13 @@ Pour lever les inconnues avant d'écrire une ligne dans Laravel, [`torrent-clien
 | Ouverture du flux quand le job est en échec : le client répond **410 Gone** | Avec `-reconnect_on_http_error 5xx`, ffprobe s'arrête **net** (un 410 n'est pas un 5xx). |
 | En cours de lecture, job en échec (410) | ffmpeg retente sur toute erreur jusqu'à `-reconnect_delay_max` : arrêt au bout de 39 s avec `30`, de **18 s avec `5`**. Avec `5`, une pièce en retard passe toujours, puisque c'est le client qui attend la pièce, pas ffmpeg. |
 
+Depuis, l'endpoint est implémenté (#28) et a été vérifié **sur un vrai torrent** (*His Girl Friday*, 1940, domaine public, archive.org, mp4 de 575 Mo, pièces de 2 Mo), avec les options d'entrée de la section 4 :
+
+| Mesure | Résultat |
+|---|---|
+| ffprobe sur l'URL juste après `POST /downloads` | Durée (1 h 31) et pistes en **5,3 s**, dont 2 s de récupération du `.torrent`, revérification et annonce |
+| Commande HLS exacte de `HlsCommandBuilder` | 4 min de film converties à 10 s, 11 min à 30 s, 29 min à 60 s (téléchargement terminé vers 45 s), aucune erreur |
+
 Ce que ffprobe demande réellement sur un MP4 avec `moov` en fin de fichier :
 
 ```

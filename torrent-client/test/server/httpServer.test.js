@@ -105,6 +105,7 @@ test('GET / serves the test page with the default outputDir and the API referenc
       "method:'POST',path:'/torrents/inspect'",
       "method:'POST',path:'/downloads'",
       "method:'GET',path:'/downloads/:id'",
+      "method:'GET',path:'/downloads/:id/files/:index'",
       "method:'DELETE',path:'/downloads/:id'",
     ]) {
       assert.ok(page.includes(route), route);
