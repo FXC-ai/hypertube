@@ -49,6 +49,14 @@ const END_GAME_PIECES = 32;
 // while it runs, e.g. to fetch first the bytes ffmpeg is waiting for. Ties keep queue order.
 // Pieces with a priority below `provenSourcesBelowPriority` go to sources that already
 // delivered pieces rather than to the next untested one in the rotation.
+//
+// Stale pieces: archive.org rewrites some files of an item (its _meta.xml...) after the
+// torrent was made, so a piece sharing bytes with such a file never matches its hash, whoever
+// serves it. When a piece comes back with a wrong SHA-1 already seen for it, that is not the
+// source's fault: it no longer counts toward banning the source. Once a web-seed has sent the
+// same wrong copy `staleHashThreshold` times, and `acceptUnverifiedPiece(pieceIndex)` says the
+// caller can check the files another way (archive.org publishes each file's SHA-1), the copy
+// is written as is and reported with `unverified: true`; the result lists those pieces.
 export async function downloadTorrent(torrent, peers, options) {
   const {
     infoHash,
@@ -74,6 +82,8 @@ export async function downloadTorrent(torrent, peers, options) {
     onSourcesChange,
     priorityOf = () => 0,
     provenSourcesBelowPriority = -Infinity,
+    staleHashThreshold = 2,
+    acceptUnverifiedPiece = () => false,
     signal,
   } = options;
 
@@ -107,6 +117,7 @@ export async function downloadTorrent(torrent, peers, options) {
       failuresBySource: new Map(),
       // Keep each distinct failure: the last error alone can hide the real cause.
       reasons: new Set(),
+      badHashes: new Map(), // wrong SHA-1 received -> how many times
       done: false,
       holders: new Map(), // source key -> AbortController of each fetch of this piece
     }));
@@ -114,6 +125,7 @@ export async function downloadTorrent(torrent, peers, options) {
   const inFlight = new Map(); // pieceIndex -> piece, while at least one source fetches it
   const sessions = new Map(); // peer key -> peer session
   const webSeedUrlCache = new Map();
+  const unverifiedPieces = [];
   let completed = 0;
   let failure = null;
   let lastProgressAt = Date.now();
@@ -238,7 +250,7 @@ export async function downloadTorrent(torrent, peers, options) {
   }
 
   // First valid copy of a piece: write it, stop the other sources still fetching it.
-  async function complete(piece, buffer) {
+  async function complete(piece, buffer, { unverified = false } = {}) {
     if (piece.done) {
       return;
     }
@@ -253,8 +265,20 @@ export async function downloadTorrent(torrent, peers, options) {
     inFlight.delete(piece.pieceIndex);
     completed += 1;
     lastProgressAt = Date.now();
-    onProgress?.({ completed, total: numPieces, pieceIndex: piece.pieceIndex });
+    onProgress?.({ completed, total: numPieces, pieceIndex: piece.pieceIndex, unverified });
     wake();
+  }
+
+  // Records a wrong copy of `piece`; true when that exact copy had already been received.
+  function seenBefore(piece, err) {
+    if (!err?.hashMismatch || !err.actualHash) {
+      return false;
+    }
+
+    const times = piece.badHashes.get(err.actualHash) ?? 0;
+    piece.badHashes.set(err.actualHash, times + 1);
+
+    return times > 0;
   }
 
   // `source` stopped fetching `piece`. With `err`, that counts as a failure against the source
@@ -270,7 +294,7 @@ export async function downloadTorrent(torrent, peers, options) {
 
     if (err && !(err instanceof CancelledError)) {
       const before = pool.counts().active;
-      pool.reportFailure(source, err);
+      pool.reportFailure(source, err, { countHashFailure: !seenBefore(piece, err) });
 
       if (pool.counts().active !== before) {
         reportSources();
@@ -407,9 +431,24 @@ export async function downloadTorrent(torrent, peers, options) {
             pool.reportSuccess(source);
             await complete(piece, buffer);
           },
-          onBadPiece: (pieceIndex, err) => {
+          onBadPiece: async (pieceIndex, err, buffer) => {
+            const piece = byIndex.get(pieceIndex);
             settled.add(pieceIndex);
-            release(byIndex.get(pieceIndex), source, err);
+
+            if (
+              (piece.badHashes.get(err.actualHash) ?? 0) + 1 >= staleHashThreshold &&
+              acceptUnverifiedPiece(pieceIndex)
+            ) {
+              seenBefore(piece, err);
+              piece.holders.delete(source.key);
+              piece.reasons.add(`${err.message} (kept unverified)`);
+              unverifiedPieces.push(pieceIndex);
+              await complete(piece, buffer, { unverified: true });
+
+              return;
+            }
+
+            release(piece, source, err);
           },
         },
       );
@@ -510,7 +549,12 @@ export async function downloadTorrent(torrent, peers, options) {
     // Zero-length files overlap no piece, so touch every file to make sure they all exist.
     await Promise.all(wantedFiles.map((file) => handleFor(file)));
 
-    return { outputDir, piecesDownloaded: completed, files: wantedFiles.map((f) => f.fileName) };
+    return {
+      outputDir,
+      piecesDownloaded: completed,
+      files: wantedFiles.map((f) => f.fileName),
+      unverifiedPieces,
+    };
   } finally {
     for (const session of sessions.values()) {
       session.close();

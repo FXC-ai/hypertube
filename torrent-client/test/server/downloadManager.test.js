@@ -315,3 +315,51 @@ test('fetching the .torrent is retried after a network error, never after an HTT
   );
   assert.equal(httpCalls, 1);
 });
+
+// Stands in for downloadTorrent: writes movie.mp4, reports its last piece as unverified.
+function downloadWithUnverifiedLastPiece(content) {
+  return async (torrent, peers, options) => {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(`${options.outputDir}/movie.mp4`, content);
+    assert.equal(options.acceptUnverifiedPiece(2), true);
+    options.onProgress({ completed: 1, total: 3, pieceIndex: 0 });
+    options.onProgress({ completed: 2, total: 3, pieceIndex: 1 });
+    options.onProgress({ completed: 3, total: 3, pieceIndex: 2, unverified: true });
+
+    return { unverifiedPieces: [2] };
+  };
+}
+
+test('an unverified piece completes the job only if the whole file matches archive.org', async () => {
+  const { mkdtemp } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { createHash } = await import('node:crypto');
+  const content = Buffer.alloc(240, 5);
+  const sha1 = createHash('sha1').update(content).digest('hex');
+  const torrent = { ...fakeTorrent({ urlList: ['https://archive.org/download/'] }), name: 'item' };
+  const run = async (published) => {
+    const outputDir = await mkdtemp(`${tmpdir()}/unverified-`);
+    const asked = [];
+    const manager = managerFor(torrent, {
+      downloadTorrentFn: downloadWithUnverifiedLastPiece(content),
+      fetchArchiveFileHashesFn: async (item) => {
+        asked.push(item);
+
+        return new Map([['movie.mp4', published]]);
+      },
+    });
+    const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir });
+    await waitForEnd(manager, id);
+
+    return { status: manager.getStatus(id), asked };
+  };
+
+  const good = await run(sha1);
+  assert.equal(good.status.status, 'completed');
+  assert.deepEqual(good.asked, ['item']);
+  assert.deepEqual(good.status.files[0].availableRanges, [[0, 240]]);
+
+  const bad = await run('00'.repeat(20));
+  assert.equal(bad.status.status, 'failed');
+  assert.match(bad.status.error, /does not match the SHA-1 archive.org publishes/);
+});

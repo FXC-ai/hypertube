@@ -63,3 +63,16 @@ test('a source with every slot taken is skipped until a slot is released', () =>
   pool.release(first);
   assert.equal(pool.pick(new Map()).key, first.key);
 });
+
+test('a corrupted piece that is not the source fault does not count toward a ban', () => {
+  const pool = createSourcePool([SEED]);
+  const err = Object.assign(new Error('hash mismatch'), { hashMismatch: true });
+
+  pool.reportFailure(pool.pick(new Map()), err);
+  pool.reportFailure(pool.pick(new Map()), err, { countHashFailure: false });
+  pool.reportFailure(pool.pick(new Map()), err, { countHashFailure: false });
+  assert.deepEqual(pool.counts(), { active: 1, dropped: 0 });
+
+  pool.reportFailure(pool.pick(new Map()), err);
+  assert.deepEqual(pool.counts(), { active: 0, dropped: 1 });
+});

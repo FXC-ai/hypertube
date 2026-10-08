@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
+import { archiveItemOf, fetchArchiveFileHashes, sha1OfFile } from '../archiveOrg.js';
 import { CancelledError } from '../cancelledError.js';
 import {
   classifyFile,
@@ -55,6 +56,7 @@ export function createDownloadManager({
   trackerPort = DEFAULT_TRACKER_PORT,
   torrentFetchAttempts = 3,
   torrentFetchRetryDelayMs = 1000,
+  fetchArchiveFileHashesFn = (item) => fetchArchiveFileHashes(item, { fetchImpl }),
 } = {}) {
   const jobs = new Map();
   // Per job, what the streaming endpoint needs once the .torrent is parsed (not in the status).
@@ -194,11 +196,16 @@ export function createDownloadManager({
 
       streamSource.ready.resolve();
 
-      function countPiece(pieceIndex) {
+      // An unverified piece (see "Stale pieces" in downloadTorrent.js) counts as downloaded but
+      // is not served to the stream until its whole file has been checked.
+      function countPiece(pieceIndex, { unverified = false } = {}) {
         const { offset, length } = pieceRanges[pieceIndex];
         job.piecesCompleted += 1;
-        availability.mark(pieceIndex);
-        detectContainers(job, selectedFiles, availability);
+
+        if (!unverified) {
+          availability.mark(pieceIndex);
+          detectContainers(job, selectedFiles, availability);
+        }
 
         for (const overlap of computeOverlaps(selectedFiles, offset, length)) {
           const fileStatus = fileStatusByIndex.get(overlap.file.index);
@@ -253,7 +260,8 @@ export function createDownloadManager({
         );
       }
 
-      await downloadTorrentFn(torrent, peers, {
+      const archiveItem = archiveItemOf(torrent);
+      const result = await downloadTorrentFn(torrent, peers, {
         infoHash,
         peerId,
         outputDir: job.outputDir,
@@ -268,8 +276,21 @@ export function createDownloadManager({
         onSourcesChange: (counts) => {
           job.sources = counts;
         },
-        onProgress: ({ pieceIndex }) => countPiece(pieceIndex),
+        acceptUnverifiedPiece: () => archiveItem !== null,
+        onProgress: ({ pieceIndex, unverified }) => countPiece(pieceIndex, { unverified }),
       });
+
+      if (result?.unverifiedPieces?.length > 0) {
+        job.status = 'checking';
+        await verifyWholeFiles(job, {
+          archiveItem,
+          selectedFiles,
+          pieceRanges,
+          unverifiedPieces: result.unverifiedPieces,
+        });
+        result.unverifiedPieces.forEach((pieceIndex) => availability.mark(pieceIndex));
+        detectContainers(job, selectedFiles, availability);
+      }
 
       job.status = 'completed';
     } catch (err) {
@@ -281,6 +302,43 @@ export function createDownloadManager({
       }
     } finally {
       streamSources.get(job.id).ready.resolve();
+    }
+  }
+
+  // Every chosen file touched by an unverified piece must match the SHA-1 archive.org publishes
+  // for it; otherwise the job fails rather than hand over a file nobody could check.
+  async function verifyWholeFiles(
+    job,
+    { archiveItem, selectedFiles, pieceRanges, unverifiedPieces },
+  ) {
+    const hashes = await fetchArchiveFileHashesFn(archiveItem);
+    const touched = new Set();
+
+    for (const pieceIndex of unverifiedPieces) {
+      const { offset, length } = pieceRanges[pieceIndex];
+
+      for (const overlap of computeOverlaps(selectedFiles, offset, length)) {
+        touched.add(overlap.file);
+      }
+    }
+
+    for (const file of touched) {
+      const expected = hashes.get(file.path);
+      const pieces = unverifiedPieces.join(', ');
+
+      if (!expected) {
+        throw new DownloadManagerError(
+          `Piece(s) ${pieces} never matched their hash and archive.org publishes no SHA-1 for ${file.path}: cannot check it`,
+        );
+      }
+
+      const actual = await sha1OfFile(join(job.outputDir, file.fileName));
+
+      if (actual !== expected) {
+        throw new DownloadManagerError(
+          `Piece(s) ${pieces} never matched their hash, and ${file.path} does not match the SHA-1 archive.org publishes (expected ${expected}, got ${actual})`,
+        );
+      }
     }
   }
 

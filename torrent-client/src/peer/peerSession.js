@@ -207,7 +207,7 @@ export function createPeerSession(peer, options) {
       request,
       new PeerError(
         `Piece ${index} hash mismatch from ${label}: expected ${request.pieceHash}, got ${actualHash}`,
-        { hashMismatch: true },
+        { hashMismatch: true, actualHash },
       ),
     );
   }

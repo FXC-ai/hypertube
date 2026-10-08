@@ -3,7 +3,8 @@
 // then gets one more chance: web-seeds are often the only source for archive.org, so nobody is
 // written off for a network hiccup. A source that sends `maxHashFailures` corrupted pieces is
 // banned for good. Failing a piece for another reason (peer without that piece, HTTP 404) does
-// not count against the source.
+// not count against the source, and neither does a corrupted piece the caller knows is not the
+// source's fault (`countHashFailure: false`, see downloadTorrent).
 //
 // `capacityOf(source)` caps how many pieces one source fetches at once: a source with every
 // slot taken (acquire/release) is skipped, so the load follows each source's speed.
@@ -117,10 +118,10 @@ export function createSourcePool(
     source.successes += 1;
   }
 
-  function reportFailure(source, err) {
+  function reportFailure(source, err, { countHashFailure = true } = {}) {
     source.lastError = err.message;
 
-    if (err.hashMismatch) {
+    if (err.hashMismatch && countHashFailure) {
       source.hashFailures += 1;
       source.banned = source.hashFailures >= maxHashFailures;
     }

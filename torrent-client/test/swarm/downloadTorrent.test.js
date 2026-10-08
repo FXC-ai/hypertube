@@ -631,3 +631,88 @@ test('end-game: a piece a peer never sends is also asked elsewhere instead of wa
     webSeed.close();
   }
 });
+
+// archive.org case (CC_1918_xx_xx_TripleTrouble): movie.mp4 then meta.xml, sharing the last
+// piece, and the web-seed now serves a rewritten meta.xml. That piece can never match its hash.
+async function staleLastPieceCase(fn) {
+  const movie = Buffer.alloc(PIECE_LENGTH * 2 + 100, 7);
+  const metaAtTorrentTime = Buffer.alloc(200, 1);
+  const metaToday = Buffer.alloc(200, 2);
+  const stream = Buffer.concat([movie, metaAtTorrentTime]);
+  const torrent = {
+    name: 'item',
+    infoHash: INFO_HASH.toString('hex'),
+    pieceLength: PIECE_LENGTH,
+    pieces: [0, 1, 2].map((i) =>
+      createHash('sha1')
+        .update(stream.subarray(i * PIECE_LENGTH, (i + 1) * PIECE_LENGTH))
+        .digest('hex'),
+    ),
+    totalLength: stream.length,
+    files: [
+      { path: 'movie.mp4', length: movie.length },
+      { path: 'item_meta.xml', length: metaToday.length },
+    ],
+  };
+  const webSeed = await startFakeWebSeed('item', {
+    'movie.mp4': movie,
+    'item_meta.xml': metaToday,
+  });
+
+  try {
+    await withTempDir((outputDir) =>
+      fn({ torrent, movie, outputDir, url: `http://127.0.0.1:${webSeed.address().port}/` }),
+    );
+  } finally {
+    webSeed.close();
+  }
+}
+
+test('a piece that never matches because archive.org rewrote a neighbour file is kept unverified', async () => {
+  await staleLastPieceCase(async ({ torrent, movie, outputDir, url }) => {
+    const progress = [];
+    const result = await downloadTorrent(torrent, [], {
+      ...FAST,
+      infoHash: INFO_HASH,
+      peerId: CLIENT_PEER_ID,
+      outputDir,
+      webSeedUrls: [url],
+      fileIndexes: [0],
+      acceptUnverifiedPiece: () => true,
+      onProgress: ({ pieceIndex, unverified }) => progress.push([pieceIndex, unverified]),
+    });
+
+    assert.deepEqual(result.unverifiedPieces, [2]);
+    assert.deepEqual(
+      progress.sort((a, b) => a[0] - b[0]),
+      [
+        [0, false],
+        [1, false],
+        [2, true],
+      ],
+    );
+    assert.ok((await readFile(join(outputDir, 'movie.mp4'))).equals(movie));
+  });
+});
+
+test('without a way to check the file, the stale piece fails the download but never bans the web-seed', async () => {
+  await staleLastPieceCase(async ({ torrent, outputDir, url }) => {
+    await assert.rejects(
+      downloadTorrent(torrent, [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        webSeedUrls: [url],
+        fileIndexes: [0],
+        stallTimeoutMs: 300,
+      }),
+      (err) => {
+        assert.match(err.message, /Stuck: piece 2 .*hash mismatch/);
+        assert.match(err.message, /1 active source\(s\), 0 dropped/);
+
+        return true;
+      },
+    );
+  });
+});

@@ -2,13 +2,17 @@ import { createHash } from 'node:crypto';
 import { CancelledError } from '../cancelledError.js';
 import { computeOverlaps } from '../torrentLayout.js';
 
-// Same flags as PeerError: connectionFailure (server unreachable) and hashMismatch.
+// Same flags as PeerError: connectionFailure (server unreachable), hashMismatch and actualHash.
 export class WebSeedError extends Error {
-  constructor(message, { connectionFailure = false, hashMismatch = false } = {}) {
+  constructor(
+    message,
+    { connectionFailure = false, hashMismatch = false, actualHash = null } = {},
+  ) {
     super(message);
     this.name = 'WebSeedError';
     this.connectionFailure = connectionFailure;
     this.hashMismatch = hashMismatch;
+    this.actualHash = actualHash;
   }
 }
 
@@ -17,7 +21,7 @@ const DEFAULT_TIMEOUT_MS = 20000;
 // Downloads a run of consecutive pieces via BEP19 with one ranged GET per file the run overlaps,
 // at <baseUrl><torrent.name>/<file.path> (the archive.org convention). Bytes are cut into pieces
 // as they arrive: each piece is verified against its SHA-1 and handed to `onPiece` at once (a
-// corrupted one to `onBadPiece`), so a long run does not delay the first piece. One request per
+// corrupted one to `onBadPiece`, with its bytes), so a long run does not delay the first piece. One request per
 // piece (the old way) paid a round trip, and a redirect, for every 128 KiB to 2 MiB.
 //
 // `urlCache` (a Map shared across calls) remembers where a redirect led: archive.org/download/
@@ -79,8 +83,9 @@ export async function downloadPiecesFromWebSeed(
           pieceIndex,
           new WebSeedError(
             `Piece ${pieceIndex} hash mismatch via web-seed: expected ${expected}, got ${actual}`,
-            { hashMismatch: true },
+            { hashMismatch: true, actualHash: actual },
           ),
+          Buffer.from(piece),
         );
       } else {
         await onPiece(pieceIndex, Buffer.from(piece));
