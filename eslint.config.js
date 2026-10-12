@@ -49,7 +49,7 @@ export default [
         },
     },
     {
-        files: ['torrent-client/**/*.js'],
+        files: ['torrent-client/**/*.{js,mjs}'],
         languageOptions: {
             globals: {
                 ...globals.node,
