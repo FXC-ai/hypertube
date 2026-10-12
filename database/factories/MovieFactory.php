@@ -20,7 +20,7 @@ class MovieFactory extends Factory
      */
     public function definition(): array
     {
-        $filename = fake()->unique()->slug(3) . '.mp4';
+        $filename = fake()->unique()->slug(3).'.mp4';
         /** @var ConversionStatus $status */
         $status = fake()->randomElement(ConversionStatus::cases());
 
@@ -31,16 +31,15 @@ class MovieFactory extends Factory
                 'en' => fake()->sentence(3),
             ],
             'filename' => $filename,
-            'imdb_id' => 'tt' . fake()->numerify('######'),
+            'imdb_id' => 'tt'.fake()->numerify('######'),
             'torrent_url' => null,
             ...$this->conversionAttributes($status),
         ];
     }
 
-
     public function withConversionStatus(ConversionStatus $status): static
     {
-        return $this->state(fn(): array => $this->conversionAttributes($status));
+        return $this->state(fn (): array => $this->conversionAttributes($status));
     }
 
     /**

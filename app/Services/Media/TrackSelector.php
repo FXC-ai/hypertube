@@ -7,8 +7,6 @@ use App\Data\MediaStream;
 use App\Data\SelectedTracks;
 use App\Exceptions\MediaConversionException;
 
-
-
 final class TrackSelector
 {
     public function select(MediaInfo $media): SelectedTracks
@@ -24,7 +22,7 @@ final class TrackSelector
             audio: $this->selectAudio($media->audios()),
             subtitles: array_values(array_filter(
                 $media->subtitles(),
-                fn(MediaStream $stream): bool => in_array(
+                fn (MediaStream $stream): bool => in_array(
                     $stream->language,
                     ['fra', 'eng', 'deu', 'ita'],
                     true,

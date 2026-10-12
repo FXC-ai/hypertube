@@ -35,7 +35,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('movies', function (Blueprint $table) {
-            $table->removeColumn("imdb_id");
+            $table->removeColumn('imdb_id');
         });
 
         Schema::dropIfExists('movie_data');

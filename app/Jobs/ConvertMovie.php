@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Data\SelectedTracks;
 use App\Enums\ConversionStatus;
 use App\Models\Movie;
 use App\Services\Media\HlsCommandBuilder;
@@ -11,15 +10,12 @@ use App\Services\Media\HlsMasterPlaylistBuilder;
 use App\Services\Media\HlsReadinessChecker;
 use App\Services\Media\MediaProbe;
 use App\Services\Media\TrackSelector;
-use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
-
-
 
 final class ConvertMovie implements ShouldQueue
 {
@@ -40,7 +36,7 @@ final class ConvertMovie implements ShouldQueue
         HlsConverter $hlsConverter
     ): void {
 
-        Log::channel("my_debug")->debug("Etape 2 : ", ["ConvertMovie" => "handle"]);
+        Log::channel('my_debug')->debug('Etape 2 : ', ['ConvertMovie' => 'handle']);
 
         $attempt = (string) Str::uuid();
         $startedAt = now();
@@ -63,7 +59,7 @@ final class ConvertMovie implements ShouldQueue
 
         $movie = Movie::query()->findOrFail($this->movieId);
 
-        Log::channel("my_debug")->debug("ConvertMovie", ["movie" => json_encode($movie, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+        Log::channel('my_debug')->debug('ConvertMovie', ['movie' => json_encode($movie, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
 
         try {
 
@@ -80,7 +76,7 @@ final class ConvertMovie implements ShouldQueue
 
             $tracksSelected = $trackSelector->select($probe->probe($inputPath));
 
-            Log::channel("my_debug")->debug("ConvertMovie ", ["tracksSelected" => json_encode($tracksSelected, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)]);
+            Log::channel('my_debug')->debug('ConvertMovie ', ['tracksSelected' => json_encode($tracksSelected, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)]);
 
             $published = false;
 
@@ -94,10 +90,11 @@ final class ConvertMovie implements ShouldQueue
                 &$published,
             ): void {
 
-                Log::channel("my_debug")->debug("publishWhenReady", ["called"]);
+                Log::channel('my_debug')->debug('publishWhenReady', ['called']);
 
                 if ($published || ! $hlsReadinessChecker->isReady($outputDirectory, $tracksSelected)) {
-                    Log::channel("my_debug")->debug("publishWhenReady stops", [$tracksSelected]);
+                    Log::channel('my_debug')->debug('publishWhenReady stops', [$tracksSelected]);
+
                     return;
                 }
 
@@ -136,9 +133,9 @@ final class ConvertMovie implements ShouldQueue
                     'conversion_completed_at' => now(),
                 ]);
 
-            Log::channel("my_debug")->debug("ConverMovie", ["handle ended, la conversion est terminée."]);
+            Log::channel('my_debug')->debug('ConverMovie', ['handle ended, la conversion est terminée.']);
         } catch (Throwable $exception) {
-            Log::channel("my_debug")->error("ConvertMovie", ["exception : ", $exception]);
+            Log::channel('my_debug')->error('ConvertMovie', ['exception : ', $exception]);
 
             Movie::query()
                 ->whereKey($movie->id)

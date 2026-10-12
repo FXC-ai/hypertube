@@ -2,28 +2,18 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Concerns\ProfilepictureRules;
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-
-
-
-use App\Models\User;
 use App\Models\SocialAccount;
-use Exception;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
-use phpDocumentor\Reflection\PseudoTypes\LowercaseString;
 use Throwable;
-use Laravel\Socialite\Two\User as SocialiteUser;
-
-
 
 class SocialiteController extends Controller
 {
@@ -53,7 +43,7 @@ class SocialiteController extends Controller
         }
 
         $suffix = substr(
-            hash('sha256', $provider . ':' . $socialUser->getId()),
+            hash('sha256', $provider.':'.$socialUser->getId()),
             0,
             3,
         );
@@ -62,13 +52,14 @@ class SocialiteController extends Controller
             $baseUsername,
             255 - strlen($suffix) - 1,
             '',
-        ) . '-' . $suffix;
+        ).'-'.$suffix;
     }
 
     private function downloadProfilepicture(?string $url): ?string
     {
         if ($url === null || $url === '') {
             Log::channel('my_debug')->debug('Return null: URL is empty', []);
+
             return null;
         }
 
@@ -78,11 +69,13 @@ class SocialiteController extends Controller
                 ->get($url);
         } catch (Throwable) {
             Log::channel('my_debug')->debug('Return null: HTTP request threw an exception', []);
+
             return null;
         }
 
         if (! $response->successful()) {
             Log::channel('my_debug')->debug('Return null: HTTP response was unsuccessful', []);
+
             return null;
         }
 
@@ -90,6 +83,7 @@ class SocialiteController extends Controller
 
         if ($contents === '' || strlen($contents) > 2 * 1024 * 1024) {
             Log::channel('my_debug')->debug('Return null: image is empty or larger than 2 MB', []);
+
             return null;
         }
 
@@ -97,6 +91,7 @@ class SocialiteController extends Controller
 
         if ($imageInformation === false) {
             Log::channel('my_debug')->debug('Return null: invalid image contents', []);
+
             return null;
         }
 
@@ -104,6 +99,7 @@ class SocialiteController extends Controller
 
         if ($width > 4000 || $height > 4000) {
             Log::channel('my_debug')->debug('Return null: image dimensions exceed 2000 px', []);
+
             return null;
         }
 
@@ -117,10 +113,11 @@ class SocialiteController extends Controller
 
         if ($extension === null) {
             Log::channel('my_debug')->debug('Return null: unsupported image MIME type', []);
+
             return null;
         }
 
-        $path = 'avatars/' . Str::uuid() . '.' . $extension;
+        $path = 'avatars/'.Str::uuid().'.'.$extension;
         Log::channel('my_debug')->debug('Return result of avatar storage', []);
 
         return Storage::disk('public')->put($path, $contents)
@@ -156,7 +153,7 @@ class SocialiteController extends Controller
                 ['email' => $socialUser->getEmail()],
                 [
                     'username' => $this->generateUsername($provider, $socialUser),
-                    //'profilepicture' => $this->downloadProfilepicture($socialUser->getAvatar()),
+                    // 'profilepicture' => $this->downloadProfilepicture($socialUser->getAvatar()),
                     'email_verified_at' => now(),
                 ]
             );
@@ -175,6 +172,7 @@ class SocialiteController extends Controller
                 'token' => $socialUser->token,
                 'refresh_token' => $socialUser->refreshToken,
             ]);
+
             return $user;
         });
     }

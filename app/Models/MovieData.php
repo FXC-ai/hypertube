@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -72,7 +73,7 @@ class MovieData extends Model
                 'imdbRating' => ($data['imdbRating'] != 'N/A') ? $data['imdbRating'] : null,
                 'imdbVotes' => ($data['imdbVotes'] != 'N/A') ? $data['imdbVotes'] : null,
                 'boxOffice' => ($data['BoxOffice'] != 'N/A') ? $data['BoxOffice'] : null,
-                'release_date' => $data['Released'] != 'N/A' ? \Carbon\Carbon::parse($data['Released']) : null,
+                'release_date' => $data['Released'] != 'N/A' ? Carbon::parse($data['Released']) : null,
             ],
         );
     }

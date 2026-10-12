@@ -38,7 +38,7 @@ class FortyTwoProvider extends AbstractProvider implements ProviderInterface
             [
                 RequestOptions::HEADERS => [
                     'Accept' => 'application/json',
-                    'Authorization' => 'Bearer ' . $token,
+                    'Authorization' => 'Bearer '.$token,
                 ],
             ],
         );

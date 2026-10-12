@@ -44,6 +44,7 @@ test('POST /torrents/inspect lists the files of a real torrent and suggests the 
     assert.equal(main.container, 'mp4');
     assert.ok(inspection.files.some((f) => f.kind === 'subtitle'));
     assert.ok(inspection.files.some((f) => f.kind === 'other' && !f.suggested));
+
     for (const file of inspection.files) {
       assert.equal(
         file.suggested,
@@ -51,6 +52,7 @@ test('POST /torrents/inspect lists the files of a real torrent and suggests the 
         file.path,
       );
     }
+
     assert.equal(inspection.infoHash.length, 40);
   });
 });
@@ -100,6 +102,7 @@ test('GET / serves the test page with the default outputDir and the API referenc
 
     assert.ok(!page.includes('__DEFAULT_OUTPUT_DIR__'), 'outputDir placeholder replaced');
     assert.match(page, /var ROUTES=\[/);
+
     for (const route of [
       "method:'GET',path:'/health'",
       "method:'POST',path:'/torrents/inspect'",
@@ -109,6 +112,7 @@ test('GET / serves the test page with the default outputDir and the API referenc
     ]) {
       assert.ok(page.includes(route), route);
     }
+
     assert.ok(page.includes('id="routes"'), 'API reference container');
     assert.ok(page.includes('id="inspectBox"'), 'inspection result');
     assert.ok(page.includes('id="historyRows"'), 'job history');

@@ -12,7 +12,7 @@ final readonly class MediaInfo
     {
         return array_values(array_filter(
             $this->streams,
-            fn(MediaStream $stream): bool => $stream->type === 'video' && ! $stream->isAttachedPicture(),
+            fn (MediaStream $stream): bool => $stream->type === 'video' && ! $stream->isAttachedPicture(),
         ));
     }
 
@@ -21,7 +21,7 @@ final readonly class MediaInfo
     {
         return array_values(array_filter(
             $this->streams,
-            fn(MediaStream $stream): bool => $stream->type === 'audio',
+            fn (MediaStream $stream): bool => $stream->type === 'audio',
         ));
     }
 
@@ -30,7 +30,7 @@ final readonly class MediaInfo
     {
         return array_values(array_filter(
             $this->streams,
-            fn(MediaStream $stream): bool => $stream->type === 'subtitle'
+            fn (MediaStream $stream): bool => $stream->type === 'subtitle'
                 && $stream->isTextSubtitle(),
         ));
     }

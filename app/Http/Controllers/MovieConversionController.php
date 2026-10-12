@@ -2,24 +2,23 @@
 
 namespace App\Http\Controllers;
 
-
 use App\Enums\ConversionStatus;
 use App\Jobs\ConvertMovie;
 use App\Models\Movie;
-use Inertia\Inertia;
-use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Inertia\Response;
 
 final class MovieConversionController extends Controller
 {
     public function store(Movie $movie): RedirectResponse
     {
-        Log::channel("my_debug")->debug("Etape 1 : ", ["MovieConversionController" => "store"]);
+        Log::channel('my_debug')->debug('Etape 1 : ', ['MovieConversionController' => 'store']);
 
         $queued = Movie::query()
             ->whereKey($movie->id)
-            ->whereIn('conversion_status', [ConversionStatus::Pending->value, ConversionStatus::Failed->value,])
+            ->whereIn('conversion_status', [ConversionStatus::Pending->value, ConversionStatus::Failed->value])
             ->update(
                 [
                     'conversion_status' => ConversionStatus::Queued->value,
@@ -32,10 +31,10 @@ final class MovieConversionController extends Controller
 
             );
 
-        Log::channel("my_debug")->debug("MovieConversionController : ", ["method" => "store", "queued = " => $queued]);
+        Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queued = ' => $queued]);
 
         if ($queued === 1) {
-            Log::channel("my_debug")->debug("MovieConversionController : ", ["method" => "store", "queueud = " => $queued]);
+            Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queueud = ' => $queued]);
 
             ConvertMovie::dispatch($movie->id)->afterCommit();
         }
@@ -48,14 +47,13 @@ final class MovieConversionController extends Controller
         return Inertia::render(
             'movies/show',
             [
-                'conversion' =>
-                [
+                'conversion' => [
 
                     'status' => $movie->conversion_status->value,
                     'attempt' => $movie->conversion_attempt,
                     'error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
                     'playable' => $movie->isPlayable(),
-                ]
+                ],
             ]
         );
     }

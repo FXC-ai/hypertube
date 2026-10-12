@@ -7,7 +7,6 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Input\InputOption;
 
 #[Signature('import:wikidata-movies {--limit=1000000} {--dry-run} {--batch-size=1000}')]
@@ -17,7 +16,7 @@ class ImportWikidataMovies extends Command
     protected function getQuery(int $limit): string
     {
         return sprintf(
-            <<<"SPARQL"
+            <<<'SPARQL'
             SELECT ?film ?imdbID ?internetArchiveID ?archivePage ?torrentURL ?titlesJson
             WHERE {
               {
@@ -37,7 +36,7 @@ class ImportWikidataMovies extends Command
                   FILTER(?lang IN ("fr", "en", "es", "de", "it"))
 
                   # Construction de la paire clé-valeur JSON : "fr": "Mon Titre"
-                  BIND(CONCAT('"', ?lang, '": "', REPLACE(STR(?label), '"', '\\"'), '"') AS ?langTitle)
+                  BIND(CONCAT('"', ?lang, '": "', REPLACE(STR(?label), '"', '\"'), '"') AS ?langTitle)
                 }
                 GROUP BY ?film ?imdbID ?internetArchiveID ?torrentURL
               }
@@ -67,7 +66,7 @@ class ImportWikidataMovies extends Command
         $dryRun = $this->option('dry-run');
 
         $this->info('🎬 Importing public domain films from Wikidata...');
-        $this->info("Limit: {$limit} | Batch: {$batchSize} | Mode: " . ($dryRun ? 'DRY RUN' : 'LIVE'));
+        $this->info("Limit: {$limit} | Batch: {$batchSize} | Mode: ".($dryRun ? 'DRY RUN' : 'LIVE'));
 
         $query = $this->getQuery($limit);
 
@@ -142,7 +141,7 @@ class ImportWikidataMovies extends Command
             }
 
             if ($dryRun) {
-                $this->line("📝 Would import: {$imdbId} - " . ($defaultTitle ?? 'Unknown'));
+                $this->line("📝 Would import: {$imdbId} - ".($defaultTitle ?? 'Unknown'));
                 $skipped++;
 
                 continue;
@@ -161,7 +160,7 @@ class ImportWikidataMovies extends Command
         }
 
         if (! empty($newMovies)) {
-            $this->info("\n📦 Inserting " . count($newMovies) . " movies in batches of {$batchSize}...");
+            $this->info("\n📦 Inserting ".count($newMovies)." movies in batches of {$batchSize}...");
 
             $batchInserted = 0;
             $batchTotal = 0;
@@ -182,8 +181,8 @@ class ImportWikidataMovies extends Command
         }
 
         $this->newLine();
-        $this->info("🎉 Import complete!");
-        $this->line("   ✅ Imported:  " . count($newMovies));
+        $this->info('🎉 Import complete!');
+        $this->line('   ✅ Imported:  '.count($newMovies));
         $this->line("   ⏭️  Skipped:  {$skipped}");
         $this->line("   ❌ Failed:    {$failed}");
 

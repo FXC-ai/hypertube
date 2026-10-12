@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\ConversionStatus;
-use App\Models\MovieData;
 use App\Services\OmdbService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -39,7 +38,7 @@ class Movie extends Model
 
     public function movieData()
     {
-        return $this->hasOne(\App\Models\MovieData::class);
+        return $this->hasOne(MovieData::class);
     }
 
     public function getEnrichedData(): ?array

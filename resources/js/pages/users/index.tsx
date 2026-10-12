@@ -1,14 +1,14 @@
+import { Form, Head, InfiniteScroll, Link } from '@inertiajs/react';
+import UserController from '@/actions/App/Http/Controllers/UserController'
+import Heading from '@/components/heading';
+import InputError from '@/components/input-error';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useInitials } from '@/hooks/use-initials';
 import { index } from '@/routes/users';
-import { Form, Head, InfiniteScroll, Link } from '@inertiajs/react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import Heading from '@/components/heading';
-import UserController from '@/actions/App/Http/Controllers/UserController'
-
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import InputError from '@/components/input-error';
 
 type User = {
     id: number;
@@ -76,6 +76,7 @@ function UserItem({ user }: { user: User }) {
 export default function UsersIndex({ users, filters }: UserIndexProps) {
 
     console.log(filters, users);
+
     return (
         <>
             <Head title="Users" />

@@ -2,14 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\IndexMovieRequest;
-
 use App\Enums\ConversionStatus;
+use App\Http\Requests\IndexMovieRequest;
 use App\Http\Resources\CommentResource;
 use App\Http\Resources\IndexMovieResource;
 use App\Models\Movie;
-use App\Models\MovieData;
-use App\Services\OmdbService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -54,12 +51,12 @@ class MovieController extends Controller
         $dir = $params['dir'] ?? 'asc';
         $perPage = (int) ($params['perPage'] ?? 5);
 
-        Log::channel("my_debug")->debug("search = ", [$search]);
+        Log::channel('my_debug')->debug('search = ', [$search]);
 
         $query = Movie::query();
 
         if ($search) {
-            $query->where('title', 'like', '%' . $search . '%');
+            $query->where('title', 'like', '%'.$search.'%');
         }
 
         if ($sort) {
@@ -71,8 +68,8 @@ class MovieController extends Controller
         return Inertia::render(
             'movies/index',
             [
-                "movies" => Inertia::scroll(
-                    fn() => IndexMovieResource::collection($query->paginate($perPage))
+                'movies' => Inertia::scroll(
+                    fn () => IndexMovieResource::collection($query->paginate($perPage))
                 ),
                 'filters' => [
                     'search' => $search,

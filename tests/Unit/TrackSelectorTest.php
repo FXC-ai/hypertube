@@ -3,10 +3,8 @@
 use App\Data\MediaInfo;
 use App\Data\MediaStream;
 use App\Data\SelectedTracks;
-use App\Services\Media\TrackSelector;
-
 use App\Exceptions\MediaConversionException;
-
+use App\Services\Media\TrackSelector;
 
 function selectedTracksFixture(): SelectedTracks
 {
@@ -39,7 +37,7 @@ test('the track selector keeps the video, preferred audio, and supported subtitl
     expect($tracks->video->index)->toBe(0)
         ->and($tracks->audio?->index)->toBe(1)
         ->and(array_map(
-            fn(MediaStream $subtitle): string => $subtitle->language,
+            fn (MediaStream $subtitle): string => $subtitle->language,
             $tracks->subtitles,
         ))->toBe(['eng', 'fra', 'deu', 'ita']);
 });
@@ -47,5 +45,5 @@ test('the track selector keeps the video, preferred audio, and supported subtitl
 test('the track selector rejects media without a video track', function () {
     $media = new MediaInfo([new MediaStream(1, 'audio', 'aac', 'eng', '', [])]);
 
-    expect(fn(): SelectedTracks => (new TrackSelector)->select($media))->toThrow(MediaConversionException::class, 'No video track avaible.');
+    expect(fn (): SelectedTracks => (new TrackSelector)->select($media))->toThrow(MediaConversionException::class, 'No video track avaible.');
 });

@@ -19,7 +19,7 @@ class IndexMovieCommentRequest extends FormRequest
             'perPage' => ['nullable', 'integer', 'min:1', 'max:100'],
             'sort' => ['nullable', 'string', Rule::in(['created_at'])],
             'dir' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
-            'page' => ['nullable', 'integer', 'min:1']
+            'page' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

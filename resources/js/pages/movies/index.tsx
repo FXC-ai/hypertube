@@ -1,14 +1,13 @@
-import { useInitials } from '@/hooks/use-initials';
-import { index } from '@/routes/movies';
 import { Form, Head, InfiniteScroll, Link } from '@inertiajs/react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import Heading from '@/components/heading';
 import MovieController from '@/actions/App/Http/Controllers/MovieController'
+import Heading from '@/components/heading';
 
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import InputError from '@/components/input-error';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { index } from '@/routes/movies';
 
 type Movie = {
     id: number;
@@ -83,6 +82,7 @@ function MovieItem({ movie }: { movie: Movie }) {
 export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
 
     console.log(filters, movies);
+
     return (
         <>
             <Head title="Movies" />

@@ -1,8 +1,8 @@
 <?php
 
+use App\Enums\Languages;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia;
-use App\Enums\Languages;
 
 test('an authenticated user can view another public user profile', function () {
     $authenticatedUser = User::factory()->create();
@@ -54,11 +54,11 @@ test('the public profile does not expose private user information', function () 
         ->get(route('users.show', $viewedUser))
         ->assertOk()
         ->assertInertia(
-            fn(AssertableInertia $page) => $page
+            fn (AssertableInertia $page) => $page
                 ->component('users/show')
                 ->has(
                     'user.data',
-                    fn(AssertableInertia $user) => $user
+                    fn (AssertableInertia $user) => $user
                         ->missing('email')
                         ->missing('email_verified_at')
                         ->missing('password')
@@ -84,11 +84,11 @@ test('the route returns the requested user instead of the authenticated user', f
         ->get(route('users.show', $viewedUser))
         ->assertOk()
         ->assertInertia(
-            fn(AssertableInertia $page) => $page
+            fn (AssertableInertia $page) => $page
                 ->component('users/show')
                 ->has(
                     'user.data',
-                    fn(AssertableInertia $user) => $user
+                    fn (AssertableInertia $user) => $user
                         ->where('id', $viewedUser->id)
                         ->where('username', 'viewed-user')
                         ->etc()

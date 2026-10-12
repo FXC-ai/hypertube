@@ -1,12 +1,10 @@
 <?php
 
-use Illuminate\Support\Facades\Queue;
 use App\Enums\ConversionStatus;
-
 use App\Http\Controllers\MovieConversionController;
-use App\Models\Movie;
 use App\Jobs\ConvertMovie;
-
+use App\Models\Movie;
+use Illuminate\Support\Facades\Queue;
 
 test('a pending movie is queued and a conversion job is dispatched', function () {
     Queue::fake();

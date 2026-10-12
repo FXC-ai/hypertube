@@ -8,7 +8,7 @@ test(
         $user = User::factory()->create(
             [
                 'username' => 'test',
-                'password' => 'password'
+                'password' => 'password',
             ]
         );
 
@@ -27,7 +27,6 @@ test(
         expect($user->username)->toBe('test2');
 
         $this->post(route('logout'))->assertRedirect(route('home'));
-
 
         $this->assertGuest();
 

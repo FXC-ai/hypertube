@@ -1,15 +1,14 @@
 import { Form, Head, usePage } from '@inertiajs/react';
 import { Link } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import ProfilePictureController from '@/actions/App/Http/Controllers/Settings/ProfilePictureController';
 import DeleteUser from '@/components/delete-user';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/profile';
-import { send } from '@/routes/verification';
-import type { Auth } from '@/types';
 import {
     Select,
     SelectContent,
@@ -17,10 +16,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
-import ProfilePictureController from '@/actions/App/Http/Controllers/Settings/ProfilePictureController';
+import { edit } from '@/routes/profile';
+import { send } from '@/routes/verification';
+import type { Auth } from '@/types';
+
 
 
 type PageProps = {
@@ -31,6 +31,7 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
 
     const { auth } = usePage<PageProps>().props;
     const getInitials = useInitials();
+
     return (
         <>
             <Head title="Profile settings" />

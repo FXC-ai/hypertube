@@ -2,10 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
+use Illuminate\Database\Eloquent\Model;
 
 #[Fillable(
     [
@@ -15,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
         'avatar',
         'token',
         'refresh_token',
-        'token_expires_at'
+        'token_expires_at',
     ]
 )]
 

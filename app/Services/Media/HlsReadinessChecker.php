@@ -9,7 +9,7 @@ final class HlsReadinessChecker
 {
     public function isReady(string $directory, SelectedTracks $tracks): bool
     {
-        Log::channel("my_debug")->debug("HlsReadinessChecker", ["isReady" => "is called"]);
+        Log::channel('my_debug')->debug('HlsReadinessChecker', ['isReady' => 'is called']);
 
         if (! $this->playlistHasExistingSegment($directory, 'video.m3u8', 'ts')) {
             return false;
@@ -31,13 +31,13 @@ final class HlsReadinessChecker
         string $playlistName,
         string $extension,
     ): bool {
-        $playlistPath = $directory . DIRECTORY_SEPARATOR . $playlistName;
+        $playlistPath = $directory.DIRECTORY_SEPARATOR.$playlistName;
 
-        Log::channel("my_debug")->debug("playlistHasExistingSegment", [$playlistPath]);
+        Log::channel('my_debug')->debug('playlistHasExistingSegment', [$playlistPath]);
 
         if (! is_file($playlistPath)) {
 
-            Log::channel("my_debug")->debug("HlsReadinessChecker", ["isReady return False : ", $playlistPath]);
+            Log::channel('my_debug')->debug('HlsReadinessChecker', ['isReady return False : ', $playlistPath]);
 
             return false;
         }
@@ -45,7 +45,8 @@ final class HlsReadinessChecker
         $lines = file($playlistPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
         if ($lines === false) {
-            Log::channel("my_debug")->debug("HlsReadinessChecker", ["isReady return False : ", $lines]);
+            Log::channel('my_debug')->debug('HlsReadinessChecker', ['isReady return False : ', $lines]);
+
             return false;
         }
 
@@ -56,20 +57,20 @@ final class HlsReadinessChecker
                 continue;
             }
 
-            if (preg_match('/\A[a-zA-Z0-9_-]+\.' . preg_quote($extension, '/') . '\z/', $candidate) !== 1) {
+            if (preg_match('/\A[a-zA-Z0-9_-]+\.'.preg_quote($extension, '/').'\z/', $candidate) !== 1) {
                 continue;
             }
 
-            $segmentPath = $directory . DIRECTORY_SEPARATOR . $candidate;
+            $segmentPath = $directory.DIRECTORY_SEPARATOR.$candidate;
 
             if (is_file($segmentPath) && filesize($segmentPath) > 0) {
-                Log::channel("my_debug")->debug("HlsReadinessChecker", ["isReady return True : ", $segmentPath, " exists"]);
+                Log::channel('my_debug')->debug('HlsReadinessChecker', ['isReady return True : ', $segmentPath, ' exists']);
 
                 return true;
             }
         }
 
-        Log::channel("my_debug")->debug("HlsReadinessChecker", ["isReady return False : ", $directory, $playlistName, $extension]);
+        Log::channel('my_debug')->debug('HlsReadinessChecker', ['isReady return False : ', $directory, $playlistName, $extension]);
 
         return false;
     }

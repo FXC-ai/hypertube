@@ -33,7 +33,7 @@ return new class extends Migration
             $table->dropColumn([
                 'poster', 'plot', 'genres', 'runtime',
                 'actors', 'director', 'writers', 'rated', 'language', 'awards',
-                'imdbRating', 'imdbVotes', 'boxOffice'
+                'imdbRating', 'imdbVotes', 'boxOffice',
             ]);
         });
     }

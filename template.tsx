@@ -1,6 +1,8 @@
 
 
 
+import { Head } from '@inertiajs/react';
+import { CalendarDays, Languages, UserRound } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,8 +15,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { useInitials } from '@/hooks/use-initials';
 import { show } from '@/routes/users';
-import { Head } from '@inertiajs/react';
-import { CalendarDays, Languages, UserRound } from 'lucide-react';
 
 type User = {
     id: number;

@@ -22,6 +22,7 @@ final class OmdbService
     {
         if ($this->apiKey == null) {
             Log::warning('OMDb API key not configured, skipping enrichment for {imdb_id}', ['imdb_id' => $imdbId]);
+
             return null;
         }
 
@@ -31,7 +32,7 @@ final class OmdbService
 
         try {
             $response = Http::timeout(30)->get('http://www.omdbapi.com/', [
-            // $response = Http::timeout(30)->get('http://www.omdbapi.com/demo.aspx/', [
+                // $response = Http::timeout(30)->get('http://www.omdbapi.com/demo.aspx/', [
                 'apikey' => $this->apiKey,
                 // 'token' => "demo",
                 'i' => $imdbId,
@@ -44,6 +45,7 @@ final class OmdbService
                     'imdb_id' => $imdbId,
                     'status' => $response->status(),
                 ]);
+
                 return null;
             }
             $data = $response->json();
@@ -100,7 +102,7 @@ final class OmdbService
             'year' => $data->release_date?->format('Y') ?? 'N/A',
             'rated' => $data->rated,
             'released' => $data->release_date?->format('d M Y'),
-            'runtime' => $data->runtime ? (string) $data->runtime . ' min' : 'N/A',
+            'runtime' => $data->runtime ? (string) $data->runtime.' min' : 'N/A',
             'genre' => $data->genres ? implode(', ', $data->genres) : 'N/A',
             'director' => $data->director ?? 'N/A',
             'writer' => $data->writers ? implode(', ', $data->writers) : 'N/A',
