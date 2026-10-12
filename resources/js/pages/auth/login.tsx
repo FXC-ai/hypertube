@@ -19,8 +19,9 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword }: Props) {
-
-    const [redirectingProvider, setRedirectingProvider] = useState<'github' | 'fortytwo' | null>(null);
+    const [redirectingProvider, setRedirectingProvider] = useState<
+        'github' | 'fortytwo' | null
+    >(null);
 
     const redirectToProvider = (provider: 'github' | 'fortytwo') => {
         setRedirectingProvider(provider);
@@ -103,7 +104,7 @@ export default function Login({ status, canResetPassword }: Props) {
                             type="button"
                             className="mt-4 w-full"
                             variant="secondary"
-                            onClick={() => redirectToProvider("github")}
+                            onClick={() => redirectToProvider('github')}
                             disabled={redirectingProvider !== null}
                         >
                             {redirectingProvider === 'github' && <Spinner />}
@@ -114,7 +115,7 @@ export default function Login({ status, canResetPassword }: Props) {
                             type="button"
                             className="mt-2 w-full"
                             variant="secondary"
-                            onClick={() => redirectToProvider("fortytwo")}
+                            onClick={() => redirectToProvider('fortytwo')}
                             disabled={redirectingProvider !== null}
                         >
                             {redirectingProvider === 'fortytwo' && <Spinner />}
@@ -127,7 +128,6 @@ export default function Login({ status, canResetPassword }: Props) {
                                 Register
                             </TextLink>
                         </div>
-
                     </>
                 )}
             </Form>

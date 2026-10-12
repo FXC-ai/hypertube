@@ -57,7 +57,7 @@ type MoviePageData = {
 
 type MovieShowProps = {
     moviePageData: MoviePageData;
-    comments: { data: Comment[], meta: {total: number} };
+    comments: { data: Comment[]; meta: { total: number } };
 };
 
 const conversionStatusLabel: Record<ConversionStatus, string> = {
@@ -69,12 +69,16 @@ const conversionStatusLabel: Record<ConversionStatus, string> = {
     failed: 'Preparation failed',
 };
 
-function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage: string }) {
-
+function HlsPlayer({
+    src,
+    preferredlanguage,
+}: {
+    src: string;
+    preferredlanguage: string;
+}) {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-
         const languages: { [language: string]: string } = {
             french: 'fr',
             german: 'de',
@@ -89,7 +93,8 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
         }
 
         const supportsMediaSource = Hls.isSupported();
-        const supportsNativeHls = video.canPlayType('application/vnd.apple.mpegurl') !== '';
+        const supportsNativeHls =
+            video.canPlayType('application/vnd.apple.mpegurl') !== '';
 
         if (!supportsMediaSource && supportsNativeHls) {
             video.src = src;
@@ -106,16 +111,14 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
             return;
         }
 
-        const hls = new Hls(
-            {
-                autoStartLoad: false,
-                subtitlePreference: {
-                    lang: languages[preferredlanguage],
-                },
-                lowLatencyMode: false,
-                startPosition: 0,
-            }
-        );
+        const hls = new Hls({
+            autoStartLoad: false,
+            subtitlePreference: {
+                lang: languages[preferredlanguage],
+            },
+            lowLatencyMode: false,
+            startPosition: 0,
+        });
 
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
             hls.loadSource(src);
@@ -135,7 +138,7 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
                 duration: data.details.totalduration,
                 endSN: data.details.endSN,
                 totalduration: data.details.totalduration,
-                hasEndList: data.details.live === false
+                hasEndList: data.details.live === false,
             });
         });
 
@@ -187,7 +190,6 @@ function HlsPlayer({ src, preferredlanguage }: { src: string; preferredlanguage:
 }
 
 export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
-
     const conversionForm = useForm({});
     const { stop } = usePoll(2000, {});
     const isPreparing = ['queued', 'converting'].includes(
@@ -205,12 +207,17 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
     }, [moviePageData.conversion_status, stop]);
 
     const startConversion = (): void => {
-        conversionForm.post(conversionStore.url(moviePageData.id), { preserveScroll: true });
+        conversionForm.post(conversionStore.url(moviePageData.id), {
+            preserveScroll: true,
+        });
     };
 
-    console.log("moviePageData.conversion_attempt = ", moviePageData.conversion_attempt);
+    console.log(
+        'moviePageData.conversion_attempt = ',
+        moviePageData.conversion_attempt,
+    );
 
-    console.log("Data: ", moviePageData.movieData);
+    console.log('Data: ', moviePageData.movieData);
 
     return (
         <>
@@ -226,39 +233,40 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
 
                 <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
                     <Card className="overflow-hidden border-border/60 bg-black p-0 shadow-xl">
-                        {moviePageData.playable && moviePageData.conversion_attempt !== null ?
-                            (
-                                <HlsPlayer
-                                    /*                                 src={manifest.url({
+                        {moviePageData.playable &&
+                        moviePageData.conversion_attempt !== null ? (
+                            <HlsPlayer
+                                /*                                 src={manifest.url({
                                                                         movie: moviePageData.id,
                                                                         conversion_attempt: moviePageData.conversion_attempt
                                                                     })} */
 
-
-                                    src={`/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
-                                    preferredlanguage={moviePageData.preferredlanguage}
-                                />
-                            ) : (
-                                <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
-                                    {isPreparing ? (
-                                        <LoaderCircle className="size-8 animate-spin" />
-                                    ) : (
-                                        <Film className="size-8" />
-                                    )}
-                                    <div>
-                                        <p className="font-medium text-foreground">
-                                            {isPreparing
-                                                ? 'The video is being prepared'
-                                                : 'The video is not available yet'}
-                                        </p>
-                                        <p className="mt-1 text-sm">
-                                            {isPreparing
-                                                ? 'This page will update automatically.'
-                                                : 'Prepare the video to start watching.'}
-                                        </p>
-                                    </div>
+                                src={`/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
+                                preferredlanguage={
+                                    moviePageData.preferredlanguage
+                                }
+                            />
+                        ) : (
+                            <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
+                                {isPreparing ? (
+                                    <LoaderCircle className="size-8 animate-spin" />
+                                ) : (
+                                    <Film className="size-8" />
+                                )}
+                                <div>
+                                    <p className="font-medium text-foreground">
+                                        {isPreparing
+                                            ? 'The video is being prepared'
+                                            : 'The video is not available yet'}
+                                    </p>
+                                    <p className="mt-1 text-sm">
+                                        {isPreparing
+                                            ? 'This page will update automatically.'
+                                            : 'Prepare the video to start watching.'}
+                                    </p>
                                 </div>
-                            )}
+                            </div>
+                        )}
                     </Card>
 
                     <Card className="border-border/60 shadow-sm">
@@ -300,18 +308,27 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                     {moviePageData.conversion_error}
                                 </p>
                             )}
-                            {(moviePageData.conversion_status === 'pending' || moviePageData.conversion_status === 'failed') &&
-                                (
-                                    <Button
-                                        type="button"
-                                        className="w-full"
-                                        disabled={conversionForm.processing}
-                                        onClick={startConversion}
-                                    >
-                                        {moviePageData.conversion_status === 'failed' ? (<RotateCcw />) : (<Play />)}
-                                        {moviePageData.conversion_status === 'failed' ? 'Retry' : 'Prepare video'}
-                                    </Button>
-                                )}
+                            {(moviePageData.conversion_status === 'pending' ||
+                                moviePageData.conversion_status ===
+                                    'failed') && (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    disabled={conversionForm.processing}
+                                    onClick={startConversion}
+                                >
+                                    {moviePageData.conversion_status ===
+                                    'failed' ? (
+                                        <RotateCcw />
+                                    ) : (
+                                        <Play />
+                                    )}
+                                    {moviePageData.conversion_status ===
+                                    'failed'
+                                        ? 'Retry'
+                                        : 'Prepare video'}
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -332,63 +349,106 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                         <img
                                             src={moviePageData.movieData.poster}
                                             alt={`${moviePageData.title}`}
-                                            className="max-w-50 rounded-lg shadow-md text-center"
+                                            className="max-w-50 rounded-lg text-center shadow-md"
                                         />
                                     </div>
                                 )}
 
                                 <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                                     <div>
-                                        <span className="text-muted-foreground">Year:</span>
-                                        <span className="ml-2 font-medium">{moviePageData.movieData.year}</span>
+                                        <span className="text-muted-foreground">
+                                            Year:
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                            {moviePageData.movieData.year}
+                                        </span>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground">Rated:</span>
-                                        <span className="ml-2 font-medium">{moviePageData.movieData.rated ?? 'N/A'}</span>
+                                        <span className="text-muted-foreground">
+                                            Rated:
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                            {moviePageData.movieData.rated ??
+                                                'N/A'}
+                                        </span>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground">Released:</span>
-                                        <span className="ml-2 font-medium">{moviePageData.movieData.released ?? 'N/A'}</span>
+                                        <span className="text-muted-foreground">
+                                            Released:
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                            {moviePageData.movieData.released ??
+                                                'N/A'}
+                                        </span>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground">Runtime:</span>
-                                        <span className="ml-2 font-medium">{moviePageData.movieData.runtime}</span>
+                                        <span className="text-muted-foreground">
+                                            Runtime:
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                            {moviePageData.movieData.runtime}
+                                        </span>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <span className="text-muted-foreground">Genre:</span>
-                                    <span className="ml-2 font-medium">{moviePageData.movieData.genre}</span>
+                                    <span className="text-muted-foreground">
+                                        Genre:
+                                    </span>
+                                    <span className="ml-2 font-medium">
+                                        {moviePageData.movieData.genre}
+                                    </span>
                                 </div>
 
                                 <div>
-                                    <span className="text-muted-foreground">Director:</span>
-                                    <span className="ml-2 font-medium">{moviePageData.movieData.director}</span>
+                                    <span className="text-muted-foreground">
+                                        Director:
+                                    </span>
+                                    <span className="ml-2 font-medium">
+                                        {moviePageData.movieData.director}
+                                    </span>
                                 </div>
 
                                 <div>
-                                    <span className="text-muted-foreground">Writer:</span>
-                                    <span className="ml-2 font-medium">{moviePageData.movieData.writer}</span>
+                                    <span className="text-muted-foreground">
+                                        Writer:
+                                    </span>
+                                    <span className="ml-2 font-medium">
+                                        {moviePageData.movieData.writer}
+                                    </span>
                                 </div>
 
                                 <div>
-                                    <span className="text-muted-foreground">Actors:</span>
-                                    <span className="ml-2 font-medium">{moviePageData.movieData.actors}</span>
+                                    <span className="text-muted-foreground">
+                                        Actors:
+                                    </span>
+                                    <span className="ml-2 font-medium">
+                                        {moviePageData.movieData.actors}
+                                    </span>
                                 </div>
 
                                 <div>
-                                    <span className="text-muted-foreground">Plot:</span>
-                                    <p className="mt-1 text-muted-foreground">{moviePageData.movieData.plot}</p>
+                                    <span className="text-muted-foreground">
+                                        Plot:
+                                    </span>
+                                    <p className="mt-1 text-muted-foreground">
+                                        {moviePageData.movieData.plot}
+                                    </p>
                                 </div>
 
                                 <div>
-                                    <span className="text-muted-foreground">Language:</span>
-                                    <span className="ml-2 font-medium">{moviePageData.movieData.language}</span>
+                                    <span className="text-muted-foreground">
+                                        Language:
+                                    </span>
+                                    <span className="ml-2 font-medium">
+                                        {moviePageData.movieData.language}
+                                    </span>
                                 </div>
 
                                 {moviePageData.movieData.awards !== 'N/A' && (
                                     <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                                        <strong>Awards:</strong> {moviePageData.movieData.awards}
+                                        <strong>Awards:</strong>{' '}
+                                        {moviePageData.movieData.awards}
                                     </div>
                                 )}
                             </CardContent>
@@ -408,7 +468,8 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                             </CardHeader>
                             <CardContent>
                                 <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm text-muted-foreground">
-                                    No additional information available for this movie.
+                                    No additional information available for this
+                                    movie.
                                 </div>
                             </CardContent>
                         </Card>
@@ -429,16 +490,22 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
 
                             <div className="space-y-4">
                                 {comments.data.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-4">
-                                        No comments yet. Be the first to share your thoughts!
+                                    <p className="py-4 text-center text-sm text-muted-foreground">
+                                        No comments yet. Be the first to share
+                                        your thoughts!
                                     </p>
                                 ) : (
-                                    <InfiniteScroll data="comments" buffer={300} onlyNext>
-
-                                        {
-                                            comments.data.map((comment) => (<CommentItem key={comment.id} comment={comment}></CommentItem>))
-                                        }
-
+                                    <InfiniteScroll
+                                        data="comments"
+                                        buffer={300}
+                                        onlyNext
+                                    >
+                                        {comments.data.map((comment) => (
+                                            <CommentItem
+                                                key={comment.id}
+                                                comment={comment}
+                                            ></CommentItem>
+                                        ))}
                                     </InfiniteScroll>
                                 )}
                             </div>

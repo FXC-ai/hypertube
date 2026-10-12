@@ -28,7 +28,6 @@ export function NavUser() {
         <SidebarMenu>
             <SidebarMenuItem>
                 <DropdownMenu>
-
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
@@ -47,8 +46,8 @@ export function NavUser() {
                             isMobile
                                 ? 'bottom'
                                 : state === 'collapsed'
-                                    ? 'left'
-                                    : 'bottom'
+                                  ? 'left'
+                                  : 'bottom'
                         }
                     >
                         <UserMenuContent user={auth.user} />
