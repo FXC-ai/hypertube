@@ -47,4 +47,8 @@ return [
         'redirect' => env('FORTY_TWO_REDIRECT_URI')
     ],
 
+    'omdb' => [
+        'key' => env('OMDB_API_KEY'),
+    ],
+
 ];

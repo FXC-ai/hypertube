@@ -26,7 +26,13 @@ class MovieFactory extends Factory
 
         return [
             'title' => fake()->sentence(3),
+            'titles' => [
+                'fr' => fake()->sentence(3),
+                'en' => fake()->sentence(3),
+            ],
             'filename' => $filename,
+            'imdb_id' => 'tt' . fake()->numerify('######'),
+            'torrent_url' => null,
             ...$this->conversionAttributes($status),
         ];
     }

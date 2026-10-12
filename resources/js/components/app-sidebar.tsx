@@ -6,7 +6,8 @@ import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
-import { index } from '@/routes/users/index'
+import { index as index_users} from '@/routes/users/index'
+import { index as index_movies} from '@/routes/movies/index'
 
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 
@@ -25,12 +26,12 @@ import type { NavItem } from '@/types';
 const mainNavItems: NavItem[] = [
     {
         title: 'Video',
-        href: "/",
+        href: index_movies(),
         icon: Film,
     },
     {
         title: 'Users',
-        href: index(),
+        href: index_users(),
         icon: User,
     },
     {
