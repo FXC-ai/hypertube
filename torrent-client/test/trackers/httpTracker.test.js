@@ -51,4 +51,5 @@ test('percent-encodes raw info_hash and peer_id bytes in the query string', asyn
   assert.ok(requestedUrl.includes('port=6881'));
   assert.ok(requestedUrl.includes('left=1000'));
   assert.ok(requestedUrl.includes('event=started'));
+  assert.ok(requestedUrl.includes('numwant=200'), 'ask for more peers than the tracker default');
 });

@@ -9,6 +9,7 @@ const SINTEL = new URL('../fixtures/sintel.webtorrent.io.torrent', import.meta.u
 // Real parsing and routing, no network: fetch always fails, nothing is ever downloaded.
 async function withServer(fn) {
   const manager = createDownloadManager({
+    torrentFetchRetryDelayMs: 0,
     fetchImpl: async () => {
       throw new Error('getaddrinfo ENOTFOUND example.test');
     },
@@ -42,6 +43,7 @@ test('POST /torrents/inspect lists the files of a real torrent and suggests the 
     const main = inspection.files[inspection.mainVideoIndex];
     assert.equal(main.path, 'Sintel.mp4');
     assert.equal(main.container, 'mp4');
+    assert.equal(main.fileName, 'Sintel.mp4');
     assert.ok(inspection.files.some((f) => f.kind === 'subtitle'));
     assert.ok(inspection.files.some((f) => f.kind === 'other' && !f.suggested));
 
@@ -108,6 +110,7 @@ test('GET / serves the test page with the default outputDir and the API referenc
       "method:'POST',path:'/torrents/inspect'",
       "method:'POST',path:'/downloads'",
       "method:'GET',path:'/downloads/:id'",
+      "method:'GET',path:'/downloads/:id/files/:index'",
       "method:'DELETE',path:'/downloads/:id'",
     ]) {
       assert.ok(page.includes(route), route);

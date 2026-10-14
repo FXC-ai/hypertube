@@ -71,7 +71,7 @@ function sendAnnounce(socket, host, port, connectionId, params, timeoutMs, annou
   request.writeUInt32BE(EVENT_CODES[params.event ?? 'none'], 80);
   request.writeUInt32BE(0, 84); // ip = 0 (let the tracker use the packet's source address)
   request.writeUInt32BE(randomTransactionId(), 88); // key
-  request.writeInt32BE(-1, 92); // num_want = default
+  request.writeInt32BE(200, 92); // num_want: trackers default to about 50, many of them dead
   request.writeUInt16BE(params.port, 96);
 
   return sendAndReceive(socket, request, host, port, timeoutMs, announceUrl, (response) => {

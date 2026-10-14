@@ -11,13 +11,13 @@ Pas d'authentification - le service n'est censé être joignable que depuis le r
 
 ## Évolutions en cours
 
-Les parties marquées **🟡 Proposé** décrivent le contrat visé par des tickets pas encore implémentés, pas le comportement actuel. Le ticket A est implémenté. Conception complète dans [overview.md](overview.md#conception-sélection-de-fichiers-robustesse-et-streaming-tickets-a-c-b).
+Les tickets A, C et B sont implémentés : tout ce document décrit le comportement actuel. Conception complète dans [overview.md](overview.md#conception-sélection-de-fichiers-robustesse-et-streaming-tickets-a-c-b).
 
 | Ticket | Ce qui change dans l'API |
 |---|---|
 | **A - Sélection de fichiers** ✅ implémenté ([#26](https://github.com/FXC-ai/hypertube/issues/26)) | Nouveau `POST /torrents/inspect`. `POST /downloads` accepte `fileIndexes` et `expectedInfoHash`. Détail par fichier dans `GET /downloads/:id`. |
-| **C - Robustesse des sources + reprise** 🟡 ([#27](https://github.com/FXC-ai/hypertube/issues/27)) | Nouvel état `"checking"` (vérification des fichiers déjà sur disque, [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md)). Nouveau champ `sources`. |
-| **B - Streaming** 🟡 (après validation de [ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md)) | Nouveau `GET /downloads/:id/files/:index` avec support `Range`. Champs `contiguousBytesFromStart`, `availableRanges` et `pieces` dans `GET /downloads/:id`. |
+| **C - Robustesse des sources + reprise** ✅ implémenté ([#27](https://github.com/FXC-ai/hypertube/issues/27)) | Nouvel état `"checking"` (vérification des fichiers déjà sur disque, [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md)). Nouveau champ `sources`. |
+| **B - Streaming** ✅ implémenté ([#28](https://github.com/FXC-ai/hypertube/issues/28), [ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md)) | Nouveau `GET /downloads/:id/files/:index` avec support `Range`. Champs `contiguousBytesFromStart`, `availableRanges`, `detectedContainer` et `pieces` dans `GET /downloads/:id`. |
 
 ## `POST /torrents/inspect`
 
@@ -40,10 +40,10 @@ Corps JSON : `torrentUrl` **ou** `torrentBase64`, mêmes règles que pour `POST 
   "totalLength": 2980052992,
   "mainVideoIndex": 0,
   "files": [
-    { "index": 0, "path": "Movie.mp4", "length": 2961234567, "kind": "video", "container": "mp4", "suggested": true },
-    { "index": 1, "path": "Movie.en.srt", "length": 81234, "kind": "subtitle", "container": null, "suggested": true },
-    { "index": 2, "path": "some_item_meta.sqlite", "length": 20480, "kind": "other", "container": null, "suggested": false },
-    { "index": 3, "path": "Movie.ogv", "length": 18716711, "kind": "video", "container": "ogg", "suggested": false }
+    { "index": 0, "path": "Movie/Movie.mp4", "fileName": "Movie.mp4", "length": 2961234567, "kind": "video", "container": "mp4", "suggested": true },
+    { "index": 1, "path": "Movie/Subs/Movie.en.srt", "fileName": "Movie.en.srt", "length": 81234, "kind": "subtitle", "container": null, "suggested": true },
+    { "index": 2, "path": "some_item_meta.sqlite", "fileName": "some_item_meta.sqlite", "length": 20480, "kind": "other", "container": null, "suggested": false },
+    { "index": 3, "path": "Movie/Movie.ogv", "fileName": "Movie.ogv", "length": 18716711, "kind": "video", "container": "ogg", "suggested": false }
   ]
 }
 ```
@@ -52,6 +52,8 @@ Corps JSON : `torrentUrl` **ou** `torrentBase64`, mêmes règles que pour `POST 
 |---|---|
 | `infoHash` | À renvoyer tel quel dans `expectedInfoHash` au `POST /downloads`, voir plus bas. |
 | `files[].index` | Identifiant du fichier pour `fileIndexes` et pour `GET /downloads/:id/files/:index`. C'est sa position dans la liste `files` du `.torrent`. |
+| `files[].path` | Chemin du fichier **dans le torrent**, sous-dossiers compris. |
+| `files[].fileName` | Nom du fichier **sur disque**, directement dans `outputDir` : tous les fichiers sont écrits à plat, sans les sous-dossiers du torrent. Deux fichiers de même nom (casse ignorée) deviennent `nom.ext` et `nom (2).ext`, dans l'ordre du torrent ; un nom vide, `.` ou `..` devient `file-<index>`. C'est la valeur à stocker côté Laravel (`movies/{id}/{fileName}`). |
 | `files[].kind` | `"video"` \| `"subtitle"` \| `"other"`, déduit de l'extension uniquement (aucun octet du film n'est lu à ce stade). Vidéo : `mp4`, `m4v`, `mov`, `mkv`, `webm`, `avi`, `ogv`. Sous-titre : `srt`, `vtt`, `ass`, `ssa`, `sub`. |
 | `files[].container` | `"mp4"` \| `"matroska"` \| `"ogg"` \| `"avi"` \| `null`, déduit de l'extension. |
 | `mainVideoIndex` | Le plus gros fichier `"video"`, ou `null` s'il n'y en a aucun. |
@@ -92,7 +94,7 @@ Corps JSON - deux façons de fournir le torrent, une seule à la fois :
 
 | Champ | Type | Description |
 |---|---|---|
-| `outputDir` | string | **Obligatoire.** Chemin absolu où écrire les fichiers du torrent, à l'intérieur du volume partagé. Pour un film, utiliser exactement `storage/app/public/movies/{movieId}` (vu depuis `app`, donc `/var/www/html/storage/app/public/movies/{movieId}` côté conteneur) - c'est le chemin que `Storage::disk('public')->path("movies/{id}/{filename}")` va relire côté Laravel. |
+| `outputDir` | string | **Obligatoire.** Chemin absolu où écrire les fichiers du torrent, à l'intérieur du volume partagé. Pour un film, utiliser exactement `storage/app/public/movies/{movieId}` (vu depuis `app`, donc `/var/www/html/storage/app/public/movies/{movieId}` côté conteneur) - c'est le chemin que `Storage::disk('public')->path("movies/{id}/{filename}")` va relire côté Laravel. Les fichiers y sont écrits à plat, sous leur `fileName` (voir `POST /torrents/inspect`). |
 | `torrentUrl` | string | URL d'un `.torrent` que le service télécharge lui-même avant de démarrer. |
 | `torrentBase64` | string | Contenu brut du `.torrent`, encodé en base64, si vous l'avez déjà en mémoire côté Laravel plutôt qu'une URL à fetch. |
 
@@ -123,7 +125,7 @@ curl -X POST http://client-torrent:7881/downloads \
 
 Garder l'`id` retourné : c'est la seule façon de récupérer le statut ou d'annuler ensuite, rien n'est indexé par `outputDir` ni par une notion de film.
 
-🟡 **Reprise (ticket C)** : si `outputDir` contient déjà des fichiers de ce torrent (téléchargement précédent échoué, annulé, ou interrompu par un redémarrage du conteneur), le job commence par les revérifier pièce par pièce (état `"checking"`) et ne retélécharge que les pièces manquantes ou corrompues. Pour reprendre, il suffit donc de relancer `POST /downloads` avec le **même** `outputDir`. Voir [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md).
+**Reprise** : si `outputDir` contient déjà des fichiers de ce torrent (téléchargement précédent échoué, annulé, ou interrompu par un redémarrage du conteneur), le job commence par les revérifier pièce par pièce (état `"checking"`) et ne retélécharge que les pièces manquantes ou corrompues. Pour reprendre, il suffit donc de relancer `POST /downloads` avec le **même** `outputDir`. Voir [ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md).
 
 Ne pas lancer deux jobs sur le même `outputDir` en même temps : ils écriraient dans les mêmes fichiers. Le client ne le détecte pas.
 
@@ -154,11 +156,11 @@ GET /downloads/2ce4f502-b325-444f-9053-da3174fb94b5
 | `status` | `"downloading"` \| `"completed"` \| `"failed"` \| `"cancelled"` |
 | `downloadedBytes`, `totalBytes` | Progression en octets. `totalBytes` est `null` tant que le `.torrent` n'a pas encore été parsé (juste après le `POST`, très bref). |
 | `piecesCompleted`, `totalPieces` | Progression en pièces BitTorrent - plus fin que les octets pour un affichage de progression. |
-| `error` | `null` sauf si `status` est `"failed"` - message expliquant l'échec (tracker sans pairs ni web-seed, torrent malformé, toutes les sources ont échoué sur une pièce, etc.). |
+| `error` | `null` sauf si `status` est `"failed"` - message expliquant l'échec (tracker sans pairs ni web-seed, torrent malformé, aucune pièce n'a abouti pendant 2 min, etc.). Pour un blocage, le message liste les pièces bloquées avec chaque cause distincte, et les sources écartées avec leur dernière erreur. |
 
 ### Champs ajoutés (tickets A, B, C)
 
-Les champs du ticket A sont implémentés ; ceux de B et C (🟡 dans la colonne Ticket) sont encore proposés. L'exemple montre la forme finale visée.
+Tous ces champs sont implémentés.
 
 ```json
 {
@@ -173,7 +175,8 @@ Les champs du ticket A sont implémentés ; ceux de B et C (🟡 dans la colonne
   "files": [
     {
       "index": 0,
-      "path": "Movie.mp4",
+      "path": "Movie/Movie.mp4",
+      "fileName": "Movie.mp4",
       "length": 2961234567,
       "downloadedBytes": 6291456,
       "contiguousBytesFromStart": 4194304,
@@ -182,7 +185,8 @@ Les champs du ticket A sont implémentés ; ceux de B et C (🟡 dans la colonne
     },
     {
       "index": 1,
-      "path": "Movie.en.srt",
+      "path": "Movie/Subs/Movie.en.srt",
+      "fileName": "Movie.en.srt",
       "length": 81234,
       "downloadedBytes": 81234,
       "contiguousBytesFromStart": 81234,
@@ -199,23 +203,23 @@ Les champs du ticket A sont implémentés ; ceux de B et C (🟡 dans la colonne
 
 | Champ | Ticket | Description |
 |---|---|---|
-| `status` | C 🟡 | Nouvelle valeur `"checking"` : vérification des fichiers déjà présents dans `outputDir`, avant `"downloading"`. `piecesCompleted` y progresse au fil des pièces valides trouvées. |
+| `status` | C | Nouvelle valeur `"checking"`, **état initial** d'un job : récupération du `.torrent` puis vérification des fichiers déjà présents dans `outputDir`, avant `"downloading"`. `piecesCompleted` et `downloadedBytes` y progressent au fil des pièces valides trouvées. Si tout est déjà sur disque, le job passe directement à `"completed"` sans contacter de tracker. `DELETE` annule aussi un job en `"checking"`. |
 | `downloadedBytes`, `totalBytes`, `piecesCompleted`, `totalPieces` | A | **Changement de sens** : ne comptent plus que les fichiers choisis (et les pièces qui les couvrent), plus tout le torrent. `totalBytes` est la somme des `files[].length`. |
 | `infoHash`, `pieceLength` | A | Info-hash et taille de pièce du torrent, `null` tant que le `.torrent` n'a pas été parsé. |
-| `files[]` | A | Un élément par fichier **choisi**, dans l'ordre des index : `index`, `path`, `length`, `downloadedBytes`, `complete`. Vide tant que le `.torrent` n'a pas été parsé. |
-| `files[].contiguousBytesFromStart` | B 🟡 | Octets disponibles d'un seul tenant depuis le début du fichier. Indicateur pour "prêt à regarder" côté UI. |
-| `files[].detectedContainer` | B 🟡 | Format lu dans les premiers octets du fichier, sans ffmpeg : `"mp4"` (boîte `ftyp` aux octets 4 à 8), `"matroska"` (en-tête EBML `1A 45 DF A3`, MKV et WebM), `"unknown"`, ou `null` tant que la première pièce du fichier n'est pas arrivée. Permet de repérer un faux fichier (un `.mp4` qui n'en est pas un) sans attendre la fin du téléchargement. Le client ne décide rien : c'est à Laravel d'annuler s'il le veut. Les pistes et codecs restent l'affaire de ffprobe. |
-| `files[].availableRanges` | B 🟡 | Plages d'octets disponibles, `[début, fin exclue]`, fusionnées et triées, relatives au fichier. |
-| `pieces` | B 🟡 | Bitfield des pièces vérifiées, en base64, au format du message `bitfield` de BitTorrent (bit de poids fort du premier octet = pièce 0). Pour le débogage et la page de test, pas besoin de le décoder côté Laravel. |
-| `sources` | C 🟡 | Sources encore utilisées (`active`) et écartées après des échecs répétés (`dropped`), pairs et web-seeds confondus. |
-| `error` | C 🟡 | Inclut désormais la cause réseau précise quand il y en a une (ex. `fetch failed (ECONNRESET)` au lieu de `fetch failed`). |
+| `files[]` | A | Un élément par fichier **choisi**, dans l'ordre des index : `index`, `path`, `fileName`, `length`, `downloadedBytes`, `complete`. Vide tant que le `.torrent` n'a pas été parsé. |
+| `files[].contiguousBytesFromStart` | B | Octets disponibles d'un seul tenant depuis le début du fichier. Indicateur pour "prêt à regarder" côté UI. |
+| `files[].detectedContainer` | B | Format lu dans les premiers octets du fichier, sans ffmpeg : `"mp4"` (boîte `ftyp` aux octets 4 à 8), `"matroska"` (en-tête EBML `1A 45 DF A3`, MKV et WebM), `"unknown"`, ou `null` tant que la première pièce du fichier n'est pas arrivée. Permet de repérer un faux fichier (un `.mp4` qui n'en est pas un) sans attendre la fin du téléchargement. Le client ne décide rien : c'est à Laravel d'annuler s'il le veut. Les pistes et codecs restent l'affaire de ffprobe. |
+| `files[].availableRanges` | B | Plages d'octets disponibles, `[début, fin exclue]`, fusionnées et triées, relatives au fichier. |
+| `pieces` | B | Bitfield des pièces vérifiées, en base64, au format du message `bitfield` de BitTorrent (bit de poids fort du premier octet = pièce 0). Pour le débogage et la page de test, pas besoin de le décoder côté Laravel. |
+| `sources` | C | Sources utilisables (`active`) et écartées (`dropped`), pairs et web-seeds confondus. `null` avant le début du téléchargement. Une source injoignable 3 fois de suite est écartée 30 s puis retentée ; une source qui envoie 2 pièces corrompues l'est pour de bon. |
+| `error` | C | Inclut désormais la cause réseau précise quand il y en a une (ex. `fetch failed (ECONNRESET)` au lieu de `fetch failed`). |
 
 **404** si l'`id` est inconnu :
 ```json
 { "error": "Unknown download id" }
 ```
 
-Pas de webhook / notification - c'est à l'appelant de sonder cette route (ex. toutes les 1-2 secondes) tant que `status` reste `"downloading"` (ou `"checking"`, ticket C).
+Pas de webhook / notification - c'est à l'appelant de sonder cette route (ex. toutes les 1-2 secondes) tant que `status` reste `"checking"` ou `"downloading"`.
 
 ## `DELETE /downloads/:id`
 
@@ -231,7 +235,7 @@ DELETE /downloads/2ce4f502-b325-444f-9053-da3174fb94b5
 
 Les fichiers déjà écrits avant l'annulation restent sur disque (partiels, pas de nettoyage automatique) - à supprimer côté appelant si besoin.
 
-## `GET /downloads/:id/files/:index` 🟡 Proposé (ticket B)
+## `GET /downloads/:id/files/:index`
 
 Sert un fichier choisi d'un téléchargement, **pendant** qu'il se télécharge, avec support des requêtes `Range`. C'est l'entrée que ffprobe et ffmpeg lisent à la place du chemin disque tant que le téléchargement n'est pas terminé. Pourquoi ce choix plutôt que lire le fichier qui grossit : [ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md).
 
@@ -253,6 +257,9 @@ Range: bytes=2959137415-
 ```json
 { "status": "failed", "error": "No piece completed for 120s (812/1413 downloaded, 0 active source(s), 5 dropped). Stuck: piece 12 ..." }
 ```
+
+6. Les pièces prioritaires (plages demandées, et dès le démarrage la première et la dernière pièce de la vidéo principale) partent vers les sources qui ont déjà livré des pièces, ou vers un web-seed tant qu'aucune ne l'a fait, plutôt que vers le prochain pair pas encore testé. Mesuré sur un film archive.org de 575 Mo : ffprobe répond en 5 s au lieu de 10 à 25 s sans cette règle.
+7. Juste après `POST /downloads`, tant que le `.torrent` n'est pas encore parsé, la requête attend (au plus `STREAM_STALL_TIMEOUT_MS`, puis 503).
 
 Sans en-tête `Range`, la réponse est un `200` avec le fichier entier, servi de la même façon (en attendant les pièces au fil de l'eau).
 
@@ -312,7 +319,7 @@ done
 curl -X DELETE http://client-torrent:7881/downloads/$id
 ```
 
-### Avec sélection de fichiers (ticket A) et streaming (ticket B 🟡)
+### Avec sélection de fichiers et streaming
 
 ```bash
 # 1. Inspecter le .torrent et garder les fichiers suggérés
@@ -329,7 +336,7 @@ id=$(curl -s -X POST http://client-torrent:7881/downloads \
   -d "{\"torrentUrl\":\"https://example.org/movie.torrent\",\"outputDir\":\"/var/www/html/storage/app/public/movies/42\",\"fileIndexes\":$indexes,\"expectedInfoHash\":\"$hash\"}" \
   | jq -r .id)
 
-# 3. 🟡 ticket B : ffprobe lit le film pendant le téléchargement : le client priorise tout seul la fin du fichier (moov)
+# 3. ffprobe lit le film pendant le téléchargement : le client priorise tout seul la fin du fichier (moov)
 ffprobe -v error -rw_timeout 90000000 -show_streams -of json \
   "http://client-torrent:7881/downloads/$id/files/$main"
 ```
@@ -338,5 +345,5 @@ ffprobe -v error -rw_timeout 90000000 -show_streams -of json \
 
 - Pas de recherche de films / résolution de source - l'appelant fournit déjà une URL ou un contenu `.torrent` concret (voir issue #13 côté Laravel pour la résolution archive.org/publicdomaintorrents.info).
 - Pas de connexion base de données, pas de notion de `Movie` ou d'utilisateur - le service ne connaît que des jobs de téléchargement identifiés par un UUID généré à la volée.
-- Pas de persistance : un redémarrage du conteneur perd l'état de tous les téléchargements en cours (voir la note correspondante dans le README). 🟡 Avec le ticket C, relancer `POST /downloads` sur le même `outputDir` reprend là où les fichiers en étaient ([ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md)).
+- Pas de persistance : un redémarrage du conteneur perd l'état de tous les téléchargements en cours (voir la note correspondante dans le README). Relancer `POST /downloads` sur le même `outputDir` reprend là où les fichiers en étaient ([ADR-0008](../docs/adr/0008-client-state-in-memory-with-disk-recheck.md)).
 - Pas d'analyse des formats vidéo : le client ne parse ni MP4 ni MKV. Il sert des plages d'octets, et c'est ffprobe/ffmpeg qui savent où chercher `moov` ou `Cues` ([ADR-0007](../docs/adr/0007-stream-partial-files-over-http.md)).

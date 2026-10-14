@@ -49,6 +49,7 @@ test('inspectTorrent: suggests the largest video and every subtitle, nothing els
   assert.deepEqual(inspection.files[1], {
     index: 1,
     path: 'Movie.ogv',
+    fileName: 'Movie.ogv',
     length: 300,
     kind: 'video',
     container: 'ogg',
@@ -101,4 +102,19 @@ test('resolveFileIndexes: explicit indexes are kept and sorted, absent means the
   assert.deepEqual(resolveFileIndexes(torrent, [1, 0]), [0, 1]);
   assert.deepEqual(resolveFileIndexes(torrent, undefined), [1]);
   assert.throws(() => resolveFileIndexes(torrent, [2]), /out of range/);
+});
+
+test('inspectTorrent: each file gives the flat name it will have in outputDir', () => {
+  const inspection = inspectTorrent(
+    fakeTorrent([
+      { path: 'M(1931)/M.1931.mp4', length: 900 },
+      { path: 'Subs/English.srt', length: 5 },
+      { path: 'Extras/english.srt', length: 6 },
+    ]),
+  );
+
+  assert.deepEqual(
+    inspection.files.map((f) => f.fileName),
+    ['M.1931.mp4', 'English.srt', 'english (2).srt'],
+  );
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -93,7 +93,11 @@ function startFakePeer(pieces, { failPieceIndexes = new Set() } = {}) {
 // <base>/<torrentName>/<filePath>, matching the archive.org convention
 // downloadPieceFromWebSeed expects. `files` maps a file path to its full
 // content buffer.
-function startFakeWebSeed(torrentName, files, { pieceLength, failPieceIndexes = new Set() } = {}) {
+function startFakeWebSeed(
+  torrentName,
+  files,
+  { pieceLength, failPieceIndexes = new Set(), requestedPaths = [] } = {},
+) {
   const server = createHttpServer((req, res) => {
     const prefix = `/${encodeURIComponent(torrentName)}/`;
 
@@ -105,6 +109,7 @@ function startFakeWebSeed(torrentName, files, { pieceLength, failPieceIndexes = 
     }
 
     const filePath = decodeURIComponent(req.url.slice(prefix.length));
+    requestedPaths.push(filePath);
 
     if (!files[filePath]) {
       res.writeHead(404);
@@ -222,7 +227,7 @@ test('with fileIndexes, only the pieces covering the chosen file are fetched and
           outputDir,
           concurrency: 2,
           pieceTimeoutMs: 2000,
-          maxAttemptsPerPiece: 1,
+          stallTimeoutMs: 3000,
           fileIndexes: [1],
         },
       );
@@ -232,6 +237,35 @@ test('with fileIndexes, only the pieces covering the chosen file are fetched and
       assert.ok(movie.equals(stream.subarray(10000, 42768)));
       await assert.rejects(access(join(outputDir, 'meta.sqlite')), { code: 'ENOENT' });
       await assert.rejects(access(join(outputDir, 'extra.mp3')), { code: 'ENOENT' });
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('files nested in folders of the torrent are written straight into outputDir', async () => {
+  const pieces = buildPieces(2);
+  const stream = Buffer.concat(pieces);
+  const torrent = {
+    ...torrentFor(pieces),
+    files: [
+      { path: 'M(1931)/movie.mp4', length: 20000 },
+      { path: 'M(1931)/Subs/movie.en.srt', length: stream.length - 20000 },
+    ],
+  };
+  const server = await startFakePeer(pieces);
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(
+        torrent,
+        [{ ip: '127.0.0.1', port: server.address().port }],
+        { infoHash: INFO_HASH, peerId: CLIENT_PEER_ID, outputDir, concurrency: 2 },
+      );
+      assert.deepEqual(result.files, ['movie.mp4', 'movie.en.srt']);
+      assert.ok((await readFile(join(outputDir, 'movie.mp4'))).equals(stream.subarray(0, 20000)));
+      assert.ok((await readFile(join(outputDir, 'movie.en.srt'))).equals(stream.subarray(20000)));
+      await assert.rejects(access(join(outputDir, 'M(1931)')), { code: 'ENOENT' });
     });
   } finally {
     server.close();
@@ -269,7 +303,7 @@ test('combines a real peer and a web-seed in the same download rather than picki
           outputDir,
           concurrency: 4,
           pieceTimeoutMs: 2000,
-          maxAttemptsPerPiece: 6,
+          backoffBaseMs: 10,
           webSeedUrls: [`http://127.0.0.1:${port}/`],
         },
       );
@@ -300,7 +334,8 @@ test('a failed piece reports every distinct source failure, not only the last on
           peerId: CLIENT_PEER_ID,
           outputDir,
           pieceTimeoutMs: 2000,
-          maxAttemptsPerPiece: 4,
+          backoffBaseMs: 10,
+          stallTimeoutMs: 500,
           webSeedUrls: [`http://127.0.0.1:${port}/`, 'http://127.0.0.1:1/'],
         }),
         (err) => /hash mismatch/.test(err.message) && /Web-seed request failed/.test(err.message),
@@ -309,4 +344,428 @@ test('a failed piece reports every distinct source failure, not only the last on
   } finally {
     webSeed.close();
   }
+});
+
+// A TCP port nothing listens on: connecting is refused straight away (ECONNREFUSED).
+async function deadPeer() {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  await new Promise((resolve) => server.close(resolve));
+
+  return { ip: '127.0.0.1', port };
+}
+
+const FAST = { pieceTimeoutMs: 2000, backoffBaseMs: 10, concurrency: 2 };
+
+test('a peer that refuses every connection is dropped and the download finishes on the others', async () => {
+  const pieces = buildPieces(6);
+  const torrent = torrentFor(pieces);
+  const good = await startFakePeer(pieces);
+  const sourceCounts = [];
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(
+        torrent,
+        [await deadPeer(), { ip: '127.0.0.1', port: good.address().port }],
+        {
+          ...FAST,
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+          onSourcesChange: (counts) => sourceCounts.push(counts),
+        },
+      );
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(Buffer.concat(pieces)));
+      assert.deepEqual(sourceCounts.at(-1), { active: 1, dropped: 1 });
+    });
+  } finally {
+    good.close();
+  }
+});
+
+test('a piece that fails many times on the only source is retried until it gets through (Mulan case)', async () => {
+  const pieces = buildPieces(2);
+  const torrent = torrentFor(pieces);
+  const content = Buffer.concat(pieces);
+  let failuresLeft = 6; // more than the old fixed budget of max(4, sources x 2) = 4
+  const webSeed = createHttpServer((req, res) => {
+    if (failuresLeft > 0) {
+      failuresLeft -= 1;
+      req.socket.destroy(); // fetch() sees "fetch failed", like the archive.org web-seed did
+
+      return;
+    }
+
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    res.writeHead(206, { 'Content-Length': end - start + 1 });
+    res.end(content.subarray(start, end + 1));
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrent, [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        sourceCooldownMs: 50,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+      assert.equal(failuresLeft, 0);
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('when every source is dead, the download fails once nothing has progressed for stallTimeoutMs', async () => {
+  const torrent = torrentFor(buildPieces(2));
+
+  await withTempDir(async (outputDir) => {
+    await assert.rejects(
+      downloadTorrent(torrent, [await deadPeer()], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        stallTimeoutMs: 500,
+      }),
+      (err) => /No piece completed for/.test(err.message) && /ECONNREFUSED/.test(err.message),
+    );
+  });
+});
+
+test('a re-announce brings new peers when the active ones run out', async () => {
+  const pieces = buildPieces(3);
+  const good = await startFakePeer(pieces);
+  let refreshes = 0;
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [await deadPeer()], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        refreshIntervalMs: 0,
+        refreshSources: async () => {
+          refreshes += 1;
+
+          return [{ ip: '127.0.0.1', port: good.address().port }];
+        },
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(Buffer.concat(pieces)));
+      assert.ok(refreshes >= 1);
+    });
+  } finally {
+    good.close();
+  }
+});
+
+test('skipPieces are not fetched again and the existing file is written in place, not truncated', async () => {
+  const pieces = buildPieces(3);
+  const content = Buffer.concat(pieces);
+  // the peer never serves pieces 0 and 1: the download only succeeds if it never asks
+  const server = await startFakePeer(pieces, { failPieceIndexes: new Set([0, 1]) });
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await writeFile(join(outputDir, 'output.bin'), content.subarray(0, PIECE_LENGTH * 2));
+      const result = await downloadTorrent(
+        torrentFor(pieces),
+        [{ ip: '127.0.0.1', port: server.address().port }],
+        {
+          ...FAST,
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+          stallTimeoutMs: 3000,
+          skipPieces: new Set([0, 1]),
+        },
+      );
+      assert.equal(result.piecesDownloaded, 1);
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('an outage of every source shorter than stallTimeoutMs is survived: set-aside sources come back', async () => {
+  const pieces = buildPieces(3);
+  const content = Buffer.concat(pieces);
+  const outageUntil = Date.now() + 600; // longer than several cooldowns, shorter than the stall timeout
+  const webSeed = createHttpServer((req, res) => {
+    if (Date.now() < outageUntil) {
+      req.socket.destroy(); // fetch failed: a connection failure, like the archive.org outage
+
+      return;
+    }
+
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    res.writeHead(206, { 'Content-Length': end - start + 1 });
+    res.end(content.subarray(start, end + 1));
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        sourceCooldownMs: 100,
+        stallTimeoutMs: 2000,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('by default a set-aside source comes back well before the download is given up', async () => {
+  const { readFile: readSource } = await import('node:fs/promises');
+  const source = await readSource(
+    new URL('../../src/swarm/downloadTorrent.js', import.meta.url),
+    'utf8',
+  );
+  const cooldown = Number(/sourceCooldownMs = (\d+)/.exec(source)[1]);
+  const stall = Number(/stallTimeoutMs = (\d+)/.exec(source)[1]);
+
+  assert.ok(cooldown * 3 <= stall, `cooldown ${cooldown} ms vs stall ${stall} ms`);
+});
+
+test('every piece from a peer goes over one long-lived connection', async () => {
+  const pieces = buildPieces(10);
+  const server = await startFakePeer(pieces);
+  let connections = 0;
+  server.on('connection', () => {
+    connections += 1;
+  });
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(
+        torrentFor(pieces),
+        [{ ip: '127.0.0.1', port: server.address().port }],
+        {
+          ...FAST,
+          concurrency: 8,
+          infoHash: INFO_HASH,
+          peerId: CLIENT_PEER_ID,
+          outputDir,
+        },
+      );
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(Buffer.concat(pieces)));
+      assert.equal(connections, 1);
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('a web-seed serves a run of consecutive pieces in one request', async () => {
+  const pieces = buildPieces(10);
+  const content = Buffer.concat(pieces);
+  let requests = 0;
+  const webSeed = createHttpServer((req, res) => {
+    requests += 1;
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    res.writeHead(206, { 'Content-Length': end - start + 1 });
+    res.end(content.subarray(start, end + 1));
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [], {
+        ...FAST,
+        concurrency: 1,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+      assert.equal(requests, 1);
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('end-game: a piece a peer never sends is also asked elsewhere instead of waiting its timeout', async () => {
+  const pieces = buildPieces(4);
+  const content = Buffer.concat(pieces);
+  // the peer silently never answers piece 3: only the end-game copy from the web-seed gets it
+  const peer = await startFakePeer(pieces, { failPieceIndexes: new Set([3]) });
+  const webSeed = createHttpServer((req, res) => {
+    const [, start, end] = /bytes=(\d+)-(\d+)/.exec(req.headers.range).map(Number);
+    // slow enough that the peer takes every piece first
+    setTimeout(() => {
+      res.writeHead(206, { 'Content-Length': end - start + 1 });
+      res.end(content.subarray(start, end + 1));
+    }, 300);
+  });
+  await new Promise((resolve) => webSeed.listen(0, '127.0.0.1', resolve));
+  const started = Date.now();
+
+  try {
+    await withTempDir(async (outputDir) => {
+      await downloadTorrent(torrentFor(pieces), [{ ip: '127.0.0.1', port: peer.address().port }], {
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        concurrency: 4,
+        pieceTimeoutMs: 30000,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+        priorityOf: () => 0,
+      });
+      assert.ok((await readFile(join(outputDir, 'output.bin'))).equals(content));
+      assert.ok(Date.now() - started < 10000, `took ${Date.now() - started} ms`);
+    });
+  } finally {
+    peer.close();
+    webSeed.close();
+  }
+});
+
+// archive.org case (CC_1918_xx_xx_TripleTrouble): movie.mp4 then meta.xml, sharing the last
+// piece, and the web-seed now serves a rewritten meta.xml. That piece can never match its hash.
+async function staleLastPieceCase(fn) {
+  const movie = Buffer.alloc(PIECE_LENGTH * 2 + 100, 7);
+  const metaAtTorrentTime = Buffer.alloc(200, 1);
+  const metaToday = Buffer.alloc(200, 2);
+  const stream = Buffer.concat([movie, metaAtTorrentTime]);
+  const torrent = {
+    name: 'item',
+    infoHash: INFO_HASH.toString('hex'),
+    pieceLength: PIECE_LENGTH,
+    pieces: [0, 1, 2].map((i) =>
+      createHash('sha1')
+        .update(stream.subarray(i * PIECE_LENGTH, (i + 1) * PIECE_LENGTH))
+        .digest('hex'),
+    ),
+    totalLength: stream.length,
+    files: [
+      { path: 'movie.mp4', length: movie.length },
+      { path: 'item_meta.xml', length: metaToday.length },
+    ],
+  };
+  const webSeed = await startFakeWebSeed('item', {
+    'movie.mp4': movie,
+    'item_meta.xml': metaToday,
+  });
+
+  try {
+    await withTempDir((outputDir) =>
+      fn({ torrent, movie, outputDir, url: `http://127.0.0.1:${webSeed.address().port}/` }),
+    );
+  } finally {
+    webSeed.close();
+  }
+}
+
+test('a piece that never matches because archive.org rewrote a neighbour file is kept unverified', async () => {
+  await staleLastPieceCase(async ({ torrent, movie, outputDir, url }) => {
+    const progress = [];
+    const result = await downloadTorrent(torrent, [], {
+      ...FAST,
+      infoHash: INFO_HASH,
+      peerId: CLIENT_PEER_ID,
+      outputDir,
+      webSeedUrls: [url],
+      fileIndexes: [0],
+      acceptUnverifiedPiece: () => true,
+      onProgress: ({ pieceIndex, unverified }) => progress.push([pieceIndex, unverified]),
+    });
+
+    assert.deepEqual(result.unverifiedPieces, [2]);
+    assert.deepEqual(
+      progress.sort((a, b) => a[0] - b[0]),
+      [
+        [0, false],
+        [1, false],
+        [2, true],
+      ],
+    );
+    assert.ok((await readFile(join(outputDir, 'movie.mp4'))).equals(movie));
+  });
+});
+
+test('an unavailable unselected file sharing the last movie piece is never requested', async () => {
+  const movie = Buffer.alloc(PIECE_LENGTH * 2 + 100, 7);
+  const thumbnailAtTorrentTime = Buffer.alloc(11612, 1);
+  const streamAtTorrentTime = Buffer.concat([movie, thumbnailAtTorrentTime]);
+  const torrent = {
+    name: 'item',
+    infoHash: INFO_HASH.toString('hex'),
+    pieceLength: PIECE_LENGTH,
+    pieces: [0, 1, 2].map((i) =>
+      createHash('sha1')
+        .update(streamAtTorrentTime.subarray(i * PIECE_LENGTH, (i + 1) * PIECE_LENGTH))
+        .digest('hex'),
+    ),
+    totalLength: streamAtTorrentTime.length,
+    files: [
+      { path: 'movie.mp4', length: movie.length },
+      { path: '__ia_thumb.jpg', length: thumbnailAtTorrentTime.length },
+    ],
+  };
+  const requestedPaths = [];
+  const webSeed = await startFakeWebSeed(
+    'item',
+    { 'movie.mp4': movie },
+    { requestedPaths },
+  );
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(torrent, [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+        fileIndexes: [0],
+        acceptUnverifiedPiece: () => true,
+      });
+
+      assert.deepEqual(result.unverifiedPieces, [2]);
+      assert.deepEqual([...new Set(requestedPaths)], ['movie.mp4']);
+      assert.ok((await readFile(join(outputDir, 'movie.mp4'))).equals(movie));
+      await assert.rejects(access(join(outputDir, '__ia_thumb.jpg')), { code: 'ENOENT' });
+    });
+  } finally {
+    webSeed.close();
+  }
+});
+
+test('without a way to check the file, the stale piece fails the download but never bans the web-seed', async () => {
+  await staleLastPieceCase(async ({ torrent, outputDir, url }) => {
+    await assert.rejects(
+      downloadTorrent(torrent, [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        webSeedUrls: [url],
+        fileIndexes: [0],
+        stallTimeoutMs: 300,
+      }),
+      (err) => {
+        assert.match(err.message, /Stuck: piece 2 .*hash mismatch/);
+        assert.match(err.message, /1 active source\(s\), 0 dropped/);
+
+        return true;
+      },
+    );
+  });
 });

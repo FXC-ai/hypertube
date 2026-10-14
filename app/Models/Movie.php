@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Enums\DownloadStatus;
 
 #[Fillable([
     'title',
@@ -21,6 +22,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'conversion_started_at',
     'conversion_playable_at',
     'conversion_completed_at',
+    'download_status',
+    'download_id',
+    'download_file_index',
+    'download_error',
 ])]
 
 /**
@@ -67,6 +72,7 @@ class Movie extends Model
     {
         return [
             'conversion_status' => ConversionStatus::class,
+            'download_status' => DownloadStatus::class,
             'titles' => 'array',
             'conversion_started_at' => 'datetime',
             'conversion_playable_at' => 'datetime',

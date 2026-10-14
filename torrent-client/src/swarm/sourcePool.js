@@ -1,0 +1,187 @@
+// Peers and web-seeds with their health. A source that cannot be reached (refused, connect
+// timeout, fetch failed) `maxConnectionFailures` times in a row is set aside for `cooldownMs`,
+// then gets one more chance: web-seeds are often the only source for archive.org, so nobody is
+// written off for a network hiccup. A source that sends `maxHashFailures` corrupted pieces is
+// banned for good. Failing a piece for another reason (peer without that piece, HTTP 404) does
+// not count against the source, and neither does a corrupted piece the caller knows is not the
+// source's fault (`countHashFailure: false`, see downloadTorrent).
+//
+// `capacityOf(source)` caps how many pieces one source fetches at once: a source with every
+// slot taken (acquire/release) is skipped, so the load follows each source's speed.
+export function createSourcePool(
+  initialSources,
+  {
+    maxConnectionFailures = 3,
+    maxHashFailures = 2,
+    cooldownMs = 30000,
+    capacityOf = () => Infinity,
+    now = Date.now,
+  } = {},
+) {
+  const sources = [];
+  let cursor = 0;
+
+  add(initialSources);
+
+  function keyOf(source) {
+    return source.kind === 'peer' ? `${source.peer.ip}:${source.peer.port}` : source.baseUrl;
+  }
+
+  // Returns how many sources were new (a re-announce often lists known peers again).
+  function add(newSources) {
+    let added = 0;
+
+    for (const source of newSources) {
+      const key = keyOf(source);
+
+      if (
+        (source.kind === 'peer' && !isUsableAddress(source.peer)) ||
+        sources.some((known) => known.key === key)
+      ) {
+        continue;
+      }
+
+      sources.push({
+        ...source,
+        key,
+        connectionFailures: 0,
+        successes: 0,
+        hashFailures: 0,
+        suspendedUntil: 0,
+        banned: false,
+        lastError: null,
+        inFlight: 0,
+      });
+      added += 1;
+    }
+
+    return added;
+  }
+
+  function isActive(source) {
+    return !source.banned && source.suspendedUntil <= now();
+  }
+
+  // The active source that failed this piece the least, rotating among ties so the load
+  // spreads and unknown sources get tried. `failuresBySource` maps a source key to how often
+  // it failed this piece. With `preferProven` (a piece someone is waiting for), ties go to the
+  // source with the most successful pieces, then to web-seeds: no gamble on an untested peer.
+  function pick(failuresBySource, { preferProven = false } = {}) {
+    const active = sources.filter(
+      (source) => isActive(source) && source.inFlight < capacityOf(source),
+    );
+
+    if (active.length === 0) {
+      return null;
+    }
+
+    let best = null;
+
+    for (let i = 0; i < active.length; i += 1) {
+      const source = active[(cursor + i) % active.length];
+
+      if (best === null || isBetter(source, best, failuresBySource, preferProven)) {
+        best = source;
+      }
+    }
+
+    cursor += 1;
+
+    return best;
+  }
+
+  function isBetter(candidate, current, failuresBySource, preferProven) {
+    const failureDiff =
+      (failuresBySource.get(candidate.key) ?? 0) - (failuresBySource.get(current.key) ?? 0);
+
+    if (failureDiff !== 0 || !preferProven) {
+      return failureDiff < 0;
+    }
+
+    if (candidate.successes !== current.successes) {
+      return candidate.successes > current.successes;
+    }
+
+    return candidate.kind === 'webseed' && current.kind !== 'webseed';
+  }
+
+  function acquire(source) {
+    source.inFlight += 1;
+  }
+
+  function release(source) {
+    source.inFlight = Math.max(0, source.inFlight - 1);
+  }
+
+  function reportSuccess(source) {
+    source.connectionFailures = 0;
+    source.successes += 1;
+  }
+
+  function reportFailure(source, err, { countHashFailure = true } = {}) {
+    source.lastError = err.message;
+
+    if (err.hashMismatch && countHashFailure) {
+      source.hashFailures += 1;
+      source.banned = source.hashFailures >= maxHashFailures;
+    }
+
+    if (err.connectionFailure) {
+      source.connectionFailures += 1;
+
+      if (source.connectionFailures >= maxConnectionFailures) {
+        source.suspendedUntil = now() + cooldownMs;
+        // back from cooldown, a single new connection failure sets it aside again
+        source.connectionFailures = maxConnectionFailures - 1;
+      }
+    }
+  }
+
+  function counts() {
+    const active = sources.filter(isActive).length;
+
+    return { active, dropped: sources.length - active };
+  }
+
+  // When the next set-aside source comes back, or null if none will.
+  function nextReactivationAt() {
+    const pending = sources
+      .filter((source) => !source.banned && source.suspendedUntil > now())
+      .map((source) => source.suspendedUntil);
+
+    return pending.length > 0 ? Math.min(...pending) : null;
+  }
+
+  function describeDropped() {
+    return sources
+      .filter((source) => !isActive(source))
+      .map(
+        (source) =>
+          `${source.key} (${source.banned ? 'banned' : 'cooling down'}): ${source.lastError}`,
+      );
+  }
+
+  return {
+    add,
+    pick,
+    acquire,
+    release,
+    reportSuccess,
+    reportFailure,
+    counts,
+    nextReactivationAt,
+    describeDropped,
+  };
+}
+
+// Trackers list peers they cannot vouch for: port 0 or 1 (seen with archive.org's tracker),
+// the unspecified address, broadcast and multicast. Connecting to them only wastes a slot.
+function isUsableAddress({ ip, port }) {
+  if (!Number.isInteger(port) || port < 2 || port > 65535) {
+    return false;
+  }
+
+  const firstOctet = Number(ip.split('.')[0]);
+
+  return ip !== '0.0.0.0' && ip !== '255.255.255.255' && !(firstOctet >= 224 && firstOctet <= 239);
+}

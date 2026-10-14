@@ -10,11 +10,25 @@ use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Jobs\DownloadMovie;
+use App\Enums\DownloadStatus;
+
 final class MovieConversionController extends Controller
 {
     public function store(Movie $movie): RedirectResponse
     {
-        Log::channel('my_debug')->debug('Etape 1 : ', ['MovieConversionController' => 'store']);
+        Log::channel('my_debug')->debug('MovieConversionController', ['Method' => 'store']);
+
+        if
+        (
+            $movie->torrent_url !== null && 
+            ! in_array($movie->download_status, [DownloadStatus::Downloading, DownloadStatus::Completed], true)
+        )
+        {
+            DownloadMovie::dispatch($movie->id)->afterCommit();
+
+            return to_route('movies.show', $movie);
+        }
 
         $queued = Movie::query()
             ->whereKey($movie->id)
@@ -28,13 +42,9 @@ final class MovieConversionController extends Controller
                     'conversion_playable_at' => null,
                     'conversion_completed_at' => null,
                 ]
-
             );
 
-        Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queued = ' => $queued]);
-
         if ($queued === 1) {
-            Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queueud = ' => $queued]);
 
             ConvertMovie::dispatch($movie->id)->afterCommit();
         }

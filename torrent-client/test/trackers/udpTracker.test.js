@@ -71,4 +71,5 @@ test('sends a well-formed BEP15 announce request using the connection id', async
   assert.equal(seenAnnounce.readBigUInt64BE(64), 424242n); // left
   assert.equal(seenAnnounce.readUInt32BE(80), 2); // event = started
   assert.equal(seenAnnounce.readUInt16BE(96), 6882); // port
+  assert.equal(seenAnnounce.readInt32BE(92), 200); // num_want
 });

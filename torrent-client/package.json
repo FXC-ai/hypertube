@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "node --test test/",
+    "test:unit": "node --test $(find test -name '*.test.js' ! -name '*.integration.test.js')",
     "start": "node src/index.js"
   }
 }
