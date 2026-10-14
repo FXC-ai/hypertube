@@ -16,7 +16,7 @@ final class MovieConversionController extends Controller
 {
     public function store(Movie $movie): RedirectResponse
     {
-        Log::channel('my_debug')->debug('Etape 1 : ', ['MovieConversionController' => 'store']);
+        Log::channel('my_debug')->debug('MovieConversionController', ['Method' => 'store']);
 
         // Movie still to download: DownloadMovie starts the download, then the conversion.
         if ($movie->torrent_url !== null && ! in_array($movie->download_status, [DownloadStatus::Downloading, DownloadStatus::Completed], true)) {
@@ -25,6 +25,7 @@ final class MovieConversionController extends Controller
             return to_route('movies.show', $movie);
         }
 
+        // Update du conversion status du film Pending/Fail -> Queued
         $queued = Movie::query()
             ->whereKey($movie->id)
             ->whereIn('conversion_status', [ConversionStatus::Pending->value, ConversionStatus::Failed->value])

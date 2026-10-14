@@ -38,7 +38,7 @@ final class ConvertMovie implements ShouldQueue
         MovieInputResolver $inputs,
     ): void {
 
-        Log::channel('my_debug')->debug('Etape 2 : ', ['ConvertMovie' => 'handle']);
+        Log::channel('my_debug')->debug('ConvertMovie', ['Method' => 'handle']);
 
         $attempt = (string) Str::uuid();
         $startedAt = now();
@@ -92,10 +92,10 @@ final class ConvertMovie implements ShouldQueue
                 &$published,
             ): void {
 
-                Log::channel('my_debug')->debug('publishWhenReady', ['called']);
+                // Log::channel('my_debug')->debug('ConvertMovie', ['called']);
 
                 if ($published || ! $hlsReadinessChecker->isReady($outputDirectory, $tracksSelected)) {
-                    Log::channel('my_debug')->debug('publishWhenReady stops', [$tracksSelected]);
+                    // Log::channel('my_debug')->debug('publishWhenReady stops', [$tracksSelected]);
 
                     return;
                 }
@@ -158,8 +158,8 @@ final class ConvertMovie implements ShouldQueue
     }
 
     /**
-     * A torrent may keep the movie in a subfolder ("M(1931)/M.1931.mp4"): relative segments are
-     * allowed, but nothing that could leave movies/{id}.
+     * Un torrent peut stocker le film dans un sous-dossier (« M(1931)/M.1931.mp4 ») : les chemins relatifs sont
+     * autorisés, mais rien qui puisse sortir du dossier movies/{id}.
      */
     private static function isInsideMovieDirectory(string $filename): bool
     {

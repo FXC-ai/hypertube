@@ -16,13 +16,14 @@ final readonly class MovieInput
     /**
      * Options to put BEFORE the input (-i for ffmpeg, before the path for ffprobe).
      *
-     * -reconnect_on_http_error 5xx retries a 503 (late piece) and stops on a 410 (download
-     * failed); the Client Torrent waits for slow pieces itself, so a short delay is enough.
+     * -reconnect_on_http_error 5xx effectue plusieurs tentatives en cas de code 503 (fragment en retard) et s'arrête en cas de code 410 (échec du téléchargement
+     *) ; le client Torrent attend lui-même les fragments lents, un court délai suffit donc.
      *
      * @return list<string>
      */
     public function inputOptions(): array
     {
+        // Si le film n'est pas en cours de téléchargment
         if (! $this->isStream) {
             return [];
         }
