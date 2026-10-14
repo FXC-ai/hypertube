@@ -57,6 +57,8 @@ const END_GAME_PIECES = 32;
 // same wrong copy `staleHashThreshold` times, and `acceptUnverifiedPiece(pieceIndex)` says the
 // caller can check the files another way (archive.org publishes each file's SHA-1), the copy
 // is written as is and reported with `unverified: true`; the result lists those pieces.
+// A web-seed also omits unselected bytes from boundary pieces immediately when the same callback
+// allows whole-file verification, so a missing metadata file cannot block a selected movie.
 export async function downloadTorrent(torrent, peers, options) {
   const {
     infoHash,
@@ -424,6 +426,8 @@ export async function downloadTorrent(torrent, peers, options) {
           idleTimeoutMs: pieceTimeoutMs,
           urlCache: webSeedUrlCache,
           signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+          wantedFileIndexes,
+          acceptUnverifiedPiece,
           onPiece: async (pieceIndex, buffer) => {
             const piece = byIndex.get(pieceIndex);
             settled.add(pieceIndex);
@@ -449,6 +453,19 @@ export async function downloadTorrent(torrent, peers, options) {
             }
 
             release(piece, source, err);
+          },
+          onUnverifiedPiece: async (pieceIndex, buffer) => {
+            const piece = byIndex.get(pieceIndex);
+            settled.add(pieceIndex);
+
+            if (piece.done) {
+              return;
+            }
+
+            piece.holders.delete(source.key);
+            piece.reasons.add('Unselected bytes omitted; whole selected file must be verified');
+            unverifiedPieces.push(pieceIndex);
+            await complete(piece, buffer, { unverified: true });
           },
         },
       );

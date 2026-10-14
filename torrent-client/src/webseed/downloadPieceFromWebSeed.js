@@ -21,8 +21,13 @@ const DEFAULT_TIMEOUT_MS = 20000;
 // Downloads a run of consecutive pieces via BEP19 with one ranged GET per file the run overlaps,
 // at <baseUrl><torrent.name>/<file.path> (the archive.org convention). Bytes are cut into pieces
 // as they arrive: each piece is verified against its SHA-1 and handed to `onPiece` at once (a
-// corrupted one to `onBadPiece`, with its bytes), so a long run does not delay the first piece. One request per
-// piece (the old way) paid a round trip, and a redirect, for every 128 KiB to 2 MiB.
+// corrupted one to `onBadPiece`, with its bytes), so a long run does not delay the first piece.
+// One request per piece (the old way) paid a round trip, and a redirect, for every 128 KiB to
+// 2 MiB.
+//
+// When the caller can verify selected files as a whole, unselected bytes are not requested merely
+// to complete a boundary piece. Zeroes preserve the piece layout in memory but are never written;
+// that piece goes to `onUnverifiedPiece` and must stay unavailable until whole-file verification.
 //
 // `urlCache` (a Map shared across calls) remembers where a redirect led: archive.org/download/
 // answers 302 to the storage node holding the item. `idleTimeoutMs` fails a response that stops
@@ -39,6 +44,9 @@ export async function downloadPiecesFromWebSeed(
   const {
     onPiece,
     onBadPiece = () => {},
+    onUnverifiedPiece = () => {},
+    wantedFileIndexes = null,
+    acceptUnverifiedPiece = () => false,
     idleTimeoutMs = DEFAULT_TIMEOUT_MS,
     fetchImpl = fetch,
     urlCache = new Map(),
@@ -56,6 +64,8 @@ export async function downloadPiecesFromWebSeed(
   let pieceCursor = 0;
   let pending = [];
   let pendingLength = 0;
+  const wantedFiles = wantedFileIndexes === null ? null : new Set(wantedFileIndexes);
+  const unverifiedPieceIndexes = new Set();
 
   // Called with every chunk of the run, in order: emits each piece once all its bytes are in.
   async function consume(chunk) {
@@ -78,7 +88,9 @@ export async function downloadPiecesFromWebSeed(
       const expected = torrent.pieces?.[pieceIndex];
       const actual = expected ? createHash('sha1').update(piece).digest('hex') : null;
 
-      if (expected && actual !== expected) {
+      if (unverifiedPieceIndexes.has(pieceIndex)) {
+        await onUnverifiedPiece(pieceIndex, Buffer.from(piece));
+      } else if (expected && actual !== expected) {
         await onBadPiece(
           pieceIndex,
           new WebSeedError(
@@ -94,6 +106,25 @@ export async function downloadPiecesFromWebSeed(
   }
 
   for (const overlap of computeOverlaps(fileLayout, runStart, runLength)) {
+    const overlappingPieceIndexes = pieceIndexes.filter((pieceIndex) => {
+      const piece = pieceRanges[pieceIndex];
+      const overlapStart = overlap.file.torrentOffset + overlap.fileOffset;
+      const overlapEnd = overlapStart + overlap.length;
+
+      return piece.offset < overlapEnd && piece.offset + piece.length > overlapStart;
+    });
+    const canOmit =
+      wantedFiles !== null &&
+      !wantedFiles.has(overlap.file.index) &&
+      overlappingPieceIndexes.every((pieceIndex) => acceptUnverifiedPiece(pieceIndex));
+
+    if (canOmit) {
+      overlappingPieceIndexes.forEach((pieceIndex) => unverifiedPieceIndexes.add(pieceIndex));
+      await consume(Buffer.alloc(overlap.length));
+
+      continue;
+    }
+
     const url = buildFileUrl(baseUrl, torrent.name, overlap.file.path);
     await fetchRange(url, overlap.fileOffset, overlap.length, consume, {
       idleTimeoutMs,

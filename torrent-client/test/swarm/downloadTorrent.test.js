@@ -93,7 +93,11 @@ function startFakePeer(pieces, { failPieceIndexes = new Set() } = {}) {
 // <base>/<torrentName>/<filePath>, matching the archive.org convention
 // downloadPieceFromWebSeed expects. `files` maps a file path to its full
 // content buffer.
-function startFakeWebSeed(torrentName, files, { pieceLength, failPieceIndexes = new Set() } = {}) {
+function startFakeWebSeed(
+  torrentName,
+  files,
+  { pieceLength, failPieceIndexes = new Set(), requestedPaths = [] } = {},
+) {
   const server = createHttpServer((req, res) => {
     const prefix = `/${encodeURIComponent(torrentName)}/`;
 
@@ -105,6 +109,7 @@ function startFakeWebSeed(torrentName, files, { pieceLength, failPieceIndexes = 
     }
 
     const filePath = decodeURIComponent(req.url.slice(prefix.length));
+    requestedPaths.push(filePath);
 
     if (!files[filePath]) {
       res.writeHead(404);
@@ -693,6 +698,54 @@ test('a piece that never matches because archive.org rewrote a neighbour file is
     );
     assert.ok((await readFile(join(outputDir, 'movie.mp4'))).equals(movie));
   });
+});
+
+test('an unavailable unselected file sharing the last movie piece is never requested', async () => {
+  const movie = Buffer.alloc(PIECE_LENGTH * 2 + 100, 7);
+  const thumbnailAtTorrentTime = Buffer.alloc(11612, 1);
+  const streamAtTorrentTime = Buffer.concat([movie, thumbnailAtTorrentTime]);
+  const torrent = {
+    name: 'item',
+    infoHash: INFO_HASH.toString('hex'),
+    pieceLength: PIECE_LENGTH,
+    pieces: [0, 1, 2].map((i) =>
+      createHash('sha1')
+        .update(streamAtTorrentTime.subarray(i * PIECE_LENGTH, (i + 1) * PIECE_LENGTH))
+        .digest('hex'),
+    ),
+    totalLength: streamAtTorrentTime.length,
+    files: [
+      { path: 'movie.mp4', length: movie.length },
+      { path: '__ia_thumb.jpg', length: thumbnailAtTorrentTime.length },
+    ],
+  };
+  const requestedPaths = [];
+  const webSeed = await startFakeWebSeed(
+    'item',
+    { 'movie.mp4': movie },
+    { requestedPaths },
+  );
+
+  try {
+    await withTempDir(async (outputDir) => {
+      const result = await downloadTorrent(torrent, [], {
+        ...FAST,
+        infoHash: INFO_HASH,
+        peerId: CLIENT_PEER_ID,
+        outputDir,
+        webSeedUrls: [`http://127.0.0.1:${webSeed.address().port}/`],
+        fileIndexes: [0],
+        acceptUnverifiedPiece: () => true,
+      });
+
+      assert.deepEqual(result.unverifiedPieces, [2]);
+      assert.deepEqual([...new Set(requestedPaths)], ['movie.mp4']);
+      assert.ok((await readFile(join(outputDir, 'movie.mp4'))).equals(movie));
+      await assert.rejects(access(join(outputDir, '__ia_thumb.jpg')), { code: 'ENOENT' });
+    });
+  } finally {
+    webSeed.close();
+  }
 });
 
 test('without a way to check the file, the stale piece fails the download but never bans the web-seed', async () => {
