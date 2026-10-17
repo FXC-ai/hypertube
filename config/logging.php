@@ -106,6 +106,8 @@ return [
             'driver' => 'single',
             'path' => storage_path('logs/my_debug.log'),
             'level' => 'debug',
+            'replace_placeholders' => true,
+            'locking' => true,
         ],
 
         'stderr' => [

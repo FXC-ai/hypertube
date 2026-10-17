@@ -7,6 +7,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * HTTP client for the Client Torrent service (torrent-client/API.md).
@@ -20,9 +21,12 @@ final class TorrentClient
      */
     public function inspect(string $torrentUrl): array
     {
-        return $this->send(fn (PendingRequest $http): Response => $http->post('/torrents/inspect', [
-            'torrentUrl' => $torrentUrl,
-        ]))->json();
+        return $this->send(
+            operation: __FUNCTION__,
+            request: fn (PendingRequest $http): Response => $http->post('/torrents/inspect', [
+                'torrentUrl' => $torrentUrl,
+            ]),
+        )->json();
     }
 
     /**
@@ -32,12 +36,19 @@ final class TorrentClient
      */
     public function startDownload(string $torrentUrl, string $outputDirectory, array $fileIndexes, string $infoHash): string
     {
-        return $this->send(fn (PendingRequest $http): Response => $http->post('/downloads', [
-            'torrentUrl' => $torrentUrl,
-            'outputDir' => $outputDirectory,
-            'fileIndexes' => $fileIndexes,
-            'expectedInfoHash' => $infoHash,
-        ]))->json('id');
+        return $this->send(
+            operation: __FUNCTION__,
+            request: fn (PendingRequest $http): Response => $http->post('/downloads', [
+                'torrentUrl' => $torrentUrl,
+                'outputDir' => $outputDirectory,
+                'fileIndexes' => $fileIndexes,
+                'expectedInfoHash' => $infoHash,
+            ]),
+            context: [
+                'selected_file_count' => count($fileIndexes),
+                'info_hash' => $infoHash,
+            ],
+        )->json('id');
     }
 
     /**
@@ -49,7 +60,11 @@ final class TorrentClient
     public function status(string $downloadId): ?array
     {
         $response = $this->send(
-            fn (PendingRequest $http): Response => $http->get('/downloads/'.rawurlencode($downloadId)),
+            operation: __FUNCTION__,
+            request: fn (PendingRequest $http): Response => $http->get('/downloads/'.rawurlencode($downloadId)),
+            context: [
+                'download_id' => $downloadId,
+            ],
             allowNotFound: true,
         );
 
@@ -66,18 +81,91 @@ final class TorrentClient
 
     /**
      * @param  callable(PendingRequest): Response  $request
+     * @param  array<string, mixed>  $context
      */
-    private function send(callable $request, bool $allowNotFound = false): Response
-    {
+    private function send(
+        string $operation,
+        callable $request,
+        array $context = [],
+        bool $allowNotFound = false,
+    ): Response {
+
+        $logContext = [
+            'class' => self::class,
+            'method' => __FUNCTION__,
+            'operation' => $operation,
+            ...$context,
+        ];
+
+        if ($operation !== 'status') {
+            Log::channel('my_debug')->debug(
+                "Une requête est envoyée au client torrent.\n".json_encode(
+                    $logContext,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                )."\n",
+            );
+        }
+
         try {
             $response = $request(Http::baseUrl($this->baseUrl())->acceptJson()->timeout(60));
         } catch (ConnectionException $exception) {
-            throw new TorrentClientException('Client Torrent unreachable: '.$exception->getMessage(), previous: $exception);
+            $torrentClientException = new TorrentClientException(
+                'Client Torrent unreachable: '.$exception->getMessage(),
+                previous: $exception,
+            );
+
+            Log::channel('my_debug')->error(
+                "La connexion au client torrent a échoué.\n".json_encode(
+                    [
+                        ...$logContext,
+                        'exception' => [
+                            'type' => $torrentClientException::class,
+                            'message' => $torrentClientException->getMessage(),
+                            'file' => $torrentClientException->getFile(),
+                            'line' => $torrentClientException->getLine(),
+                        ],
+                    ],
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                )."\n",
+            );
+
+            throw $torrentClientException;
         }
 
         if ($response->failed() && ! ($allowNotFound && $response->notFound())) {
-            throw new TorrentClientException(
-                "Client Torrent answered {$response->status()}: ".($response->json('error') ?? $response->body()),
+            $responseError = $response->json('error');
+
+            if (! is_string($responseError)) {
+                $responseError = $response->body();
+            }
+
+            $torrentClientException = new TorrentClientException(
+                "Client Torrent answered {$response->status()}: {$responseError}",
+            );
+
+            Log::channel('my_debug')->error(
+                "Le client torrent a retourné une réponse en erreur.\n".json_encode(
+                    [
+                        ...$logContext,
+                        'http_status' => $response->status(),
+                        'response_error' => mb_substr((string) $responseError, 0, 2000),
+                    ],
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                )."\n",
+            );
+
+            throw $torrentClientException;
+        }
+
+        if ($operation !== 'status') {
+            Log::channel('my_debug')->debug(
+                "La requête vers le client torrent est terminée.\n".json_encode(
+                    [
+                        ...$logContext,
+                        'http_status' => $response->status(),
+                    ],
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                )."\n",
             );
         }
 
