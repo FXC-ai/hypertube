@@ -46,8 +46,8 @@ php artisan migrate --force
 echo "Starting Vite..."
 npm run dev -- --host 0.0.0.0 &
 
-echo "Starting queue worker..."
-php artisan queue:work --tries=1 --timeout=0 &
+# echo "Starting queue worker..."
+# php artisan queue:listen --tries=1 --timeout=0 &
 
 echo "Starting PHP-FPM..."
 exec php-fpm -F

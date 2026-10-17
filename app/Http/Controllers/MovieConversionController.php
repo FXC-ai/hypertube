@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ConversionStatus;
+use App\Enums\DownloadStatus;
 use App\Jobs\ConvertMovie;
+use App\Jobs\DownloadMovie;
 use App\Models\Movie;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
@@ -14,7 +16,44 @@ final class MovieConversionController extends Controller
 {
     public function store(Movie $movie): RedirectResponse
     {
-        Log::channel('my_debug')->debug('Etape 1 : ', ['MovieConversionController' => 'store']);
+        $context = [
+            'class' => self::class,
+            'method' => __FUNCTION__,
+            'movie_id' => $movie->id,
+            'user_id' => request()->user()?->getAuthIdentifier(),
+        ];
+
+        Log::channel('my_debug')->info(
+            "Une demande de préparation du film a été reçue.\n".json_encode(
+                [
+                    ...$context,
+                    'download_status' => $movie->download_status?->value,
+                    'conversion_status' => $movie->conversion_status?->value,
+                    'has_torrent' => $movie->torrent_url !== null,
+                ],
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+            )."\n",
+        );
+
+        if (
+            $movie->torrent_url !== null &&
+            ! in_array($movie->download_status, [DownloadStatus::Downloading, DownloadStatus::Completed], true)
+        ) {
+            DownloadMovie::dispatch($movie->id)->afterCommit();
+
+            Log::channel('my_debug')->info(
+                "Le job de téléchargement du film a été ajouté à la file d’attente.\n".json_encode(
+                    [
+                        ...$context,
+                        'previous_download_status' => $movie->download_status?->value,
+                        'job' => DownloadMovie::class,
+                    ],
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                )."\n",
+            );
+
+            return to_route('movies.show', $movie);
+        }
 
         $queued = Movie::query()
             ->whereKey($movie->id)
@@ -28,15 +67,22 @@ final class MovieConversionController extends Controller
                     'conversion_playable_at' => null,
                     'conversion_completed_at' => null,
                 ]
-
             );
 
-        Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queued = ' => $queued]);
-
         if ($queued === 1) {
-            Log::channel('my_debug')->debug('MovieConversionController : ', ['method' => 'store', 'queueud = ' => $queued]);
-
             ConvertMovie::dispatch($movie->id)->afterCommit();
+
+            Log::channel('my_debug')->info(
+                "Le job de conversion du film a été ajouté à la file d’attente.\n".json_encode(
+                    [
+                        ...$context,
+                        'previous_conversion_status' => $movie->conversion_status?->value,
+                        'conversion_status' => ConversionStatus::Queued->value,
+                        'job' => ConvertMovie::class,
+                    ],
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                )."\n",
+            );
         }
 
         return to_route('movies.show', $movie);

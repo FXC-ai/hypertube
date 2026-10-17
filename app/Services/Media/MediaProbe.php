@@ -9,11 +9,13 @@ use JsonException;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
+use App\Services\Media\MovieInput;
+
 final class MediaProbe
 {
-    public function probe(string $inputPath): MediaInfo
+    public function probe(MovieInput $movieInput): MediaInfo
     {
-        if (! is_file($inputPath)) {
+        if (! $movieInput->isStream && ! is_file($movieInput->location)) {
             throw new MediaConversionException('Source file not found.');
         }
 
@@ -21,12 +23,14 @@ final class MediaProbe
             (string) config('media.ffprobe_binary'),
             '-v',
             'error',
+            ...$movieInput->inputOptions(),
             '-show_streams',
             '-of',
             'json',
-            $inputPath,
+            $movieInput->location,
         ]);
-        $process->setTimeout(60);
+
+        $process->setTimeout($movieInput->isStream ? (int) config('media.stream.probe_timeout_s') : 60);
         $process->run();
 
         if (! $process->isSuccessful()) {

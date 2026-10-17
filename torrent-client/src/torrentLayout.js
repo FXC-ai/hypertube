@@ -1,11 +1,44 @@
+import { extname } from 'node:path';
+
 // Byte-range math shared by the peer-wire write path and the web-seed read path: a torrent's
 // files are concatenated back to back in `files` order before being cut into pieces.
 
+// Every file is written straight into outputDir under its own name, whatever folders the torrent
+// nests it in: Laravel finds movies/{id}/{fileName}, and a ".." in a malicious torrent cannot
+// leave outputDir. Clashing names get " (2)", " (3)"... in torrent order, compared
+// case-insensitively because outputDir may sit on a case-insensitive disk (macOS).
+export function computeFileNames(paths) {
+  const taken = new Set();
+
+  return paths.map((path, index) => {
+    const last = path.split('/').pop();
+    const base = last === '' || last === '.' || last === '..' ? `file-${index}` : last;
+    const extension = extname(base);
+    const stem = base.slice(0, base.length - extension.length);
+    let name = base;
+
+    for (let copy = 2; taken.has(name.toLowerCase()); copy += 1) {
+      name = `${stem} (${copy})${extension}`;
+    }
+
+    taken.add(name.toLowerCase());
+
+    return name;
+  });
+}
+
 export function computeFileLayout(torrent) {
+  const fileNames = computeFileNames(torrent.files.map((file) => file.path));
   let offset = 0;
 
   return torrent.files.map((file, index) => {
-    const entry = { index, path: file.path, length: file.length, torrentOffset: offset };
+    const entry = {
+      index,
+      path: file.path,
+      fileName: fileNames[index],
+      length: file.length,
+      torrentOffset: offset,
+    };
     offset += file.length;
 
     return entry;

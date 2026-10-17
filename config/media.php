@@ -3,6 +3,13 @@
 return [
     'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
     'ffprobe_binary' => env('FFPROBE_BINARY', 'ffprobe'),
+
+    'torrent_client_url' => env('TORRENT_CLIENT_URL', 'http://client-torrent:7881'),
+    'stream' => [
+        'rw_timeout_us' => 90_000_000,
+        'probe_timeout_s' => 300,
+    ],
+
     'hls' => [
         'segment_duration' => 6,
         'bandwidth' => 1_700_000,

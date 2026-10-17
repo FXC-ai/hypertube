@@ -55,7 +55,7 @@ test('cancelDownload aborts an in-progress download and it settles as cancelled'
   const afterCancel = manager.cancelDownload(id);
   assert.ok(afterCancel);
 
-  await waitFor(() => manager.getStatus(id).status !== 'downloading');
+  await waitForEnd(manager, id);
   assert.equal(manager.getStatus(id).status, 'cancelled');
 });
 
@@ -86,6 +86,7 @@ function managerFor(torrent, overrides = {}) {
   return createDownloadManager({
     parseTorrentFileFn: () => torrent,
     announceFn: async () => ({ peers: [{ ip: '127.0.0.1', port: 1 }] }),
+    recheckPiecesFn: async () => new Set(),
     ...overrides,
   });
 }
@@ -96,7 +97,7 @@ test('without fileIndexes, the suggested files are downloaded and progress is co
     downloadTorrentFn: completingDownload(calls, [0, 1, 2]),
   });
   const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir: '/tmp/out' });
-  await waitFor(() => manager.getStatus(id).status !== 'downloading');
+  await waitForEnd(manager, id);
 
   const status = manager.getStatus(id);
   assert.equal(status.status, 'completed', status.error ?? '');
@@ -123,7 +124,7 @@ test('explicit fileIndexes restrict the pieces to download', async () => {
     outputDir: '/tmp/out',
     fileIndexes: [0],
   });
-  await waitFor(() => manager.getStatus(id).status !== 'downloading');
+  await waitForEnd(manager, id);
 
   assert.deepEqual(calls[0].fileIndexes, [0]);
   assert.equal(manager.getStatus(id).totalPieces, 1);
@@ -146,9 +147,8 @@ test('an out-of-range fileIndex or a changed info-hash fails the job without dow
     outputDir: '/o',
     expectedInfoHash: 'ff'.repeat(20),
   });
-  await waitFor(() =>
-    [outOfRange, changed].every((id) => manager.getStatus(id).status !== 'downloading'),
-  );
+  await waitForEnd(manager, outOfRange);
+  await waitForEnd(manager, changed);
 
   assert.equal(manager.getStatus(outOfRange).status, 'failed');
   assert.match(manager.getStatus(outOfRange).error, /out of range/);
@@ -192,6 +192,84 @@ test('inspectTorrent returns the file list, and a torrent URL that cannot be fet
   );
 });
 
+test('pieces already valid on disk are counted, skipped, and the job reports checking meanwhile', async () => {
+  const calls = [];
+  const recheckDone = deferred();
+  const manager = managerFor(multiFileTorrent(), {
+    recheckPiecesFn: async (torrent, { onPiece }) => {
+      await recheckDone.promise;
+      onPiece({ pieceIndex: 0, valid: true });
+
+      return new Set([0]);
+    },
+    downloadTorrentFn: async (t, p, options) => {
+      calls.push(options);
+      options.onSourcesChange({ active: 2, dropped: 1 });
+      options.onProgress({ pieceIndex: 1 });
+      options.onProgress({ pieceIndex: 2 });
+    },
+  });
+  const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir: '/o' });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(manager.getStatus(id).status, 'checking');
+
+  recheckDone.resolve();
+  await waitForEnd(manager, id);
+  const status = manager.getStatus(id);
+  assert.equal(status.status, 'completed', status.error ?? '');
+  assert.deepEqual([...calls[0].skipPieces], [0]);
+  assert.equal(status.piecesCompleted, 3);
+  assert.equal(status.downloadedBytes, 190);
+  assert.deepEqual(status.sources, { active: 2, dropped: 1 });
+});
+
+test('when every piece is already on disk, the job completes without announcing', async () => {
+  let announced = false;
+  const manager = managerFor(multiFileTorrent(), {
+    announceFn: async () => {
+      announced = true;
+
+      return { peers: [] };
+    },
+    recheckPiecesFn: async (torrent, { onPiece }) => {
+      [0, 1, 2].forEach((pieceIndex) => onPiece({ pieceIndex, valid: true }));
+
+      return new Set([0, 1, 2]);
+    },
+  });
+  const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir: '/o' });
+  await waitForEnd(manager, id);
+
+  assert.equal(manager.getStatus(id).status, 'completed');
+  assert.equal(manager.getStatus(id).downloadedBytes, 190);
+  assert.equal(announced, false);
+});
+
+test('refreshSources re-announces to the trackers and returns the new peers', async () => {
+  const announces = [];
+  let refreshed;
+  const manager = managerFor(multiFileTorrent(), {
+    announceFn: async (urls, params) => {
+      announces.push(params);
+
+      return { peers: [{ ip: '10.0.0.' + announces.length, port: 6881 }] };
+    },
+    downloadTorrentFn: async (t, p, options) => {
+      refreshed = await options.refreshSources();
+    },
+  });
+  const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir: '/o' });
+  await waitForEnd(manager, id);
+
+  assert.deepEqual(refreshed, [{ ip: '10.0.0.2', port: 6881 }]);
+  assert.equal(announces[0].event, 'started');
+  assert.equal(announces[1].event, undefined);
+});
+
+async function waitForEnd(manager, id) {
+  await waitFor(() => ['completed', 'failed', 'cancelled'].includes(manager.getStatus(id).status));
+}
+
 async function waitFor(predicate, { timeoutMs = 2000, intervalMs = 5 } = {}) {
   const start = Date.now();
 
@@ -203,3 +281,85 @@ async function waitFor(predicate, { timeoutMs = 2000, intervalMs = 5 } = {}) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }
+
+test('fetching the .torrent is retried after a network error, never after an HTTP error', async () => {
+  let calls = 0;
+  const flaky = managerFor(multiFileTorrent(), {
+    torrentFetchRetryDelayMs: 0,
+    fetchImpl: async () => {
+      calls += 1;
+
+      if (calls < 3) {
+        throw new TypeError('fetch failed');
+      }
+
+      return new Response(Buffer.from('x'));
+    },
+  });
+  const inspection = await flaky.inspectTorrent({ torrentUrl: 'http://example.test/x.torrent' });
+  assert.equal(inspection.mainVideoIndex, 1);
+  assert.equal(calls, 3);
+
+  let httpCalls = 0;
+  const refused = managerFor(multiFileTorrent(), {
+    torrentFetchRetryDelayMs: 0,
+    fetchImpl: async () => {
+      httpCalls += 1;
+
+      return new Response(null, { status: 404 });
+    },
+  });
+  await assert.rejects(
+    refused.inspectTorrent({ torrentUrl: 'http://example.test/x.torrent' }),
+    TorrentFetchError,
+  );
+  assert.equal(httpCalls, 1);
+});
+
+// Stands in for downloadTorrent: writes movie.mp4, reports its last piece as unverified.
+function downloadWithUnverifiedLastPiece(content) {
+  return async (torrent, peers, options) => {
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(`${options.outputDir}/movie.mp4`, content);
+    assert.equal(options.acceptUnverifiedPiece(2), true);
+    options.onProgress({ completed: 1, total: 3, pieceIndex: 0 });
+    options.onProgress({ completed: 2, total: 3, pieceIndex: 1 });
+    options.onProgress({ completed: 3, total: 3, pieceIndex: 2, unverified: true });
+
+    return { unverifiedPieces: [2] };
+  };
+}
+
+test('an unverified piece completes the job only if the whole file matches archive.org', async () => {
+  const { mkdtemp } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { createHash } = await import('node:crypto');
+  const content = Buffer.alloc(240, 5);
+  const sha1 = createHash('sha1').update(content).digest('hex');
+  const torrent = { ...fakeTorrent({ urlList: ['https://archive.org/download/'] }), name: 'item' };
+  const run = async (published) => {
+    const outputDir = await mkdtemp(`${tmpdir()}/unverified-`);
+    const asked = [];
+    const manager = managerFor(torrent, {
+      downloadTorrentFn: downloadWithUnverifiedLastPiece(content),
+      fetchArchiveFileHashesFn: async (item) => {
+        asked.push(item);
+
+        return new Map([['movie.mp4', published]]);
+      },
+    });
+    const id = await manager.startDownload({ torrentBytes: Buffer.from('x'), outputDir });
+    await waitForEnd(manager, id);
+
+    return { status: manager.getStatus(id), asked };
+  };
+
+  const good = await run(sha1);
+  assert.equal(good.status.status, 'completed');
+  assert.deepEqual(good.asked, ['item']);
+  assert.deepEqual(good.status.files[0].availableRanges, [[0, 240]]);
+
+  const bad = await run('00'.repeat(20));
+  assert.equal(bad.status.status, 'failed');
+  assert.match(bad.status.error, /does not match the SHA-1 archive.org publishes/);
+});

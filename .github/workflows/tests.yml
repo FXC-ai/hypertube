@@ -36,3 +36,7 @@ jobs:
 
       - name: Run CI Checks
         run: composer ci:check
+
+      - name: Run Client Torrent unit tests
+        working-directory: torrent-client
+        run: npm run test:unit

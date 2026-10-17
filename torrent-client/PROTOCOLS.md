@@ -109,30 +109,22 @@ Le modulo `%` fait boucler le curseur : après la dernière source, on repart de
 
 ```js
 // downloadTorrent.js - worker (abrégé)
-const pieceIndex = queue.shift();
-const source = nextSource();
+const readyIndex = pending.findIndex((piece) => piece.readyAt <= now);
+const source = pool.pick(pending[readyIndex].failuresBySource); // la source qui a le moins raté cette pièce
 
-const buffer =
-  source.kind === 'webseed'
-    ? await downloadPieceFromWebSeed(source.baseUrl, torrent, fileLayout, pieceIndex, offset, length, { pieceHash, timeoutMs, signal })
-    : await downloadPieceFromPeer(source.peer, { infoHash, peerId, pieceIndex, pieceLength: length, pieceHash, /* ... */ signal });
+const buffer = await fetchPiece(source, piece.pieceIndex); // pair (peer wire) ou web-seed (HTTP Range)
 ```
 
-`concurrency` vaut 10 par défaut : dix workers tournent en parallèle et tirent leurs pièces dans la même file `queue`. En cas d'échec :
+`concurrency` vaut 10 par défaut : dix workers tournent en parallèle et tirent leurs pièces dans la même file. En cas d'échec (#27) :
 
 ```js
-attempts[pieceIndex] += 1;
-
-if (attempts[pieceIndex] >= maxAttemptsPerPiece) {
-  failure = new SwarmDownloadError(`Piece ${pieceIndex} failed after ...`);
-
-  return;
-}
-
-queue.push(pieceIndex);
+pool.reportFailure(source, err); // compte contre la source seulement si injoignable ou pièce corrompue
+piece.attempts += 1;
+piece.readyAt = Date.now() + Math.min(backoffBaseMs * 2 ** (piece.attempts - 1), backoffMaxMs);
+pending.push(piece);
 ```
 
-La pièce est remise en file et sera prise par un worker sur la source suivante. Au-delà de `maxAttemptsPerPiece` (`max(4, nombre de sources * 2)` par défaut), tout le téléchargement échoue, plutôt que de produire un fichier incomplet. Une annulation (`CancelledError`) sort avant, sans compter comme un échec.
+La pièce attend un délai croissant, puis repart vers une autre source. Il n'y a plus de budget fixe par pièce : le téléchargement échoue seulement si aucune pièce n'a abouti pendant `stallTimeoutMs` (2 min), plutôt que de produire un fichier incomplet. Une annulation (`CancelledError`) sort avant, sans compter comme un échec. Le détail des règles (sources mises de côté, réannonce, reprise) est dans [overview.md](overview.md#ticket-c---robustesse-des-sources-et-reprise).
 
 ### 1.5 L'écriture : une pièce peut chevaucher deux fichiers
 
