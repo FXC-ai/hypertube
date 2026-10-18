@@ -24,8 +24,14 @@ import { show } from '@/routes/movies';
 import { store as conversionStore } from '@/routes/movies/conversion';
 import type { Comment } from '@/types/comment';
 
-type ConversionStatus =
-    'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
+type ConversionStatus = 'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
+
+type DownloadStatus =
+    | 'pending'
+    | 'downloading'
+    | 'completed'
+    | 'failed'
+    | 'unsupported';
 
 type OmdbData = {
     imdbID: string;
@@ -46,10 +52,13 @@ type OmdbData = {
 type MoviePageData = {
     id: number;
     title: string;
-    filename: string;
+    filename: string | null;
+    download_status: DownloadStatus;
+    download_error: string | null;
     conversion_attempt: string | null;
     conversion_status: ConversionStatus;
     conversion_error: string | null;
+    can_prepare: boolean;
     playable: boolean;
     preferredlanguage: string;
     movieData: OmdbData;
@@ -195,16 +204,26 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
     const isPreparing = ['queued', 'converting'].includes(
         moviePageData.conversion_status,
     );
-    const statusLabel = conversionStatusLabel[moviePageData.conversion_status];
+    const isUnsupported = moviePageData.download_status === 'unsupported';
+
+    const statusLabel = isUnsupported
+        ? 'Unsupported torrent'
+        : conversionStatusLabel[moviePageData.conversion_status];
+
+    const displayedError = isUnsupported
+        ? moviePageData.download_error
+        : moviePageData.conversion_error;
+
 
     useEffect(() => {
         if (
+            isUnsupported ||
             moviePageData.conversion_status === 'playable' ||
             moviePageData.conversion_status === 'failed'
         ) {
             stop();
         }
-    }, [moviePageData.conversion_status, stop]);
+    }, [isUnsupported, moviePageData.conversion_status, stop]);
 
     const startConversion = (): void => {
         conversionForm.post(conversionStore.url(moviePageData.id), {
@@ -234,7 +253,7 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                 <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
                     <Card className="overflow-hidden border-border/60 bg-black p-0 shadow-xl">
                         {moviePageData.playable &&
-                        moviePageData.conversion_attempt !== null ? (
+                            moviePageData.conversion_attempt !== null ? (
                             <HlsPlayer
                                 /*                                 src={manifest.url({
                                                                         movie: moviePageData.id,
@@ -255,14 +274,18 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                 )}
                                 <div>
                                     <p className="font-medium text-foreground">
-                                        {isPreparing
-                                            ? 'The video is being prepared'
-                                            : 'The video is not available yet'}
+                                        {isUnsupported
+                                            ? 'This torrent has no supported video'
+                                            : isPreparing
+                                                ? 'The video is being prepared'
+                                                : 'The video is not available yet'}
                                     </p>
                                     <p className="mt-1 text-sm">
-                                        {isPreparing
-                                            ? 'This page will update automatically.'
-                                            : 'Prepare the video to start watching.'}
+                                        {isUnsupported
+                                            ? 'No MP4 or MKV file was found.'
+                                            : isPreparing
+                                                ? 'This page will update automatically.'
+                                                : 'Prepare the video to start watching.'}
                                     </p>
                                 </div>
                             </div>
@@ -303,32 +326,30 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                     #{moviePageData.id}
                                 </span>
                             </div>
-                            {moviePageData.conversion_error && (
+                            {displayedError && (
                                 <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                                    {moviePageData.conversion_error}
+                                    {displayedError}
                                 </p>
                             )}
-                            {(moviePageData.conversion_status === 'pending' ||
-                                moviePageData.conversion_status ===
-                                    'failed') && (
-                                <Button
-                                    type="button"
-                                    className="w-full"
-                                    disabled={conversionForm.processing}
-                                    onClick={startConversion}
-                                >
-                                    {moviePageData.conversion_status ===
-                                    'failed' ? (
-                                        <RotateCcw />
-                                    ) : (
-                                        <Play />
-                                    )}
-                                    {moviePageData.conversion_status ===
-                                    'failed'
-                                        ? 'Retry'
-                                        : 'Prepare video'}
-                                </Button>
-                            )}
+                            {moviePageData.can_prepare &&
+                                (moviePageData.conversion_status === 'pending' ||
+                                    moviePageData.conversion_status === 'failed') && (
+                                    <Button
+                                        type="button"
+                                        className="w-full"
+                                        disabled={conversionForm.processing}
+                                        onClick={startConversion}
+                                    >
+                                        {moviePageData.conversion_status === 'failed' ? (
+                                            <RotateCcw />
+                                        ) : (
+                                            <Play />
+                                        )}
+                                        {moviePageData.conversion_status === 'failed'
+                                            ? 'Retry'
+                                            : 'Prepare video'}
+                                    </Button>
+                                )}
                         </CardContent>
                     </Card>
 

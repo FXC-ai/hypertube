@@ -10,7 +10,8 @@ use App\Models\Movie;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
-use Log;
+use Illuminate\Support\Facades\Log;
+use App\Enums\DownloadStatus;
 
 class MovieController extends Controller
 {
@@ -32,9 +33,14 @@ class MovieController extends Controller
                     'playable' => $movie->isPlayable(),
                     'preferredlanguage' => Auth::user()->preferredlanguage?->value,
                     'movieData' => $movie->getEnrichedData(),
+                    'download_status' => $movie->download_status->value,
+                    'download_error' => $movie->download_status === DownloadStatus::Unsupported
+                        ? $movie->download_error
+                        : null,
+                    'can_prepare' => $movie->download_status !== DownloadStatus::Unsupported && in_array($movie->conversion_status, [ConversionStatus::Pending, ConversionStatus::Failed], true),
                 ],
                 'comments' => Inertia::scroll(
-                    fn () => CommentResource::collection(
+                    fn() => CommentResource::collection(
                         $movie->comments()->with('user')->latest()->paginate(20)
                     ),
                 ),
@@ -56,7 +62,7 @@ class MovieController extends Controller
         $query = Movie::query();
 
         if ($search) {
-            $query->where('title', 'like', '%'.$search.'%');
+            $query->where('title', 'like', '%' . $search . '%');
         }
 
         if ($sort) {
@@ -69,7 +75,7 @@ class MovieController extends Controller
             'movies/index',
             [
                 'movies' => Inertia::scroll(
-                    fn () => IndexMovieResource::collection($query->paginate($perPage))
+                    fn() => IndexMovieResource::collection($query->paginate($perPage))
                 ),
                 'filters' => [
                     'search' => $search,
