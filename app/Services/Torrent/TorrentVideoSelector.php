@@ -40,8 +40,8 @@ final class TorrentVideoSelector
     private function extensionPriority(string $path): int
     {
         return match ($this->extension($path)) {
-            'mp4' => 0,
-            'mkv' => 1,
+            'mkv' => 0,
+            'mp4' => 1,
             default => PHP_INT_MAX,
         };
     }

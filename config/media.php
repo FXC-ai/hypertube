@@ -13,5 +13,7 @@ return [
     'hls' => [
         'segment_duration' => 6,
         'bandwidth' => 1_700_000,
+        'completion_minimum_ratio' => 0.99,
+        'completion_tolerance_segments' => 2,
     ],
 ];

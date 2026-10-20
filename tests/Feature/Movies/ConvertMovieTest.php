@@ -6,10 +6,12 @@ use App\Http\Controllers\MovieConversionController;
 use App\Jobs\ConvertMovie;
 use App\Models\Movie;
 use App\Services\Media\HlsCommandBuilder;
+use App\Services\Media\HlsCompletionValidator;
 use App\Services\Media\HlsConverter;
 use App\Services\Media\HlsMasterPlaylistBuilder;
 use App\Services\Media\HlsReadinessChecker;
 use App\Services\Media\MediaProbe;
+use App\Services\Media\MovieInput;
 use App\Services\Media\MovieInputResolver;
 use App\Services\Media\TrackSelector;
 use Illuminate\Support\Facades\Queue;
@@ -50,6 +52,7 @@ test('a queued movie is claimed atomically and conversion reaches converted', fu
         new TrackSelector,
         new HlsCommandBuilder,
         new HlsReadinessChecker,
+        new HlsCompletionValidator,
         new HlsMasterPlaylistBuilder,
         new HlsConverter,
         app(MovieInputResolver::class),
@@ -57,7 +60,16 @@ test('a queued movie is claimed atomically and conversion reaches converted', fu
 
     $movie->refresh();
 
+    $playlistPath = Storage::disk('public')->path(
+        "movies/{$movie->id}/hls/{$movie->conversion_attempt}/video.m3u8",
+    );
+    $hlsMediaInfo = (new MediaProbe)->probe(new MovieInput(
+        location: $playlistPath,
+        isStream: false,
+    ));
+
     expect($movie->conversion_status)->toBe(ConversionStatus::Converted)
+        ->and($hlsMediaInfo->durationSeconds)->toBeGreaterThan(0.0)
         ->and($movie->conversion_attempt)->not->toBeNull()
         ->and($movie->conversion_started_at)->not->toBeNull()
         ->and($movie->conversion_playable_at)->not->toBeNull()
@@ -69,11 +81,12 @@ test('a conversion failure marks the movie as failed and rethrows the exception'
 
     $movie = Movie::factory()->withConversionStatus(ConversionStatus::Queued)->create(['filename' => 'source.mkv']);
 
-    expect(fn() => (new ConvertMovie($movie->id))->handle(
+    expect(fn () => (new ConvertMovie($movie->id))->handle(
         new MediaProbe,
         new TrackSelector,
         new HlsCommandBuilder,
         new HlsReadinessChecker,
+        new HlsCompletionValidator,
         new HlsMasterPlaylistBuilder,
         new HlsConverter,
         app(MovieInputResolver::class),
@@ -99,6 +112,7 @@ test('a movie stored in a subfolder of its torrent is converted', function () {
         new TrackSelector,
         new HlsCommandBuilder,
         new HlsReadinessChecker,
+        new HlsCompletionValidator,
         new HlsMasterPlaylistBuilder,
         new HlsConverter,
         app(MovieInputResolver::class),
@@ -112,11 +126,12 @@ test('a file name that leaves the movie directory is rejected and the error is r
 
     $movie = Movie::factory()->withConversionStatus(ConversionStatus::Queued)->create(['filename' => $filename]);
 
-    expect(fn() => (new ConvertMovie($movie->id))->handle(
+    expect(fn () => (new ConvertMovie($movie->id))->handle(
         new MediaProbe,
         new TrackSelector,
         new HlsCommandBuilder,
         new HlsReadinessChecker,
+        new HlsCompletionValidator,
         new HlsMasterPlaylistBuilder,
         new HlsConverter,
         app(MovieInputResolver::class),

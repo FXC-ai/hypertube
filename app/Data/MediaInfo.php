@@ -4,8 +4,11 @@ namespace App\Data;
 
 final readonly class MediaInfo
 {
-    /**@paramlist<MediaStream> $streams */
-    public function __construct(public array $streams) {}
+    /** @param list<MediaStream> $streams */
+    public function __construct(
+        public array $streams,
+        public float $durationSeconds,
+    ) {}
 
     /**@return list<MediaStream> */
     public function videos(): array

@@ -20,15 +20,18 @@ function selectedTracksFixture(): SelectedTracks
 
 function mediaInfoFixture(): MediaInfo
 {
-    return new MediaInfo([
-        new MediaStream(0, 'video', 'h264', 'und', '', []),
-        new MediaStream(1, 'audio', 'aac', 'eng', '', []),
-        new MediaStream(2, 'subtitle', 'subrip', 'eng', '', []),
-        new MediaStream(3, 'subtitle', 'subrip', 'fra', '', []),
-        new MediaStream(4, 'subtitle', 'ass', 'deu', '', []),
-        new MediaStream(5, 'subtitle', 'mov_text', 'ita', '', []),
-        new MediaStream(6, 'subtitle', 'subrip', 'spa', '', []),
-    ]);
+    return new MediaInfo(
+        streams: [
+            new MediaStream(0, 'video', 'h264', 'und', '', []),
+            new MediaStream(1, 'audio', 'aac', 'eng', '', []),
+            new MediaStream(2, 'subtitle', 'subrip', 'eng', '', []),
+            new MediaStream(3, 'subtitle', 'subrip', 'fra', '', []),
+            new MediaStream(4, 'subtitle', 'ass', 'deu', '', []),
+            new MediaStream(5, 'subtitle', 'mov_text', 'ita', '', []),
+            new MediaStream(6, 'subtitle', 'subrip', 'spa', '', []),
+        ],
+        durationSeconds: 60.0,
+    );
 }
 
 test('the track selector keeps the video, preferred audio, and supported subtitles', function () {
@@ -43,7 +46,10 @@ test('the track selector keeps the video, preferred audio, and supported subtitl
 });
 
 test('the track selector rejects media without a video track', function () {
-    $media = new MediaInfo([new MediaStream(1, 'audio', 'aac', 'eng', '', [])]);
+    $media = new MediaInfo(
+        streams: [new MediaStream(1, 'audio', 'aac', 'eng', '', [])],
+        durationSeconds: 60.0,
+    );
 
     expect(fn (): SelectedTracks => (new TrackSelector)->select($media))->toThrow(MediaConversionException::class, 'No video track avaible.');
 });

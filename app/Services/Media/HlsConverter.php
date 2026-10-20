@@ -25,7 +25,7 @@ final class HlsConverter
             function () use ($onProgress, &$lastCheck): void {
                 $now = microtime(true);
 
-                if ($now - $lastCheck >= 0.5) {
+                if ($now - $lastCheck >= 1.5) {
                     $onProgress();
                     $lastCheck = $now;
                 }
@@ -38,7 +38,7 @@ final class HlsConverter
             $error = trim($process->getErrorOutput());
 
             throw new MediaConversionException(
-                'FFmpeg a échoué : '.mb_substr($error !== '' ? $error : 'erreur inconnue', 0, 2000),
+                'FFmpeg a échoué : ' . mb_substr($error !== '' ? $error : 'erreur inconnue', 0, 2000),
             );
         }
     }
