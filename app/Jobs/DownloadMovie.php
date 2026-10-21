@@ -12,7 +12,8 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
-
+use App\Services\Torrent\TorrentSubtitleSelector;
+use App\Enums\ExternalSubtitleStatus;
 
 final class DownloadMovie implements ShouldQueue
 {
@@ -26,8 +27,11 @@ final class DownloadMovie implements ShouldQueue
         $this->onQueue('monitoring');
     }
 
-    public function handle(TorrentClient $torrentClient, TorrentVideoSelector $videoSelector): void
-    {
+    public function handle(
+        TorrentClient $torrentClient,
+        TorrentVideoSelector $videoSelector,
+        TorrentSubtitleSelector $subtitleSelector,
+    ): void {
         $context = [
             'class' => self::class,
             'method' => __FUNCTION__,
@@ -53,6 +57,8 @@ final class DownloadMovie implements ShouldQueue
                 'download_id' => null,
                 'download_file_index' => null,
                 'download_error' => null,
+                'external_subtitles' => null,
+                'external_subtitles_status' => ExternalSubtitleStatus::None->value,
             ]);
 
         if ($claimed !== 1) {
@@ -84,13 +90,16 @@ final class DownloadMovie implements ShouldQueue
         try {
             $inspection = $torrentClient->inspect($movie->torrent_url);
             $selectedVideo = $videoSelector->select($inspection['files']);
+            $selectedSubtitles = $subtitleSelector->select($inspection['files']);
+
 
             Log::channel('my_debug')->info(
                 "L’inspection du torrent est terminée.\n" . json_encode(
                     [
                         ...$context,
                         'file_count' => count($inspection['files']),
-                        'selected_video' => $selectedVideo,
+                        'video selectionnee' => $selectedVideo,
+                        'sous-titre selectionnes' => $selectedSubtitles
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
                 ) . "\n",
@@ -120,10 +129,15 @@ final class DownloadMovie implements ShouldQueue
                 return;
             }
 
+            $selectedFileIndexes = [
+                $selectedVideo['index'],
+                ...array_column($selectedSubtitles, 'file_index'),
+            ];
+
             $downloadId = $torrentClient->startDownload(
                 $movie->torrent_url,
                 Storage::disk('public')->path("movies/{$movie->id}"),
-                [$selectedVideo['index']],
+                $selectedFileIndexes,
                 $inspection['infoHash'],
             );
 
@@ -141,6 +155,10 @@ final class DownloadMovie implements ShouldQueue
                 'download_id' => $downloadId,
                 'download_file_index' => $selectedVideo['index'],
                 'filename' => $selectedVideo['fileName'],
+                'external_subtitles' => $selectedSubtitles,
+                'external_subtitles_status' => $selectedSubtitles === []
+                    ? ExternalSubtitleStatus::None->value
+                    : ExternalSubtitleStatus::Pending->value,
             ]);
 
             Log::channel('my_debug')->info(
@@ -150,7 +168,7 @@ final class DownloadMovie implements ShouldQueue
                         'download_id' => $downloadId,
                         'file_index' => $selectedVideo['index'],
                         'filename' => $selectedVideo['fileName'],
-                        'selected_file_count' => 1,
+                        'selected_file_count' => count($selectedFileIndexes),
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
                 ) . "\n",
@@ -159,6 +177,7 @@ final class DownloadMovie implements ShouldQueue
             Movie::query()->whereKey($movie->id)->update([
                 'download_status' => DownloadStatus::Failed->value,
                 'download_error' => mb_substr($exception->getMessage(), 0, 2000),
+                'external_subtitles_status' => ExternalSubtitleStatus::Failed->value,
             ]);
 
             Log::channel('my_debug')->error(

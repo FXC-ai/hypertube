@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Enums\DownloadStatus;
+use App\Enums\ExternalSubtitleStatus;
 
 #[Fillable([
     'title',
@@ -26,6 +27,8 @@ use App\Enums\DownloadStatus;
     'download_id',
     'download_file_index',
     'download_error',
+    'external_subtitles',
+    'external_subtitles_status',
 ])]
 
 /**
@@ -77,6 +80,8 @@ class Movie extends Model
             'conversion_started_at' => 'datetime',
             'conversion_playable_at' => 'datetime',
             'conversion_completed_at' => 'datetime',
+            'external_subtitles' => 'array',
+            'external_subtitles_status' => ExternalSubtitleStatus::class,
         ];
     }
 

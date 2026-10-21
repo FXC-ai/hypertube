@@ -14,7 +14,49 @@ class MovieSeeder extends Seeder
     public function run(): void
     {
 
+
         Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'Night of the Living Dead',
+                'titles' => '{"en":"Night of the Living Dead"}',
+                'torrent_url' => 'https://archive.org/download/Night.Of.The.Living.Dead_1080p/Night.Of.The.Living.Dead_1080p_archive.torrent',
+            ]);
+
+        Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'Manos: The Hands of Fate',
+                'titles' => '{"en":"Manos: The Hands of Fate"}',
+                'torrent_url' => 'https://archive.org/download/ManosTheHandsofFate/ManosTheHandsofFate_archive.torrent',
+            ]);
+
+        Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'The Flying Deuces',
+                'titles' => '{"en":"The Flying Deuces"}',
+                'torrent_url' => 'https://archive.org/download/TheFlyingDeuces/TheFlyingDeuces_archive.torrent',
+            ]);
+
+        Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'The Terror',
+                'titles' => '{"en":"The Terror"}',
+                'torrent_url' => 'https://archive.org/download/TheTerror/TheTerror_archive.torrent',
+            ]);
+
+        Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'Horror Express',
+                'titles' => '{"en":"Horror Express"}',
+                'torrent_url' => 'https://archive.org/download/horror_express_ipod/horror_express_ipod_archive.torrent',
+            ]);
+
+
+        /*         Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
             ->create(
                 [
@@ -56,6 +98,6 @@ class MovieSeeder extends Seeder
                     'torrent_url' => 'https://yts.vg/movie/90443/download/720p/web/x264/DFC687CD6EDA2A0EA84A93516439B255EBBB02E1',
                     'download_status' => 'pending'
                 ]
-            );
+            ); */
     }
 }

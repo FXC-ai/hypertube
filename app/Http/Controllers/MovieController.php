@@ -12,6 +12,7 @@ use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Illuminate\Support\Facades\Log;
 use App\Enums\DownloadStatus;
+use Illuminate\Support\Facades\Storage;
 
 class MovieController extends Controller
 {
@@ -38,6 +39,19 @@ class MovieController extends Controller
                         ? $movie->download_error
                         : null,
                     'can_prepare' => $movie->download_status !== DownloadStatus::Unsupported && in_array($movie->conversion_status, [ConversionStatus::Pending, ConversionStatus::Failed], true),
+                    'external_subtitles_status' => $movie->external_subtitles_status->value,
+                    'external_subtitles' => collect($movie->external_subtitles ?? [])
+                        ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
+                        ->map(fn(array $subtitle): array => [
+                            'id' => $subtitle['file_index'],
+                            'label' => $subtitle['file_name'] . ' — External',
+                            'language' => $subtitle['language'],
+                            'url' => Storage::disk('public')->url(
+                                "movies/{$movie->id}/{$subtitle['output_file']}"
+                            ),
+                        ])
+                        ->values()
+                        ->all(),
                 ],
                 'comments' => Inertia::scroll(
                     fn() => CommentResource::collection(

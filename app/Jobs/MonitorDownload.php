@@ -9,6 +9,8 @@ use App\Services\Torrent\TorrentClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use App\Enums\ExternalSubtitleStatus;
+use App\Jobs\PrepareExternalSubtitles;
 
 /**
  * Follows a movie download on the Client Torrent until it ends, re-dispatching itself
@@ -24,7 +26,8 @@ final class MonitorDownload implements ShouldQueue
 
     public int $tries = 1;
 
-    public function __construct(public int $movieId) {
+    public function __construct(public int $movieId)
+    {
         $this->onConnection('monitoring');
         $this->onQueue('monitoring');
     }
@@ -47,7 +50,7 @@ final class MonitorDownload implements ShouldQueue
             };
 
             Log::channel('my_debug')->debug(
-                "La surveillance du téléchargement est arrêtée car elle n’est plus nécessaire.\n".json_encode(
+                "La surveillance du téléchargement est arrêtée car elle n’est plus nécessaire.\n" . json_encode(
                     [
                         ...$context,
                         'reason' => $reason,
@@ -55,7 +58,7 @@ final class MonitorDownload implements ShouldQueue
                         'download_id' => $movie?->download_id,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                )."\n",
+                ) . "\n",
             );
 
             return;
@@ -79,7 +82,7 @@ final class MonitorDownload implements ShouldQueue
             );
         } catch (TorrentClientException $exception) {
             Log::channel('my_debug')->warning(
-                "Le statut du téléchargement n’a pas pu être récupéré. Une nouvelle vérification sera programmée.\n".json_encode(
+                "Le statut du téléchargement n’a pas pu être récupéré. Une nouvelle vérification sera programmée.\n" . json_encode(
                     [
                         ...$context,
                         'retry_in_seconds' => self::POLL_SECONDS,
@@ -91,22 +94,32 @@ final class MonitorDownload implements ShouldQueue
                         ],
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                )."\n",
+                ) . "\n",
             );
             $this->checkAgainLater();
 
             return;
         }
 
+        $hasExternalSubtitles = ($movie->external_subtitles ?? []) !== [];
+
         $update = match ($download['status'] ?? null) {
             null => [
                 'download_status' => DownloadStatus::Failed->value,
                 'download_error' => 'The Client Torrent no longer knows this download (restarted?).',
             ],
-            'completed' => ['download_status' => DownloadStatus::Completed->value],
+            'completed' => [
+                'download_status' => DownloadStatus::Completed->value,
+                'external_subtitles_status' => $hasExternalSubtitles
+                    ? ExternalSubtitleStatus::Queued->value
+                    : ExternalSubtitleStatus::None->value,
+            ],
             'failed', 'cancelled' => [
                 'download_status' => DownloadStatus::Failed->value,
                 'download_error' => $download['error'] ?? "Download {$download['status']}.",
+                'external_subtitles_status' => $hasExternalSubtitles
+                    ? ExternalSubtitleStatus::Failed->value
+                    : ExternalSubtitleStatus::None->value,
             ],
             default => null,
         };
@@ -120,38 +133,44 @@ final class MonitorDownload implements ShouldQueue
         $updated = Movie::query()
             ->whereKey($movie->id)
             ->where('download_id', $movie->download_id)
+            ->where('download_status', DownloadStatus::Downloading->value)
             ->update($update);
 
         if ($updated !== 1) {
             Log::channel('my_debug')->debug(
-                "Le statut du téléchargement n’a pas été modifié car le téléchargement a changé entre-temps.\n".json_encode(
+                "Le statut du téléchargement n’a pas été modifié car le téléchargement a changé entre-temps.\n" . json_encode(
                     [
                         ...$context,
                         'target_status' => $update['download_status'],
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                )."\n",
+                ) . "\n",
             );
 
             return;
         }
 
         if ($update['download_status'] === DownloadStatus::Completed->value) {
+            if ($hasExternalSubtitles) {
+                PrepareExternalSubtitles::dispatch($movie->id)->afterCommit();
+            }
+
+
             Log::channel('my_debug')->info(
-                "Le téléchargement du film est terminé.\n".json_encode(
+                "Le téléchargement du film est terminé.\n" . json_encode(
                     [
                         ...$context,
                         'download_status' => DownloadStatus::Completed->value,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                )."\n",
+                ) . "\n",
             );
 
             return;
         }
 
         Log::channel('my_debug')->error(
-            "Le téléchargement du film s’est terminé en erreur.\n".json_encode(
+            "Le téléchargement du film s’est terminé en erreur.\n" . json_encode(
                 [
                     ...$context,
                     'download_status' => DownloadStatus::Failed->value,
@@ -159,7 +178,7 @@ final class MonitorDownload implements ShouldQueue
                     'client_status' => $download['status'] ?? null,
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            )."\n",
+            ) . "\n",
         );
     }
 

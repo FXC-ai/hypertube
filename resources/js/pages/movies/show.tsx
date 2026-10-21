@@ -33,6 +33,8 @@ type DownloadStatus =
     | 'failed'
     | 'unsupported';
 
+type ExternalSubtitleStatus = 'none' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed';
+
 type OmdbData = {
     imdbID: string;
     year: string;
@@ -49,6 +51,13 @@ type OmdbData = {
     awards: string;
 } | null;
 
+type ExternalSubtitleTrack = {
+    id: number;
+    label: string;
+    language: string;
+    url: string;
+};
+
 type MoviePageData = {
     id: number;
     title: string;
@@ -62,6 +71,8 @@ type MoviePageData = {
     playable: boolean;
     preferredlanguage: string;
     movieData: OmdbData;
+    external_subtitles_status: ExternalSubtitleStatus;
+    external_subtitles: ExternalSubtitleTrack[];
 };
 
 type MovieShowProps = {
@@ -81,9 +92,11 @@ const conversionStatusLabel: Record<ConversionStatus, string> = {
 function HlsPlayer({
     src,
     preferredlanguage,
+    externalSubtitles,
 }: {
     src: string;
     preferredlanguage: string;
+    externalSubtitles: ExternalSubtitleTrack[];
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -189,12 +202,17 @@ function HlsPlayer({
     }, [preferredlanguage, src]);
 
     return (
-        <video
-            ref={videoRef}
-            className="aspect-video w-full bg-black object-contain"
-            controls
-            preload="metadata"
-        />
+        <video ref={videoRef} controls className="w-full">
+            {externalSubtitles.map((subtitle) => (
+                <track
+                    key={subtitle.id}
+                    kind="subtitles"
+                    src={subtitle.url}
+                    srcLang={subtitle.language}
+                    label={subtitle.label}
+                />
+            ))}
+        </video>
     );
 }
 
@@ -215,15 +233,30 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
         : moviePageData.conversion_error;
 
 
+    const videoIsPlayable =
+        moviePageData.conversion_status === 'playable' ||
+        moviePageData.conversion_status === 'converted';
+
+    const subtitlesAreTerminal = ['none', 'ready', 'failed'].includes(
+        moviePageData.external_subtitles_status,
+    );
+
     useEffect(() => {
         if (
             isUnsupported ||
-            moviePageData.conversion_status === 'playable' ||
-            moviePageData.conversion_status === 'failed'
+            moviePageData.conversion_status === 'failed' ||
+            (videoIsPlayable && subtitlesAreTerminal)
         ) {
             stop();
         }
-    }, [isUnsupported, moviePageData.conversion_status, stop]);
+    }, [
+        isUnsupported,
+        moviePageData.conversion_status,
+        moviePageData.external_subtitles_status,
+        stop,
+        subtitlesAreTerminal,
+        videoIsPlayable,
+    ]);
 
     const startConversion = (): void => {
         conversionForm.post(conversionStore.url(moviePageData.id), {
@@ -264,6 +297,7 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                 preferredlanguage={
                                     moviePageData.preferredlanguage
                                 }
+                                externalSubtitles={moviePageData.external_subtitles}
                             />
                         ) : (
                             <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
