@@ -15,13 +15,13 @@ final class TorrentVideoSelector
     {
         $candidates = array_values(array_filter(
             $files,
-            fn(array $file): bool => $file['length'] > 0
+            fn (array $file): bool => $file['length'] > 0
                 && in_array($this->extension($file['path']), self::SUPPORTED_EXTENSIONS, true),
         ));
 
         usort(
             $candidates,
-            fn(array $left, array $right): int => (
+            fn (array $left, array $right): int => (
                 $this->extensionPriority($left['path'])
                 <=> $this->extensionPriority($right['path'])
             )
@@ -40,8 +40,8 @@ final class TorrentVideoSelector
     private function extensionPriority(string $path): int
     {
         return match ($this->extension($path)) {
-            'mkv' => 0,
-            'mp4' => 1,
+            'mp4' => 0,
+            'mkv' => 1,
             default => PHP_INT_MAX,
         };
     }

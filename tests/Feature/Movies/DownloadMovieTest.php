@@ -2,6 +2,7 @@
 
 use App\Enums\ConversionStatus;
 use App\Enums\DownloadStatus;
+use App\Enums\ExternalSubtitleStatus;
 use App\Exceptions\TorrentClientException;
 use App\Http\Controllers\MovieConversionController;
 use App\Jobs\ConvertMovie;
@@ -50,7 +51,7 @@ test('preparing a movie that has a torrent starts its download instead of a conv
     Queue::assertNotPushed(ConvertMovie::class);
 });
 
-test('DownloadMovie downloads only the selected video and starts the conversion right away', function () {
+test('DownloadMovie downloads the selected video and every external subtitle', function () {
     Queue::fake();
     Storage::fake('public');
     fakeClientTorrent();
@@ -59,7 +60,7 @@ test('DownloadMovie downloads only the selected video and starts the conversion 
     app()->call([new DownloadMovie($movie->id), 'handle']);
 
     Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/downloads')
-        && $request['fileIndexes'] === [2]
+        && $request['fileIndexes'] === [2, 1]
         && $request['expectedInfoHash'] === INFO_HASH
         && $request['outputDir'] === Storage::disk('public')->path("movies/{$movie->id}"));
 
@@ -68,6 +69,13 @@ test('DownloadMovie downloads only the selected video and starts the conversion 
         ->and($movie->download_id)->toBe('job-1')
         ->and($movie->download_file_index)->toBe(2)
         ->and($movie->filename)->toBe('movie.mp4')
+        ->and($movie->external_subtitles)->toBe([[
+            'file_index' => 1,
+            'file_name' => 'movie.srt',
+            'language' => 'und',
+            'output_file' => null,
+        ]])
+        ->and($movie->external_subtitles_status)->toBe(ExternalSubtitleStatus::Pending)
         ->and($movie->conversion_status)->toBe(ConversionStatus::Queued);
 
     Queue::assertPushed(ConvertMovie::class, fn (ConvertMovie $job): bool => $job->movieId === $movie->id);
@@ -96,12 +104,41 @@ test('DownloadMovie prioritizes an MP4 without trusting the client main video', 
     app()->call([new DownloadMovie($movie->id), 'handle']);
 
     Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/downloads')
-        && $request['fileIndexes'] === [0]);
+        && $request['fileIndexes'] === [0, 2]);
 
     $movie->refresh();
 
     expect($movie->download_file_index)->toBe(0)
-        ->and($movie->filename)->toBe('movie.mp4');
+        ->and($movie->filename)->toBe('movie.mp4')
+        ->and($movie->external_subtitles_status)->toBe(ExternalSubtitleStatus::Pending);
+});
+
+test('DownloadMovie records none when the torrent has no external subtitles', function () {
+    Queue::fake();
+    Storage::fake('public');
+
+    Http::fake([
+        '*/torrents/inspect' => Http::response([
+            'infoHash' => INFO_HASH,
+            'mainVideoIndex' => 2,
+            'files' => [
+                ['index' => 2, 'path' => 'Movie/movie.mp4', 'fileName' => 'movie.mp4', 'length' => 900, 'kind' => 'video', 'suggested' => true],
+            ],
+        ]),
+        '*/downloads' => Http::response(['id' => 'job-1'], 202),
+    ]);
+
+    $movie = torrentMovie();
+
+    app()->call([new DownloadMovie($movie->id), 'handle']);
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/downloads')
+        && $request['fileIndexes'] === [2]);
+
+    $movie->refresh();
+
+    expect($movie->external_subtitles)->toBe([])
+        ->and($movie->external_subtitles_status)->toBe(ExternalSubtitleStatus::None);
 });
 
 test('a torrent without an MP4 or MKV becomes unsupported and starts no pipeline jobs', function () {
@@ -148,7 +185,8 @@ test('a Client Torrent error marks the download as failed and starts no conversi
 
     $movie->refresh();
     expect($movie->download_status)->toBe(DownloadStatus::Failed)
-        ->and($movie->download_error)->toContain('outputDir is required');
+        ->and($movie->download_error)->toContain('outputDir is required')
+        ->and($movie->external_subtitles_status)->toBe(ExternalSubtitleStatus::Failed);
     Queue::assertNotPushed(ConvertMovie::class);
 });
 
