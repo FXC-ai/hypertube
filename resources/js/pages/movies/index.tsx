@@ -1,4 +1,5 @@
-import { Form, Head, InfiniteScroll, Link } from '@inertiajs/react';
+import { Form, Head, InfiniteScroll, Link, router } from '@inertiajs/react';
+import { Check } from 'lucide-react';
 import MovieController from '@/actions/App/Http/Controllers/MovieController';
 import Heading from '@/components/heading';
 
@@ -7,11 +8,15 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { index } from '@/routes/movies';
+
+type WatchedFilter = 'all' | 'watched' | 'unwatched';
 
 type Movie = {
     id: number;
     title: string;
+    watched: boolean;
     data: any;
     created_at: string;
 };
@@ -22,8 +27,15 @@ type MovieIndexProps = {
     };
     filters: {
         search: string | null;
+        watched: WatchedFilter;
     };
 };
+
+const watchedFilterOptions: { value: WatchedFilter; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'watched', label: 'Watched' },
+    { value: 'unwatched', label: 'Unwatched' },
+];
 
 function formatRegistrationDate(date: string): string {
     return new Intl.DateTimeFormat('fr-FR', {
@@ -62,9 +74,15 @@ function MovieItem({ movie }: { movie: Movie }) {
                     </div>
                 )}
 
-                <span className="absolute top-3 right-3 rounded-full bg-white p-1 text-xl text-blue-500">
-                    <img className="w-5" src="/watched.svg" alt="✓" />
-                </span>
+                {movie.watched && (
+                    <span
+                        className="absolute top-3 right-3 flex items-center rounded-full bg-white p-1 text-blue-600 shadow ring-2 ring-black/5"
+                        title="Already watched"
+                    >
+                        <Check className="size-5" strokeWidth={3} aria-hidden />
+                        <span className="sr-only">Watched</span>
+                    </span>
+                )}
             </div>
 
             <span className="min-w-0 flex-1 text-center font-medium wrap-break-word">
@@ -86,7 +104,20 @@ function MovieItem({ movie }: { movie: Movie }) {
 }
 
 export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
-    console.log(filters, movies);
+    const watched = filters.watched ?? 'all';
+    const hasFilters = filters.search != null || watched !== 'all';
+
+    function selectWatchedFilter(value: WatchedFilter) {
+        router.visit(
+            index.url({
+                query: {
+                    search: filters.search || undefined,
+                    watched: value === 'all' ? undefined : value,
+                },
+            }),
+            { preserveScroll: true, replace: true },
+        );
+    }
 
     return (
         <>
@@ -105,8 +136,6 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                         className="flex flex-col gap-2 sm:flex-row sm:items-start"
                         options={{
                             preserveScroll: true,
-                            // only: ['users', 'filters'],
-                            // reset: ['users'],
                             replace: true,
                         }}
                     >
@@ -143,13 +172,36 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                         )}
                     </Form>
 
-                    {filters.search && (
-                        <Button variant="outline" asChild>
-                            <Link href={index()} replace>
-                                Clear filters
-                            </Link>
-                        </Button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            value={watched}
+                            onValueChange={(value) => {
+                                if (value) {
+                                    selectWatchedFilter(value as WatchedFilter);
+                                }
+                            }}
+                        >
+                            {watchedFilterOptions.map(({ value, label }) => (
+                                <ToggleGroupItem
+                                    key={value}
+                                    value={value}
+                                    aria-label={`Show ${label.toLowerCase()} movies`}
+                                >
+                                    {label}
+                                </ToggleGroupItem>
+                            ))}
+                        </ToggleGroup>
+
+                        {hasFilters && (
+                            <Button variant="outline" asChild>
+                                <Link href={index()} replace>
+                                    Clear filters
+                                </Link>
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {movies.data.length > 0 ? (
@@ -165,7 +217,7 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                     </InfiniteScroll>
                 ) : filters.search != null ? (
                     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                        {`No user found for username ${filters.search}.`}
+                        {`No movie found for title ${filters.search}.`}
                     </div>
                 ) : (
                     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
