@@ -51,4 +51,14 @@ return [
         'key' => env('OMDB_API_KEY'),
     ],
 
+    'sources' => [
+        'wikidata' => [
+            'enabled' => env('SOURCE_WIKIDATA_ENABLED', true),
+        ],
+        'yts' => [
+            'enabled' => env('SOURCE_YTS_ENABLED', false),
+            'base_url' => env('YTS_BASE_URL', 'https://api.yts.gg'),
+        ],
+    ],
+
 ];

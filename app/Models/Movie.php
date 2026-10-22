@@ -3,18 +3,25 @@
 namespace App\Models;
 
 use App\Enums\ConversionStatus;
+use App\Enums\DownloadStatus;
+use App\Enums\MovieSource;
 use App\Services\OmdbService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Enums\DownloadStatus;
 
 #[Fillable([
     'title',
+    'source',
+    'source_reference',
     'titles',
     'filename',
     'torrent_url',
+    'seeds',
+    'peers',
+    'torrent_quality',
+    'torrent_size_bytes',
     'imdb_id',
     'conversion_status',
     'conversion_attempt',
@@ -31,6 +38,7 @@ use App\Enums\DownloadStatus;
 /**
  * @property-read string|null $title
  * @property-read array<string, string>|null $titles
+ * @property-read MovieSource $source
  */
 class Movie extends Model
 {
@@ -48,29 +56,35 @@ class Movie extends Model
 
     public function getEnrichedData(): ?array
     {
-        if ($this->imdb_id == null) {
+        if ($this->imdb_id === null) {
             return null;
         }
 
-        $omdbService = OmdbService::factory();
-        $enriched = $omdbService->enrichByImdbId($this->imdb_id);
+        $source = $this->source ?? MovieSource::Wikidata;
+        $sourceRow = MovieData::findByImdbIdAndSource($this->imdb_id, $source);
+        $canonical = MovieData::findByImdbIdAndSource($this->imdb_id, MovieSource::Omdb);
 
-        // Link the movie_data row to this movie if it was just created
-        if ($enriched !== null) {
-            $movieData = MovieData::findByImdbId($this->imdb_id);
-            if ($movieData && $movieData->movie_id === null) {
-                $omdbService->linkMovie($movieData, $this->id);
+        if ($canonical === null) {
+            $omdbService = OmdbService::factory();
+            $canonical = $omdbService->enrichByImdbId($this->imdb_id);
+
+            if ($canonical !== null && $canonical->movie_id === null) {
+                $omdbService->linkMovie($canonical, $this->id);
             }
-        } else {
-            // TODO: Log
         }
 
-        return $enriched;
+        if ($sourceRow !== null && $sourceRow->movie_id === null) {
+            $sourceRow->movie_id = $this->id;
+            $sourceRow->save();
+        }
+
+        return MovieData::mergedDisplay($canonical, $sourceRow?->displayArray(), $source);
     }
 
     protected function casts(): array
     {
         return [
+            'source' => MovieSource::class,
             'conversion_status' => ConversionStatus::class,
             'download_status' => DownloadStatus::class,
             'titles' => 'array',

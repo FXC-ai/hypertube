@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\MovieSource;
 use App\Models\MovieData;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -11,7 +12,8 @@ final class OmdbService
 {
     public function __construct(
         #[\SensitiveParameter] private ?string $apiKey
-    ) {}
+    ) {
+    }
 
     public static function factory(): self
     {
@@ -40,7 +42,7 @@ final class OmdbService
                 'r' => 'json',
             ]);
 
-            if (! $response->successful()) {
+            if (!$response->successful()) {
                 Log::error('OMDb API request failed for {imdb_id}: status {status}', [
                     'imdb_id' => $imdbId,
                     'status' => $response->status(),
@@ -71,50 +73,23 @@ final class OmdbService
     }
 
     /**
-     * Fetch data from OMDb if not already cached, store it, and return it.
+     * Fetch data from OMDb if not already cached, store it, and return the canonical row.
      */
-    public function enrichByImdbId(string $imdbId): ?array
+    public function enrichByImdbId(string $imdbId): ?MovieData
     {
-        // Check if already cached
-        $cached = MovieData::findByImdbId($imdbId);
+        $cached = MovieData::findByImdbIdAndSource($imdbId, MovieSource::Omdb);
 
         if ($cached !== null) {
-            return $this->normalizeCachedData($cached);
+            return $cached;
         }
 
-        // Fetch from OMDb
         $data = $this->fetchByImdbId($imdbId);
 
         if ($data === null) {
             return null;
         }
 
-        // Store for next time
-        $store = MovieData::storeFromOmdb($imdbId, $data);
-
-        return $this->normalizeCachedData($store);
-    }
-
-    private function normalizeCachedData(MovieData $data): array
-    {
-        return [
-            'imdbID' => $data->imdb_id,
-            'year' => $data->release_date?->format('Y') ?? 'N/A',
-            'rated' => $data->rated,
-            'released' => $data->release_date?->format('d M Y'),
-            'runtime' => $data->runtime ? (string) $data->runtime.' min' : 'N/A',
-            'genre' => $data->genres ? implode(', ', $data->genres) : 'N/A',
-            'director' => $data->director ?? 'N/A',
-            'writer' => $data->writers ? implode(', ', $data->writers) : 'N/A',
-            'actors' => $data->actors ? implode(', ', $data->actors) : 'N/A',
-            'plot' => $data->plot ?? 'No plot available.',
-            'language' => $data->language ? implode(', ', $data->language) : 'N/A',
-            'poster' => $data->poster ?? null,
-            'imdbRating' => $data->imdbRating,
-            'imdbVotes' => $data->imdbVotes,
-            'boxOffice' => $data->boxOffice,
-            'awards' => is_array($data->awards) ? ($data->awards['text'] ?? 'N/A') : 'N/A',
-        ];
+        return MovieData::storeFromOmdb($imdbId, $data);
     }
 
     /**

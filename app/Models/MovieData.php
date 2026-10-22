@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\MovieSource;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -34,12 +35,16 @@ class MovieData extends Model
     protected function casts(): array
     {
         return [
+            'source' => MovieSource::class,
             'genres' => 'array',
             'actors' => 'array',
             'writers' => 'array',
             'language' => 'array',
             'awards' => 'array',
             'release_date' => 'date',
+            'imdbRating' => 'float',
+            'imdbVotes' => 'integer',
+            'boxOffice' => 'float',
         ];
     }
 
@@ -53,13 +58,17 @@ class MovieData extends Model
         return self::where('imdb_id', $imdbId)->first();
     }
 
+    public static function findByImdbIdAndSource(string $imdbId, MovieSource $source): ?self
+    {
+        return self::where('imdb_id', $imdbId)->where('source', $source->value)->first();
+    }
+
     public static function storeFromOmdb(string $imdbId, array $data): self
     {
         return static::updateOrCreate(
-            ['imdb_id' => $imdbId],
+            ['imdb_id' => $imdbId, 'source' => MovieSource::Omdb->value],
             [
                 'movie_id' => null,
-                'source' => 'omdb',
                 'poster' => $data['Poster'] ?? null,
                 'plot' => $data['Plot'] ?? null,
                 'genres' => isset($data['Genre']) ? explode(',', $data['Genre']) : null,
@@ -76,5 +85,72 @@ class MovieData extends Model
                 'release_date' => $data['Released'] != 'N/A' ? Carbon::parse($data['Released']) : null,
             ],
         );
+    }
+
+    /**
+     * Store the metadata provided by a catalog source (YTS, Public Domain Torrents...).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function storeFromSource(MovieSource $source, string $imdbId, array $data): self
+    {
+        return static::updateOrCreate(
+            ['imdb_id' => $imdbId, 'source' => $source->value],
+            $data,
+        );
+    }
+
+    /**
+     * Canonical OMDb metadata merged with the metadata of the movie's own source.
+     *
+     * @param  array<string, mixed>|null  $sourceDisplay
+     * @return array<string, mixed>|null
+     */
+    public static function mergedDisplay(?self $canonical, ?array $sourceDisplay, MovieSource $source): ?array
+    {
+        $display = $canonical?->displayArray() ?? $sourceDisplay;
+
+        if ($display === null) {
+            return null;
+        }
+
+        if ($sourceDisplay !== null) {
+            $display['poster'] = $sourceDisplay['poster'] ?? $display['poster'];
+            $display['plot'] = $sourceDisplay['plot'] ?? $display['plot'];
+
+            if ($sourceDisplay['imdbRating'] !== null) {
+                $display['imdbRating'] = $sourceDisplay['imdbRating'];
+            }
+        }
+
+        $display['source'] = $source->value;
+        $display['ratingLabel'] = $source === MovieSource::Yts ? 'YTS rating' : 'IMDb rating';
+
+        return $display;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function displayArray(): array
+    {
+        return [
+            'imdbID' => $this->imdb_id,
+            'year' => $this->release_date?->format('Y') ?? 'N/A',
+            'rated' => $this->rated,
+            'released' => $this->release_date?->format('d M Y'),
+            'runtime' => $this->runtime ? (string) $this->runtime . ' min' : 'N/A',
+            'genre' => $this->genres ? implode(', ', $this->genres) : 'N/A',
+            'director' => $this->director ?? 'N/A',
+            'writer' => $this->writers ? implode(', ', $this->writers) : 'N/A',
+            'actors' => $this->actors ? implode(', ', $this->actors) : 'N/A',
+            'plot' => $this->plot ?? 'No plot available.',
+            'language' => $this->language ? implode(', ', $this->language) : 'N/A',
+            'poster' => $this->poster ?? null,
+            'imdbRating' => $this->imdbRating,
+            'imdbVotes' => $this->imdbVotes,
+            'boxOffice' => $this->boxOffice,
+            'awards' => is_array($this->awards) ? ($this->awards['text'] ?? 'N/A') : 'N/A',
+        ];
     }
 }

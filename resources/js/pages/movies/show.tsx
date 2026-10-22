@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'react';
 
 import CommentForm from '@/components/comment-form';
 import CommentItem from '@/components/comment-item';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -41,12 +42,16 @@ type OmdbData = {
     language: string;
     poster: string | null;
     awards: string;
+    imdbRating: number | null;
+    ratingLabel: string;
+    source: string;
 } | null;
 
 type MoviePageData = {
     id: number;
     title: string;
     filename: string;
+    source: string;
     conversion_attempt: string | null;
     conversion_status: ConversionStatus;
     conversion_error: string | null;
@@ -58,6 +63,11 @@ type MoviePageData = {
 type MovieShowProps = {
     moviePageData: MoviePageData;
     comments: { data: Comment[]; meta: { total: number } };
+};
+
+const sourceLabels: Record<string, string> = {
+    wikidata: 'Wikidata',
+    yts: 'YTS',
 };
 
 const conversionStatusLabel: Record<ConversionStatus, string> = {
@@ -217,8 +227,6 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
         moviePageData.conversion_attempt,
     );
 
-    console.log('Data: ', moviePageData.movieData);
-
     return (
         <>
             <Head title={moviePageData.title} />
@@ -228,13 +236,25 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                             {moviePageData.title}
                         </h1>
+                        <Badge
+                            variant="secondary"
+                            className="mt-2"
+                            title={
+                                moviePageData.source === 'yts'
+                                    ? 'YTS catalog: this source is not a legal catalog'
+                                    : 'Legal catalog'
+                            }
+                        >
+                            {sourceLabels[moviePageData.source] ??
+                                moviePageData.source}
+                        </Badge>
                     </div>
                 </section>
 
                 <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
                     <Card className="overflow-hidden border-border/60 bg-black p-0 shadow-xl">
                         {moviePageData.playable &&
-                        moviePageData.conversion_attempt !== null ? (
+                            moviePageData.conversion_attempt !== null ? (
                             <HlsPlayer
                                 /*                                 src={manifest.url({
                                                                         movie: moviePageData.id,
@@ -310,25 +330,25 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                             )}
                             {(moviePageData.conversion_status === 'pending' ||
                                 moviePageData.conversion_status ===
-                                    'failed') && (
-                                <Button
-                                    type="button"
-                                    className="w-full"
-                                    disabled={conversionForm.processing}
-                                    onClick={startConversion}
-                                >
-                                    {moviePageData.conversion_status ===
-                                    'failed' ? (
-                                        <RotateCcw />
-                                    ) : (
-                                        <Play />
-                                    )}
-                                    {moviePageData.conversion_status ===
-                                    'failed'
-                                        ? 'Retry'
-                                        : 'Prepare video'}
-                                </Button>
-                            )}
+                                'failed') && (
+                                    <Button
+                                        type="button"
+                                        className="w-full"
+                                        disabled={conversionForm.processing}
+                                        onClick={startConversion}
+                                    >
+                                        {moviePageData.conversion_status ===
+                                            'failed' ? (
+                                            <RotateCcw />
+                                        ) : (
+                                            <Play />
+                                        )}
+                                        {moviePageData.conversion_status ===
+                                            'failed'
+                                            ? 'Retry'
+                                            : 'Prepare video'}
+                                    </Button>
+                                )}
                         </CardContent>
                     </Card>
 
@@ -340,7 +360,10 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                     About this movie
                                 </CardTitle>
                                 <CardDescription>
-                                    Movie details from OMDb.
+                                    Movie details merged from{' '}
+                                    {sourceLabels[moviePageData.source] ??
+                                        moviePageData.source}{' '}
+                                    and OMDb.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -387,6 +410,17 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                         </span>
                                         <span className="ml-2 font-medium">
                                             {moviePageData.movieData.runtime}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-muted-foreground">
+                                            {moviePageData.movieData
+                                                .ratingLabel ?? 'IMDb rating'}
+                                            :
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                            {moviePageData.movieData
+                                                .imdbRating ?? 'N/A'}
                                         </span>
                                     </div>
                                 </div>

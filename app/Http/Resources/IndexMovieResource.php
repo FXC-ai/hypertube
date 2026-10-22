@@ -12,6 +12,10 @@ class IndexMovieResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->title,
+            'source' => $this->source?->value,
+            'imdb_id' => $this->imdb_id,
+            'created_at' => $this->created_at?->toIso8601String(),
+            'selectable' => false,
             'data' => $this->getEnrichedData(),
         ];
     }

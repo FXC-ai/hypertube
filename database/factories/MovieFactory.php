@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\ConversionStatus;
+use App\Enums\MovieSource;
 use App\Models\Movie;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,7 +21,7 @@ class MovieFactory extends Factory
      */
     public function definition(): array
     {
-        $filename = fake()->unique()->slug(3).'.mp4';
+        $filename = fake()->unique()->slug(3) . '.mp4';
         /** @var ConversionStatus $status */
         $status = fake()->randomElement(ConversionStatus::cases());
 
@@ -30,8 +31,10 @@ class MovieFactory extends Factory
                 'fr' => fake()->sentence(3),
                 'en' => fake()->sentence(3),
             ],
+            'source' => MovieSource::Wikidata->value,
+            'source_reference' => 'archiveorg:' . fake()->slug(3),
             'filename' => $filename,
-            'imdb_id' => 'tt'.fake()->numerify('######'),
+            'imdb_id' => 'tt' . fake()->numerify('######'),
             'torrent_url' => null,
             ...$this->conversionAttributes($status),
         ];
@@ -39,7 +42,30 @@ class MovieFactory extends Factory
 
     public function withConversionStatus(ConversionStatus $status): static
     {
-        return $this->state(fn (): array => $this->conversionAttributes($status));
+        return $this->state(fn(): array => $this->conversionAttributes($status));
+    }
+
+    public function wikidata(): static
+    {
+        return $this->state(fn(): array => [
+            'source' => MovieSource::Wikidata->value,
+            'filename' => null,
+            'torrent_url' => 'https://archive.org/download/item/item_archive.torrent',
+        ]);
+    }
+
+    public function yts(): static
+    {
+        return $this->state(fn(): array => [
+            'source' => MovieSource::Yts->value,
+            'source_reference' => 'yts:' . fake()->numberBetween(1, 99999),
+            'filename' => null,
+            'torrent_url' => 'https://yts.gg/torrent/download/' . fake()->numerify('####################'),
+            'seeds' => fake()->numberBetween(1, 50),
+            'peers' => fake()->numberBetween(0, 20),
+            'torrent_quality' => '720p',
+            'torrent_size_bytes' => fake()->numberBetween(500_000_000, 2_000_000_000),
+        ]);
     }
 
     /**
