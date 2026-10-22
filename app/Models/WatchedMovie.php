@@ -35,6 +35,8 @@ class WatchedMovie extends Model
 
     public static function markWatched(User $user, Movie $movie): self
     {
+        $movie->last_watched_at = now();
+        $movie->save();
         return static::firstOrCreate(
             ['movie_id' => $movie->id, 'user_id' => $user->id],
             ['watched_at' => Carbon::now()],
