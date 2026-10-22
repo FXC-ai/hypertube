@@ -72,7 +72,7 @@ class MovieData extends Model
                 'awards' => isset($data['Awards']) ? ['text' => $data['Awards']] : null,
                 'imdbRating' => ($data['imdbRating'] != 'N/A') ? $data['imdbRating'] : null,
                 'imdbVotes' => ($data['imdbVotes'] != 'N/A') ? $data['imdbVotes'] : null,
-                'boxOffice' => ($data['BoxOffice'] != 'N/A') ? $data['BoxOffice'] : null,
+                'boxOffice' => isset($data['BoxOffice']) ? $data['BoxOffice'] : null,
                 'release_date' => $data['Released'] != 'N/A' ? Carbon::parse($data['Released']) : null,
             ],
         );
