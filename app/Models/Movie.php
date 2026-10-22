@@ -49,6 +49,11 @@ class Movie extends Model
         return $this->hasOne(MovieData::class);
     }
 
+    public function watchedMovies(): HasMany
+    {
+        return $this->hasMany(WatchedMovie::class);
+    }
+
     public function getEnrichedData(): ?array
     {
         if ($this->imdb_id == null) {

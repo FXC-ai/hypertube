@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\WatchedFilter;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -20,6 +21,7 @@ class IndexMovieRequest extends FormRequest
             'perPage' => ['nullable', 'integer', 'min:1', 'max:100'],
             'sort' => ['nullable', 'string', Rule::in(['created_at'])],
             'dir' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
+            'watched' => ['nullable', Rule::enum(WatchedFilter::class)],
             'page' => ['nullable', 'integer', 'min:1'],
         ];
     }

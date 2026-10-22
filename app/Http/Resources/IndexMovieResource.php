@@ -12,6 +12,7 @@ class IndexMovieResource extends JsonResource
         return [
             'id' => $this->id,
             'title' => $this->title,
+            'watched' => (bool) $this->watched,
             'data' => $this->getEnrichedData(),
         ];
     }

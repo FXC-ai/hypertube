@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ConversionStatus;
+use App\Enums\WatchedFilter;
 use App\Http\Requests\IndexMovieRequest;
 use App\Http\Resources\CommentResource;
 use App\Http\Resources\IndexMovieResource;
 use App\Models\Movie;
+use App\Models\WatchedMovie;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -21,6 +24,8 @@ class MovieController extends Controller
      */
     public function show(Movie $movie): InertiaResponse
     {
+        WatchedMovie::markWatched(Auth::user(), $movie);
+
         return Inertia::render(
             'movies/show',
             [
@@ -70,13 +75,26 @@ class MovieController extends Controller
         $sort = $params['sort'] ?? null;
         $dir = $params['dir'] ?? 'asc';
         $perPage = (int) ($params['perPage'] ?? 5);
+        $watched = WatchedFilter::from($params['watched'] ?? WatchedFilter::All->value);
 
         Log::channel('my_debug')->debug('search = ', [$search]);
 
-        $query = Movie::query();
+        $userId = Auth::id();
+
+        $query = Movie::query()
+            ->withExists([
+                'watchedMovies as watched' => fn (Builder $query) => $query
+                    ->where('watched_movies.user_id', $userId),
+            ]);
 
         if ($search) {
             $query->where('title', 'like', '%' . $search . '%');
+        }
+
+        if ($watched === WatchedFilter::Watched) {
+            $query->whereHas('watchedMovies', fn (Builder $query) => $query->where('watched_movies.user_id', $userId));
+        } elseif ($watched === WatchedFilter::Unwatched) {
+            $query->whereDoesntHave('watchedMovies', fn (Builder $query) => $query->where('watched_movies.user_id', $userId));
         }
 
         if ($sort) {
@@ -93,6 +111,7 @@ class MovieController extends Controller
                 ),
                 'filters' => [
                     'search' => $search,
+                    'watched' => $watched->value,
                 ],
             ]
         );

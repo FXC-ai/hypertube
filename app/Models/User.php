@@ -8,6 +8,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -49,5 +50,22 @@ class User extends Authenticatable implements MustVerifyEmail
     public function socialAccounts()
     {
         return $this->hasMany(SocialAccount::class);
+    }
+
+    /**
+     * The movies this user has already watched.
+     *
+     * @return HasManyThrough<Movie, WatchedMovie>
+     */
+    public function watchedMovies(): HasManyThrough
+    {
+        return $this->hasManyThrough(Movie::class, WatchedMovie::class);
+    }
+
+    public function hasWatched(Movie $movie): bool
+    {
+        return WatchedMovie::where('user_id', $this->id)
+            ->where('movie_id', $movie->id)
+            ->exists();
     }
 }
