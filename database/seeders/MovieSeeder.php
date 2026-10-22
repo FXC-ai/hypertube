@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\ConversionStatus;
 use App\Models\Movie;
+use App\Models\MovieData;
 use Illuminate\Database\Seeder;
 
 class MovieSeeder extends Seeder
@@ -13,6 +14,82 @@ class MovieSeeder extends Seeder
      */
     public function run(): void
     {
+
+        $bigBunnyBuck = Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'Big Bunny Buck',
+                'titles' => '{"en":"Big Bunny Buck"}',
+                'torrent_url' => 'https://webtorrent.io/torrents/big-buck-bunny.torrent',
+            ]);
+
+        MovieData::factory()
+            ->forMovie($bigBunnyBuck)
+            ->create([
+                'release_date' => '2000-01-01',
+                'runtime' => 11,
+                'genres' => ['Test'],
+                'director' => 'Blender',
+                'language' => ['English'],
+                'imdbRating' => 0,
+            ]);
+
+        $cosmosLandromat = Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'Cosmos Landromat',
+                'titles' => '{"en":"Cosmos Landromat"}',
+                'torrent_url' => 'https://webtorrent.io/torrents/cosmos-laundromat.torrent',
+            ]);
+
+        MovieData::factory()
+            ->forMovie($cosmosLandromat)
+            ->create([
+                'release_date' => '2000-01-01',
+                'runtime' => 12,
+                'genres' => ['Test'],
+                'director' => 'Blender',
+                'language' => ['English'],
+                'imdbRating' => 0,
+            ]);
+
+        $sintel = Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'Sintel',
+                'titles' => '{"en":"Sintel"}',
+                'torrent_url' => 'https://webtorrent.io/torrents/sintel.torrent',
+            ]);
+
+        MovieData::factory()
+            ->forMovie($sintel)
+            ->create([
+                'release_date' => '2000-01-01',
+                'runtime' => 15,
+                'genres' => ['Test'],
+                'director' => 'Blender',
+                'language' => ['English'],
+                'imdbRating' => 0,
+            ]);
+
+        $tearsOfSteal = Movie::factory()
+            ->withConversionStatus(ConversionStatus::Pending)
+            ->create([
+                'title' => 'Sintel',
+                'titles' => '{"en":"Sintel"}',
+                'torrent_url' => 'https://webtorrent.io/torrents/tears-of-steel.torrent',
+            ]);
+
+        MovieData::factory()
+            ->forMovie($tearsOfSteal)
+            ->create([
+                'release_date' => '2000-01-01',
+                'runtime' => 12,
+                'genres' => ['Test'],
+                'director' => 'Blender',
+                'language' => ['English'],
+                'imdbRating' => 0,
+            ]);
 
 
         Movie::factory()
