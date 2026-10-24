@@ -17,9 +17,8 @@
 15. Corriger la restriction des fournisseurs OAuth : Le Route::whereIn() isolé dans web.php (routes/web.php:16) ne contraint pas les deux routes déclarées juste avant. Un fournisseur arbitraire peut donc atteindre le contrôleur et provoquer une erreur serveur. La contrainte doit être attachée aux routes ou contrôlée explicitement dans le contrôleur.
 16. Nettoyer la console navigateur : Plusieurs console.log, console.warn et console.error sont encore présents.
 
-5. Implémenter le suivi vu/non-vu par utilisateur.
-6. Ajouter des tris et filtres demandés. Il reste à couvrir plusieurs critères tels que :
 
+6. Ajouter des tris et filtres demandés. Il reste à couvrir plusieurs critères tels que :
    - nom ;
    - genre ;
    - note IMDb ;
@@ -28,7 +27,6 @@
    - filtres correspondants.
 7. Implémenter la vue par défaut des médias populaires : Sans recherche, les films sont actuellement classés par date de création locale. Il faut récupérer ou stocker un critère réel de popularité provenant des sources : téléchargements, vues, seeders, score, etc.
 13. Compléter les miniatures :
-
     - l’année de production n’est pas affichée ;
     - created_at est attendu par React mais n’est même pas envoyé par IndexMovieResource ;
     - la coche “watched” est affichée sur tous les films sans état réel.

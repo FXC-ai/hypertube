@@ -15,8 +15,6 @@ class MovieSeeder extends Seeder
      */
     public function run(): void
     {
-
-
         $testMkv = Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
             ->create([
@@ -25,6 +23,17 @@ class MovieSeeder extends Seeder
                 'filename' => 'test.mkv',
                 'titles' => '{"en":"Mkv test"}',
                 'torrent_url' => null,
+            ]);
+
+        MovieData::factory()
+            ->forMovie($testMkv)
+            ->create([
+                'release_date' => '2000-01-01',
+                'runtime' => 2,
+                'genres' => ['Test'],
+                'director' => 'chatgpt',
+                'language' => ['English'],
+                'imdbRating' => 0,
             ]);
 
         $testevaluation = Movie::factory()
@@ -48,18 +57,7 @@ class MovieSeeder extends Seeder
                 'imdbRating' => 0,
             ]);
 
-        MovieData::factory()
-            ->forMovie($testMkv)
-            ->create([
-                'release_date' => '2000-01-01',
-                'runtime' => 2,
-                'genres' => ['Test'],
-                'director' => 'chatgpt',
-                'language' => ['English'],
-                'imdbRating' => 0,
-            ]);
-
-        Movie::factory()
+        /*         Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
             ->create([
                 'title' => 'Sintel',
@@ -123,6 +121,6 @@ class MovieSeeder extends Seeder
                 'director' => 'Blender',
                 'language' => ['English'],
                 'imdbRating' => 0,
-            ]);
+            ]); */
     }
 }
