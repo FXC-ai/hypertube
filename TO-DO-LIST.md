@@ -1,8 +1,4 @@
-1. Télécharger et intégrer les sous-titres externes : Le torrent peut contenir des fichiers .srt/.vtt, mais DownloadMovie ne télécharge que l’index du fichier vidéo dans DownloadMovie.php (app/Jobs/DownloadMovie.php:123). La conversion ne traite donc que les sous-titres incorporés au conteneur. Il faut :
-
-   - sélectionner et télécharger les sous-titres anglais disponibles ;
-   - convertir les fichiers externes en WebVTT/HLS ;
-   - les exposer dans le lecteur.
+1. Télécharger et intégrer les sous-titres externes : améliorer la priorité
 
 
 3. Faire réellement fonctionner les jobs en arrière-plan.
@@ -10,7 +6,7 @@
 
 8. Vérifier réellement l’envoi de l’email de réinitialisation. Pour l'instant l'envoi d'email fonctionne uniquement sur l'adresse fx.coindreau@gmail.com
 9. Durcir les erreurs OAuth : Le callback ne traite que InvalidStateException. Les refus utilisateur, erreurs du fournisseur, réponses incorrectes et erreurs inattendues peuvent encore produire un HTTP 500 dans SocialiteController.php (app/Http/Controllers/Auth/SocialiteController.php:180).
-10. Finaliser l’identité et l’ergonomie du site ; Il reste des éléments du starter Laravel : dashboard générique, liens vers le dépôt du starter, intitulés incohérents et pages peu finalisées. Il faut aussi vérifier manuellement les résolutions mobiles et Chrome/Firefox récents.
+
 11. Ajouter la photo de profil à l’inscription et sa validation sécurisée.
 12. Garantir la politique de mot de passe dans tous les environnements.
 14. Ajouter un véritable header et footer global.

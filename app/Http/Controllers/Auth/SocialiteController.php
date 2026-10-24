@@ -197,6 +197,6 @@ class SocialiteController extends Controller
 
         Auth::login($user, remember: true);
 
-        return redirect()->intended('/dashboard');
+        return redirect()->intended(route('movies.index', absolute: false));
     }
 }

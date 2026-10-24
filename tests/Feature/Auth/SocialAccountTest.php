@@ -52,7 +52,7 @@ test('a user can create an account via github', function () {
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('a user can create an account via fortytwo', function () {
@@ -90,7 +90,7 @@ test('a user can create an account via fortytwo', function () {
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('an existing user can sign in via fortytwo', function () {
@@ -124,7 +124,7 @@ test('an existing user can sign in via fortytwo', function () {
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('an existing user can sign in via github', function () {
@@ -158,7 +158,7 @@ test('an existing user can sign in via github', function () {
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('a user created via fortytwo can sign in via github', function () {
@@ -174,7 +174,7 @@ test('a user created via fortytwo can sign in via github', function () {
 
     $this->get(route('socialite.callback', [
         'provider' => 'fortytwo',
-    ]))->assertRedirect('/dashboard');
+    ]))->assertRedirect(route('movies.index', absolute: false));
 
     $user = User::query()
         ->where('email', 'marvin@example.com')
@@ -217,7 +217,7 @@ test('a user created via fortytwo can sign in via github', function () {
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('an existing user can sign in via github and then fortytwo', function () {
@@ -237,7 +237,7 @@ test('an existing user can sign in via github and then fortytwo', function () {
 
     $this->get(route('socialite.callback', [
         'provider' => 'github',
-    ]))->assertRedirect('/dashboard');
+    ]))->assertRedirect(route('movies.index', absolute: false));
 
     $this->assertAuthenticatedAs($user);
 
@@ -276,7 +276,7 @@ test('an existing user can sign in via github and then fortytwo', function () {
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('a user created via github can sign in via fortytwo', function () {
@@ -292,7 +292,7 @@ test('a user created via github can sign in via fortytwo', function () {
 
     $this->get(route('socialite.callback', [
         'provider' => 'github',
-    ]))->assertRedirect('/dashboard');
+    ]))->assertRedirect(route('movies.index', absolute: false));
 
     $user = User::query()
         ->where('email', 'marvin@example.com')
@@ -335,7 +335,7 @@ test('a user created via github can sign in via fortytwo', function () {
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('signing in twice with the same github account does not create duplicates', function () {
@@ -351,7 +351,7 @@ test('signing in twice with the same github account does not create duplicates',
 
     $this->get(route('socialite.callback', [
         'provider' => 'github',
-    ]))->assertRedirect('/dashboard');
+    ]))->assertRedirect(route('movies.index', absolute: false));
 
     $user = User::query()
         ->where('email', 'octocat@example.com')
@@ -388,7 +388,7 @@ test('signing in twice with the same github account does not create duplicates',
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test('signing in twice with the same fortytwo account does not create duplicates', function () {
@@ -404,7 +404,7 @@ test('signing in twice with the same fortytwo account does not create duplicates
 
     $this->get(route('socialite.callback', [
         'provider' => 'fortytwo',
-    ]))->assertRedirect('/dashboard');
+    ]))->assertRedirect(route('movies.index', absolute: false));
 
     $user = User::query()
         ->where('email', 'marvin@example.com')
@@ -441,7 +441,7 @@ test('signing in twice with the same fortytwo account does not create duplicates
 
     $this->assertAuthenticatedAs($user);
 
-    $response->assertRedirect('/dashboard');
+    $response->assertRedirect(route('movies.index', absolute: false));
 });
 
 test(

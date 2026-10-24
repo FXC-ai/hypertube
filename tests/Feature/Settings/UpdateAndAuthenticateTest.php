@@ -35,7 +35,7 @@ test(
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $response->assertRedirect(route('movies.index', absolute: false));
         $this->assertAuthenticatedAs($user);
     }
 );

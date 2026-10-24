@@ -15,7 +15,6 @@ Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback']
 Route::whereIn('provider', ['github', 'fortytwo']);
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'dashboard')->name('dashboard');
 
     Route::patch('/updateavatar', [ProfilePictureController::class, 'update'])->name('update.avatar');
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
