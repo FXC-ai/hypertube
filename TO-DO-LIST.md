@@ -2,7 +2,7 @@
 
 
 3. Faire réellement fonctionner les jobs en arrière-plan.
-4. Implémenter la suppression après un mois sans visionnage.
+
 
 8. Vérifier réellement l’envoi de l’email de réinitialisation. Pour l'instant l'envoi d'email fonctionne uniquement sur l'adresse fx.coindreau@gmail.com
 9. Durcir les erreurs OAuth : Le callback ne traite que InvalidStateException. Les refus utilisateur, erreurs du fournisseur, réponses incorrectes et erreurs inattendues peuvent encore produire un HTTP 500 dans SocialiteController.php (app/Http/Controllers/Auth/SocialiteController.php:180).
