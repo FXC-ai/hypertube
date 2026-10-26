@@ -31,7 +31,9 @@ class AppServiceProvider extends ServiceProvider
             'fortytwo',
             function () {
                 return Socialite::buildProvider(
-                    FortyTwoProvider::class, config('services.fortytwo'));
+                    FortyTwoProvider::class,
+                    config('services.fortytwo')
+                );
             }
         );
     }
@@ -47,14 +49,13 @@ class AppServiceProvider extends ServiceProvider
             app()->isProduction(),
         );
 
-        Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
-                ->mixedCase()
-                ->letters()
-                ->numbers()
-                ->symbols()
-                ->uncompromised()
-            : null,
+        Password::defaults(
+            fn(): Password => Password::min(8)
+            //->mixedCase()
+            //->letters()
+            //->numbers()
+            //->symbols()
+            //->uncompromised()
         );
     }
 }

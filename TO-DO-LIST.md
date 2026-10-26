@@ -5,12 +5,12 @@
 
 
 8. Vérifier réellement l’envoi de l’email de réinitialisation. Pour l'instant l'envoi d'email fonctionne uniquement sur l'adresse fx.coindreau@gmail.com
-9. Durcir les erreurs OAuth : Le callback ne traite que InvalidStateException. Les refus utilisateur, erreurs du fournisseur, réponses incorrectes et erreurs inattendues peuvent encore produire un HTTP 500 dans SocialiteController.php (app/Http/Controllers/Auth/SocialiteController.php:180).
 
 
-12. Garantir la politique de mot de passe dans tous les environnements.
 
-15. Corriger la restriction des fournisseurs OAuth : Le Route::whereIn() isolé dans web.php (routes/web.php:16) ne contraint pas les deux routes déclarées juste avant. Un fournisseur arbitraire peut donc atteindre le contrôleur et provoquer une erreur serveur. La contrainte doit être attachée aux routes ou contrôlée explicitement dans le contrôleur.
+
+
+
 16. Nettoyer la console navigateur : Plusieurs console.log, console.warn et console.error sont encore présents.
 
 ____________________________________________________________________________________________________________________________________________________________________
