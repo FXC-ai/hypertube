@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
+use Illuminate\Http\Request;
 use Throwable;
 
 class SocialiteController extends Controller
@@ -43,7 +44,7 @@ class SocialiteController extends Controller
         }
 
         $suffix = substr(
-            hash('sha256', $provider.':'.$socialUser->getId()),
+            hash('sha256', $provider . ':' . $socialUser->getId()),
             0,
             3,
         );
@@ -52,7 +53,7 @@ class SocialiteController extends Controller
             $baseUsername,
             255 - strlen($suffix) - 1,
             '',
-        ).'-'.$suffix;
+        ) . '-' . $suffix;
     }
 
     private function downloadProfilepicture(?string $url): ?string
@@ -117,7 +118,7 @@ class SocialiteController extends Controller
             return null;
         }
 
-        $path = 'avatars/'.Str::uuid().'.'.$extension;
+        $path = 'avatars/' . Str::uuid() . '.' . $extension;
         Log::channel('my_debug')->debug('Return result of avatar storage', []);
 
         return Storage::disk('public')->put($path, $contents)
@@ -177,7 +178,7 @@ class SocialiteController extends Controller
         });
     }
 
-    public function callback(string $provider)
+    public function callback(Request $request, string $provider)
     {
         try {
             $socialUser = Socialite::driver($provider)->user();
