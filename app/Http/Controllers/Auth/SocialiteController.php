@@ -180,23 +180,51 @@ class SocialiteController extends Controller
 
     public function callback(Request $request, string $provider)
     {
+        Log::channel("my_debug")->info("callback appelé");
+        // on vérifie si le service externe a renvoyé une erreur
+        $providerError = $request->query('error');
+
+        if (is_string($providerError) && $providerError !== '') {
+            Log::warning('OAuth authorization was rejected by the provider.', [
+                'provider' => $provider,
+                'error' => in_array($providerError, [
+                    'access_denied',
+                    'server_error',
+                    'temporarily_unavailable',
+                ], true) ? $providerError : 'unknown',
+            ]);
+
+            return redirect()->route('login')->withErrors([
+                'social' => 'The external sign in request was cancelled or refused.',
+            ]);
+        }
+
         try {
             $socialUser = Socialite::driver($provider)->user();
+            if ($socialUser->getEmail() == null) {
+                return redirect()->route('login')->withErrors(
+                    [
+                        'social' => 'No mail adress had been provided to this provider account.',
+                    ]
+                );
+            }
+            $user = $this->findOrCreateUser($provider, $socialUser);
+
+            Auth::login($user, remember: true);
         } catch (InvalidStateException) {
             return redirect()->route('login')->withErrors([
                 'social' => 'That sign in attempt expired. Please try again.',
             ]);
-        }
+        } catch (Throwable $exception) {
+            report($exception);
 
-        if ($socialUser->getEmail() == null) {
             return redirect()->route('login')->withErrors([
-                'social' => 'No mail adress had been provided to this provider account.',
+                'social' => 'External sign in is temporarily unavailable. Please try again.',
             ]);
         }
 
-        $user = $this->findOrCreateUser($provider, $socialUser);
 
-        Auth::login($user, remember: true);
+
 
         return redirect()->intended(route('movies.index', absolute: false));
     }

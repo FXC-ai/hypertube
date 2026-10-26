@@ -479,7 +479,7 @@ test(
 ]);
 
 test(
-    'sign in is refused when OAuth authorization is cancelled',
+    'sign in is refused when the OAuth state is invalid',
     function (string $provider) {
         $socialiteProvider = Mockery::mock(Provider::class);
 
@@ -505,6 +505,31 @@ test(
             ->assertRedirect(route('login'))
             ->assertSessionHasErrors([
                 'social' => 'That sign in attempt expired. Please try again.',
+            ]);
+    },
+)->with([
+    'GitHub' => ['github'],
+    '42' => ['fortytwo'],
+]);
+
+test(
+    'sign in returns safely when OAuth authorization is refused',
+    function (string $provider) {
+        Socialite::shouldReceive('driver')->never();
+
+        $response = $this->get(route('socialite.callback', [
+            'provider' => $provider,
+            'error' => 'access_denied',
+        ]));
+
+        $this->assertGuest();
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('social_accounts', 0);
+
+        $response
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors([
+                'social' => 'The external sign in request was cancelled or refused.',
             ]);
     },
 )->with([
