@@ -87,14 +87,16 @@ class Movie extends Model
             'conversion_completed_at' => 'datetime',
             'external_subtitles' => 'array',
             'external_subtitles_status' => ExternalSubtitleStatus::class,
+            'last_watched_at' => 'datetime',
         ];
     }
 
     public function isPlayable(): bool
     {
-        return in_array($this->conversion_status, [
-            ConversionStatus::Playable,
-            ConversionStatus::Converted,
-        ], true);
+        return $this->download_status !== DownloadStatus::Purging
+            && in_array($this->conversion_status, [
+                ConversionStatus::Playable,
+                ConversionStatus::Converted,
+            ], true);
     }
 }

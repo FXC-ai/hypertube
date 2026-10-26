@@ -35,6 +35,16 @@ final class MovieConversionController extends Controller
             ) . "\n",
         );
 
+        if ($movie->download_status === DownloadStatus::Purging) {
+            Log::channel('my_debug')->debug(
+                "La préparation du film est refusée car le film est en cours de purge.\n" . json_encode(
+                    $context,
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                ) . "\n",
+            );
+            return to_route('movies.show', $movie);
+        }
+
         if ($movie->download_status === DownloadStatus::Unsupported) {
             Log::channel('my_debug')->debug(
                 "La préparation du film est refusée car son torrent n’est pas pris en charge.\n" . json_encode(
@@ -48,7 +58,11 @@ final class MovieConversionController extends Controller
 
         if (
             $movie->torrent_url !== null &&
-            ! in_array($movie->download_status, [DownloadStatus::Downloading, DownloadStatus::Completed], true)
+            ! in_array(
+                $movie->download_status,
+                [DownloadStatus::Downloading, DownloadStatus::Completed, DownloadStatus::Purging],
+                true
+            )
         ) {
             DownloadMovie::dispatch($movie->id)->afterCommit();
 
@@ -68,7 +82,7 @@ final class MovieConversionController extends Controller
 
         $queued = Movie::query()
             ->whereKey($movie->id)
-            ->where('download_status', '!=', DownloadStatus::Unsupported->value)
+            ->whereNotIn('download_status', [DownloadStatus::Unsupported->value, DownloadStatus::Purging->value])
             ->whereIn('conversion_status', [ConversionStatus::Pending->value, ConversionStatus::Failed->value])
             ->update([
                 'conversion_status' => ConversionStatus::Queued->value,

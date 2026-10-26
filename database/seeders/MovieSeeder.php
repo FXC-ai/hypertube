@@ -36,7 +36,7 @@ class MovieSeeder extends Seeder
                 'imdbRating' => 0,
             ]);
 
-        $testevaluation = Movie::factory()
+        Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
             ->create([
                 'title' => 'Mkv test evaluation',
@@ -44,9 +44,10 @@ class MovieSeeder extends Seeder
                 'filename' => null,
                 'titles' => '{"en":"Mkv de test evaluation "}',
                 'torrent_url' => 'https://itorrents.org/torrent/79816060EA56D56F2A2148CD45705511079F9BCA.torrent',
+                'imdb_id' => 'tt2608732'
             ]);
 
-        MovieData::factory()
+        /*         MovieData::factory()
             ->forMovie($testevaluation)
             ->create([
                 'release_date' => '2000-01-01',
@@ -55,7 +56,9 @@ class MovieSeeder extends Seeder
                 'director' => 'evaluation',
                 'language' => ['English'],
                 'imdbRating' => 0,
-            ]);
+            ]); */
+
+
 
         /*         Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)

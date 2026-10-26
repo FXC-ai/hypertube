@@ -31,7 +31,8 @@ type DownloadStatus =
     | 'downloading'
     | 'completed'
     | 'failed'
-    | 'unsupported';
+    | 'unsupported'
+    | 'purging';
 
 type ExternalSubtitleStatus = 'none' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed';
 
@@ -219,23 +220,25 @@ function HlsPlayer({
 export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
     const conversionForm = useForm({});
     const { stop } = usePoll(2000, {});
-    const isPreparing = ['queued', 'converting'].includes(
-        moviePageData.conversion_status,
-    );
+    const isPreparing = ['queued', 'converting'].includes(moviePageData.conversion_status);
     const isUnsupported = moviePageData.download_status === 'unsupported';
-
-    const statusLabel = isUnsupported
-        ? 'Unsupported torrent'
-        : conversionStatusLabel[moviePageData.conversion_status];
-
-    const displayedError = isUnsupported
-        ? moviePageData.download_error
-        : moviePageData.conversion_error;
+    const isPurging = moviePageData.download_status === 'purging';
 
 
-    const videoIsPlayable =
-        moviePageData.conversion_status === 'playable' ||
-        moviePageData.conversion_status === 'converted';
+    const statusLabel = isPurging
+        ? 'Cleaning up stored video'
+        : isUnsupported
+            ? 'Unsupported torrent'
+            : conversionStatusLabel[moviePageData.conversion_status];
+
+    const displayedError = isPurging
+        ? null
+        : isUnsupported
+            ? moviePageData.download_error
+            : moviePageData.conversion_error;
+
+
+    const videoIsPlayable = moviePageData.playable;
 
     const subtitlesAreTerminal = ['none', 'ready', 'failed'].includes(
         moviePageData.external_subtitles_status,
@@ -243,9 +246,12 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
 
     useEffect(() => {
         if (
-            isUnsupported ||
-            moviePageData.conversion_status === 'failed' ||
-            (videoIsPlayable && subtitlesAreTerminal)
+            !isPurging &&
+            (
+                isUnsupported ||
+                moviePageData.conversion_status === 'failed' ||
+                (videoIsPlayable && subtitlesAreTerminal)
+            )
         ) {
             stop();
         }
@@ -256,6 +262,7 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
         stop,
         subtitlesAreTerminal,
         videoIsPlayable,
+        isPurging
     ]);
 
     const startConversion = (): void => {
@@ -285,45 +292,45 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
 
                 <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
                     <Card className="overflow-hidden border-border/60 bg-black p-0 shadow-xl">
-                        {moviePageData.playable &&
-                            moviePageData.conversion_attempt !== null ? (
-                            <HlsPlayer
-                                /*                                 src={manifest.url({
-                                                                        movie: moviePageData.id,
-                                                                        conversion_attempt: moviePageData.conversion_attempt
-                                                                    })} */
-
-                                src={`/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
-                                preferredlanguage={
-                                    moviePageData.preferredlanguage
-                                }
-                                externalSubtitles={moviePageData.external_subtitles}
-                            />
-                        ) : (
-                            <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
-                                {isPreparing ? (
-                                    <LoaderCircle className="size-8 animate-spin" />
-                                ) : (
-                                    <Film className="size-8" />
-                                )}
-                                <div>
-                                    <p className="font-medium text-foreground">
-                                        {isUnsupported
-                                            ? 'This torrent has no supported video'
-                                            : isPreparing
-                                                ? 'The video is being prepared'
-                                                : 'The video is not available yet'}
-                                    </p>
-                                    <p className="mt-1 text-sm">
-                                        {isUnsupported
-                                            ? 'No MP4 or MKV file was found.'
-                                            : isPreparing
-                                                ? 'This page will update automatically.'
-                                                : 'Prepare the video to start watching.'}
-                                    </p>
+                        {moviePageData.playable && moviePageData.conversion_attempt !== null ?
+                            (
+                                <HlsPlayer
+                                    src={`/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
+                                    preferredlanguage={moviePageData.preferredlanguage}
+                                    externalSubtitles={moviePageData.external_subtitles}
+                                />
+                            ) :
+                            (
+                                <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-muted px-6 text-center text-muted-foreground">
+                                    {isPreparing ? (
+                                        <LoaderCircle className="size-8 animate-spin" />
+                                    ) : (
+                                        <Film className="size-8" />
+                                    )}
+                                    <div>
+                                        <p className="font-medium text-foreground">
+                                            {
+                                                isPurging ? 'This video is currently being cleaned up.'
+                                                    : isUnsupported
+                                                        ? 'This torrent has no supported video'
+                                                        : isPreparing
+                                                            ? 'The video is being prepared'
+                                                            : 'The video is not available yet'
+                                            }
+                                        </p>
+                                        <p className="mt-1 text-sm">
+                                            {
+                                                isPurging ? 'Please try again shortly.'
+                                                    : isUnsupported
+                                                        ? 'No MP4 or MKV file was found.'
+                                                        : isPreparing
+                                                            ? 'This page will update automatically.'
+                                                            : 'Prepare the video to start watching.'
+                                            }
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
                     </Card>
 
                     <Card className="border-border/60 shadow-sm">

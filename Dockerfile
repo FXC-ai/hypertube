@@ -17,6 +17,7 @@ RUN apt-get update \
         unzip \
         zip \
         libicu-dev \
+        cron \
     && docker-php-ext-configure gd --with-jpeg \
     && docker-php-ext-install \
         bcmath \

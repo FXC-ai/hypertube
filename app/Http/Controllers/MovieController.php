@@ -16,6 +16,7 @@ use Inertia\Response as InertiaResponse;
 use Illuminate\Support\Facades\Log;
 use App\Enums\DownloadStatus;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class MovieController extends Controller
 {
@@ -24,7 +25,17 @@ class MovieController extends Controller
      */
     public function show(Movie $movie): InertiaResponse
     {
-        WatchedMovie::markWatched(Auth::user(), $movie);
+        $movie = DB::transaction(function () use ($movie): Movie {
+            $lockedMovie = Movie::query()
+                ->lockForUpdate()
+                ->findOrFail($movie->id);
+
+            if ($lockedMovie->download_status !== DownloadStatus::Purging) {
+                WatchedMovie::markWatched(Auth::user(), $lockedMovie);
+            }
+
+            return $lockedMovie;
+        }, attempts: 3);
 
         return Inertia::render(
             'movies/show',
@@ -43,20 +54,27 @@ class MovieController extends Controller
                     'download_error' => $movie->download_status === DownloadStatus::Unsupported
                         ? $movie->download_error
                         : null,
-                    'can_prepare' => $movie->download_status !== DownloadStatus::Unsupported && in_array($movie->conversion_status, [ConversionStatus::Pending, ConversionStatus::Failed], true),
+                    'can_prepare' => ! in_array($movie->download_status, [
+                        DownloadStatus::Unsupported,
+                        DownloadStatus::Purging,
+                    ], true) && in_array($movie->conversion_status, [
+                        ConversionStatus::Pending,
+                        ConversionStatus::Failed,
+                    ], true),
                     'external_subtitles_status' => $movie->external_subtitles_status->value,
-                    'external_subtitles' => collect($movie->external_subtitles ?? [])
-                        ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
-                        ->map(fn(array $subtitle): array => [
-                            'id' => $subtitle['file_index'],
-                            'label' => $subtitle['file_name'] . ' — External',
-                            'language' => $subtitle['language'],
-                            'url' => Storage::disk('public')->url(
-                                "movies/{$movie->id}/{$subtitle['output_file']}"
-                            ),
-                        ])
-                        ->values()
-                        ->all(),
+                    'external_subtitles' => $movie->download_status === DownloadStatus::Purging
+                        ? [] : collect($movie->external_subtitles ?? [])
+                            ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
+                            ->map(fn(array $subtitle): array => [
+                                'id' => $subtitle['file_index'],
+                                'label' => $subtitle['file_name'] . ' — External',
+                                'language' => $subtitle['language'],
+                                'url' => Storage::disk('public')->url(
+                                    "movies/{$movie->id}/{$subtitle['output_file']}"
+                                ),
+                            ])
+                            ->values()
+                            ->all(),
                 ],
                 'comments' => Inertia::scroll(
                     fn() => CommentResource::collection(
@@ -83,7 +101,7 @@ class MovieController extends Controller
 
         $query = Movie::query()
             ->withExists([
-                'watchedMovies as watched' => fn (Builder $query) => $query
+                'watchedMovies as watched' => fn(Builder $query) => $query
                     ->where('watched_movies.user_id', $userId),
             ]);
 
@@ -92,9 +110,9 @@ class MovieController extends Controller
         }
 
         if ($watched === WatchedFilter::Watched) {
-            $query->whereHas('watchedMovies', fn (Builder $query) => $query->where('watched_movies.user_id', $userId));
+            $query->whereHas('watchedMovies', fn(Builder $query) => $query->where('watched_movies.user_id', $userId));
         } elseif ($watched === WatchedFilter::Unwatched) {
-            $query->whereDoesntHave('watchedMovies', fn (Builder $query) => $query->where('watched_movies.user_id', $userId));
+            $query->whereDoesntHave('watchedMovies', fn(Builder $query) => $query->where('watched_movies.user_id', $userId));
         }
 
         if ($sort) {

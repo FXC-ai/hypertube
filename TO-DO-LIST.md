@@ -9,10 +9,11 @@
 
 11. Ajouter la photo de profil à l’inscription et sa validation sécurisée.
 12. Garantir la politique de mot de passe dans tous les environnements.
-14. Ajouter un véritable header et footer global.
+
 15. Corriger la restriction des fournisseurs OAuth : Le Route::whereIn() isolé dans web.php (routes/web.php:16) ne contraint pas les deux routes déclarées juste avant. Un fournisseur arbitraire peut donc atteindre le contrôleur et provoquer une erreur serveur. La contrainte doit être attachée aux routes ou contrôlée explicitement dans le contrôleur.
 16. Nettoyer la console navigateur : Plusieurs console.log, console.warn et console.error sont encore présents.
 
+____________________________________________________________________________________________________________________________________________________________________
 
 6. Ajouter des tris et filtres demandés. Il reste à couvrir plusieurs critères tels que :
    - nom ;
