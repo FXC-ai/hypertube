@@ -4,12 +4,7 @@
 3. Faire réellement fonctionner les jobs en arrière-plan.
 
 
-8. Vérifier réellement l’envoi de l’email de réinitialisation. Pour l'instant l'envoi d'email fonctionne uniquement sur l'adresse fx.coindreau@gmail.com
-
-
-
-
-
+/usr/bin/gh auth git-credential get: 1: /usr/bin/gh: not found
 
 16. Nettoyer la console navigateur : Plusieurs console.log, console.warn et console.error sont encore présents.
 
