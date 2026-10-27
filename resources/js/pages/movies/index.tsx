@@ -156,7 +156,7 @@ function MovieCard({ movie }: { movie: Movie }) {
                 </object>
 
                 {movie.data?.imdbRating && (
-                    <div className="absolute right-3 bottom-3 flex gap-1 rounded-lg bg-stone-900 px-2 py-1">
+                    <div className="absolute bg-secondary text-secondary-foreground right-3 bottom-3 flex gap-1 rounded-lg px-2 py-1">
                         {movie.data.imdbRating}
                         <img
                             className="w-5"
@@ -168,11 +168,11 @@ function MovieCard({ movie }: { movie: Movie }) {
 
                 {movie.popularity ? (
                     <div
-                        className="absolute bottom-3 left-3 rounded-lg bg-stone-900 px-2 py-1 text-xs"
+                        className="absolute bg-secondary bottom-3 left-3 rounded-lg px-2 py-1 text-xs"
                         title={`${formatDownloads(movie.popularity)} downloads on archive.org`}
                     >
                         {formatDownloads(movie.popularity)}
-                        <span className="ml-1 text-white/70">downloads</span>
+                        <span className="ml-1 text-secondary-foreground/80">downloads</span>
                     </div>
                 ) : (
                     <></>
@@ -187,7 +187,7 @@ function MovieCard({ movie }: { movie: Movie }) {
                 </Badge>
                 {movie.watched && (
                     <span
-                        className="absolute top-3 right-3 flex items-center rounded-full bg-white p-1 text-blue-600 shadow ring-2 ring-black/5"
+                        className="absolute top-3 right-3 flex items-center rounded-full bg-secondary p-1 text-blue-600 shadow ring-2 ring-black/5"
                         title="Already watched"
                     >
                         <Check className="size-5" strokeWidth={3} aria-hidden />
@@ -446,15 +446,15 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                                     errors.yearTo ||
                                     errors.ratingFrom ||
                                     errors.ratingTo) && (
-                                    <InputError className="mt-2">
-                                        {
-                                            (errors.yearFrom ??
-                                                errors.yearTo ??
-                                                errors.ratingFrom ??
-                                                errors.ratingTo) as string
-                                        }
-                                    </InputError>
-                                )}
+                                        <InputError className="mt-2">
+                                            {
+                                                (errors.yearFrom ??
+                                                    errors.yearTo ??
+                                                    errors.ratingFrom ??
+                                                    errors.ratingTo) as string
+                                            }
+                                        </InputError>
+                                    )}
                             </>
                         )}
                     </Form>
