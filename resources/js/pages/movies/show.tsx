@@ -251,7 +251,6 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
             !isPurging &&
             (
                 isUnsupported ||
-                downloadFailed ||
                 moviePageData.conversion_status === 'failed' ||
                 (videoIsPlayable && subtitlesAreTerminal)
             )
@@ -266,7 +265,6 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
         subtitlesAreTerminal,
         videoIsPlayable,
         isPurging,
-        downloadFailed
     ]);
 
     const startConversion = (): void => {
@@ -318,7 +316,7 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                                     : isUnsupported
                                                         ? 'This torrent has no supported video'
                                                         : downloadFailed
-                                                            ? 'This movie is not vailable'
+                                                            ? 'This movie is not available'
                                                             : isPreparing
                                                                 ? 'The video is being prepared'
                                                                 : 'The video is not available yet'

@@ -46,7 +46,7 @@ class MovieController extends Controller
                     'filename' => $movie->filename,
                     'conversion_attempt' => $movie->conversion_attempt,
                     'conversion_status' => $movie->conversion_status->value,
-                    'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
+                    'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? 'The conversion failed.' : null,
                     'playable' => $movie->isPlayable(),
                     'preferredlanguage' => Auth::user()->preferredlanguage?->value,
                     'movieData' => $movie->getEnrichedData(),
