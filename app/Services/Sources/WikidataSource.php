@@ -222,9 +222,12 @@ final class WikidataSource implements MovieSourceProvider
                 'title' => $defaultTitle,
                 'titles' => $titles === [] ? null : json_encode($titles),
                 'torrent_url' => $result['torrentURL']['value'] ?? null,
+                'internet_archive_id' => $internetArchiveId,
                 'release_year' => $releaseYear > 0 ? $releaseYear : null,
                 // Wikidata knows nothing about the IMDb grade: OMDb fills it later.
                 'imdb_rating' => null,
+                // Nor about the download counts: archive.org fills them later.
+                'popularity' => null,
                 'genres' => Source::storedGenres(explode('|', $result['genresCsv']['value'] ?? '')),
                 'created_at' => now(),
                 'updated_at' => now(),

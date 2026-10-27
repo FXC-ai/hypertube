@@ -109,16 +109,18 @@ class MovieController extends Controller
         $search = $params['search'] ?? null;
         $page = (int) ($params['page'] ?? 1);
         $perPage = (int) ($params['perPage'] ?? 5);
-        $dir = ($params['dir'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $requestDir = $params['dir'] ?? null;
         $watched = WatchedFilter::from($params['watched'] ?? WatchedFilter::All->value);
         $userId = Auth::id();
 
         $sources = $request->user()->enabledSources();
         $sourceValues = array_map(fn(MovieSource $source): string => $source->value, $sources);
-        // A search is ordered by name unless the listing asks for another criterion.
+        // An empty listing shows the most popular films first, a search is ordered by
+        // name, and an explicit criterion always wins over both.
         $sort = isset($params['sort'])
             ? MovieSort::from($params['sort'])
-            : (filled($search) ? MovieSort::Name : MovieSort::CreatedAt);
+            : (filled($search) ? MovieSort::Name : MovieSort::Popularity);
+        $dir = ($requestDir ?? ($sort === MovieSort::Popularity ? 'desc' : 'asc')) === 'desc' ? 'desc' : 'asc';
         $genre = filled($params['genre'] ?? null) ? (string) $params['genre'] : null;
 
         $criteria = new MovieSearch(
@@ -140,9 +142,16 @@ class MovieController extends Controller
         $seen = [];
         $duplicates = 0;
         $total = 0;
+        $exhausted = true;
 
         foreach ($sources as $source) {
             $result = $this->registry->provider($source)->search($criteria);
+
+            // A source handing over fewer rows than the window asked for has nothing
+            // left to give, which is the only way to know the merged listing is complete.
+            if (count($result['items']) >= $criteria->windowSize()) {
+                $exhausted = false;
+            }
 
             foreach ($result['items'] as $entry) {
                 if (isset($seen[$entry->imdb_id])) {
@@ -163,22 +172,20 @@ class MovieController extends Controller
             $valueA = $this->sortValue($a, $sort);
             $valueB = $this->sortValue($b, $sort);
 
-            // An entry missing the criterion is ranked last, whichever way the sort goes.
-            if ($valueA === null || $valueB === null) {
-                if ($valueA === $valueB) {
-                    return $a->id <=> $b->id;
-                }
+            if ($valueA !== null && $valueB !== null) {
+                $comparison = $valueA <=> $valueB;
 
+                if ($comparison !== 0) {
+                    return $dir === 'asc' ? $comparison : -$comparison;
+                }
+            } elseif ($valueA !== $valueB) {
+                // An entry missing the criterion is ranked last, whichever way the sort goes.
                 return $valueA === null ? 1 : -1;
             }
 
-            $comparison = $valueA <=> $valueB;
-
-            if ($comparison === 0) {
-                $comparison = $a->id <=> $b->id;
-            }
-
-            return $dir === 'asc' ? $comparison : -$comparison;
+            // The tie breaker has to order the ids the same way every source does, or two
+            // pages of the merged listing would overlap when the criterion is unknown.
+            return $dir === 'asc' ? $a->id <=> $b->id : $b->id <=> $a->id;
         });
 
         $window = array_slice($entries, ($page - 1) * $perPage, $perPage);
@@ -201,12 +208,17 @@ class MovieController extends Controller
             $window,
         );
 
+        // Every source is exhausted: the merged listing is complete, and the duplicates
+        // of the whole catalog are known, so the count is the exact one. Otherwise the
+        // sum of the source totals is the best estimate available.
         $movies = new Paginator(
             $results,
-            max($total - $duplicates, 0),
+            $exhausted ? count($entries) : max($total - $duplicates, 0),
             $perPage,
             $page,
-            ['path' => $request->url(), 'query' => $request->query()]
+            // The page of the current request is dropped, the paginator is the one
+            // putting the next page in the link the infinite scroll follows.
+            ['path' => $request->url(), 'query' => array_diff_key($request->query(), ['page' => ''])]
         );
 
         return Inertia::render(
@@ -239,6 +251,7 @@ class MovieController extends Controller
     private function sortValue(Source $entry, MovieSort $sort): int|float|string|null
     {
         return match ($sort) {
+            MovieSort::Popularity => $entry->popularity,
             MovieSort::CreatedAt => $entry->created_at?->getTimestamp(),
             MovieSort::Name => $entry->title,
             MovieSort::Year => $entry->release_year,

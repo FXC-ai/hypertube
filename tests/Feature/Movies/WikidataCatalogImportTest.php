@@ -65,6 +65,7 @@ describe('catalog import', function () {
 
         expect($entry->titles)->toBe(['fr' => 'Metropolis', 'en' => 'Metropolis']);
         expect($entry->torrent_url)->toBe('https://archive.org/download/metropolis/metropolis_archive.torrent');
+        expect($entry->internet_archive_id)->toBe('metropolis');
     });
 
     it('stores the year and the genres the listing is filtered and sorted on', function () {

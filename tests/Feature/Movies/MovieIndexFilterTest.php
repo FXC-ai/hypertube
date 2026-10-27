@@ -69,7 +69,12 @@ describe('criteria filters', function () {
         Source::factory()->create(['title' => 'Cops', 'release_year' => 1970]);
         Source::factory()->create(['title' => 'Unknown date', 'release_year' => null]);
 
-        $response = $this->actingAs($user)->get(route('movies.index', ['yearFrom' => 1920, 'yearTo' => 1940]));
+        $response = $this->actingAs($user)->get(route('movies.index', [
+            'yearFrom' => 1920,
+            'yearTo' => 1940,
+            'sort' => 'created_at',
+            'dir' => 'asc',
+        ]));
 
         expect(orderedTitles($response))->toBe(['Metropolis', 'M']);
         $response->assertInertia(fn($assert) => $assert
@@ -86,7 +91,11 @@ describe('criteria filters', function () {
         Source::factory()->create(['title' => 'Cops', 'imdb_rating' => 2.4]);
         Source::factory()->create(['title' => 'Unranked', 'imdb_rating' => null]);
 
-        $response = $this->actingAs($user)->get(route('movies.index', ['ratingFrom' => 6.5]));
+        $response = $this->actingAs($user)->get(route('movies.index', [
+            'ratingFrom' => 6.5,
+            'sort' => 'created_at',
+            'dir' => 'asc',
+        ]));
 
         expect(orderedTitles($response))->toBe(['Metropolis', 'M']);
         $response->assertInertia(fn($assert) => $assert->where('filters.ratingFrom', 6.5));
@@ -149,7 +158,13 @@ describe('criteria filters', function () {
         Source::factory()->create(['title' => 'B', 'genres' => '|drama film|']);
         Source::factory()->create(['title' => 'C', 'genres' => '|comedy film|']);
 
-        $this->actingAs($user)->get(route('movies.index', ['genre' => 'drama film', 'perPage' => 1, 'page' => 2]))
+        $this->actingAs($user)->get(route('movies.index', [
+            'genre' => 'drama film',
+            'perPage' => 1,
+            'page' => 2,
+            'sort' => 'created_at',
+            'dir' => 'asc',
+        ]))
             ->assertInertia(fn($assert) => $assert
                 ->where('filters.genre', 'drama film')
                 ->where('movies.meta.current_page', 2)
@@ -164,14 +179,26 @@ describe('sorting criteria', function () {
         $this->actingAs(User::factory()->create())->get(route('movies.index'))
             ->assertInertia(fn($assert) => $assert
                 ->where('filters.sorts', [
+                    'popularity' => 'Popularity (downloads)',
                     'created_at' => 'Date added',
                     'name' => 'Name',
                     'year' => 'Production year',
                     'rating' => 'IMDb rating',
                 ])
-                ->where('filters.sort', 'created_at')
-                ->where('filters.dir', 'asc')
+                ->where('filters.sort', 'popularity')
+                ->where('filters.dir', 'desc')
             );
+    });
+
+    it('shows the most popular films first when nothing was searched', function () {
+        $user = User::factory()->create();
+
+        Source::factory()->create(['title' => 'Metropolis', 'popularity' => 2000]);
+        Source::factory()->create(['title' => 'M', 'popularity' => 60000]);
+        Source::factory()->create(['title' => 'Unknown', 'popularity' => null]);
+
+        expect(orderedTitles($this->actingAs($user)->get(route('movies.index'))))
+            ->toBe(['M', 'Metropolis', 'Unknown']);
     });
 
     it('sorts the merged listing by name in both directions', function () {
@@ -219,6 +246,105 @@ describe('sorting criteria', function () {
             ->toBe(['Ranked', 'Unranked']);
         expect(orderedTitles($this->actingAs($user)->get(route('movies.index', ['sort' => 'rating', 'dir' => 'desc']))))
             ->toBe(['Ranked', 'Unranked']);
+    });
+});
+
+describe('merged pagination', function () {
+    it('never shows the same film twice across the pages of the default listing', function () {
+        $user = User::factory()->create();
+
+        foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $title) {
+            Source::factory()->create(['title' => $title, 'popularity' => null]);
+        }
+
+        $pages = [
+            collect($this->actingAs($user)->get(route('movies.index', ['perPage' => 3, 'page' => 1]))
+                ->inertiaProps('movies.data'))->pluck('title')->all(),
+            collect($this->actingAs($user)->get(route('movies.index', ['perPage' => 3, 'page' => 2]))
+                ->inertiaProps('movies.data'))->pluck('title')->all(),
+        ];
+
+        expect($pages[0])->toHaveCount(3)
+            ->and($pages[1])->toHaveCount(3)
+            ->and(array_intersect($pages[0], $pages[1]))->toBe([]);
+    });
+
+    it('tells the infinite scroll the page that comes next, without repeating the page parameter', function () {
+        $user = User::factory()->create();
+
+        foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $title) {
+            Source::factory()->create(['title' => $title]);
+        }
+
+        $response = $this->actingAs($user)
+            ->get(route('movies.index', ['perPage' => 3, 'page' => 1]));
+
+        expect(data_get($response->viewData('page'), 'scrollProps.movies.nextPage'))->toBe(2);
+
+        $nextUrl = (string) collect($response->inertiaProps('movies.meta.links'))->last()['url'];
+
+        expect($nextUrl)->toContain('page=2')
+            ->and(substr_count($nextUrl, 'page='))->toBe(1);
+    });
+
+    it('pages the popular listing in the very order it is sorted on', function () {
+        $user = User::factory()->create();
+
+        Source::factory()->create(['title' => 'Low', 'popularity' => 10]);
+        Source::factory()->create(['title' => 'Middle', 'popularity' => 20]);
+        Source::factory()->create(['title' => 'High', 'popularity' => 30]);
+        Source::factory()->create(['title' => 'Unknown', 'popularity' => null]);
+
+        expect(orderedTitles($this->actingAs($user)->get(route('movies.index', ['perPage' => 2, 'page' => 1]))))
+            ->toBe(['High', 'Middle']);
+        expect(orderedTitles($this->actingAs($user)->get(route('movies.index', ['perPage' => 2, 'page' => 2]))))
+            ->toBe(['Low', 'Unknown']);
+    });
+
+    it('pages a descending sort of films sharing the same criterion', function () {
+        $user = User::factory()->create();
+
+        foreach (['A', 'B', 'C', 'D'] as $title) {
+            Source::factory()->create(['title' => $title, 'release_year' => 1930, 'popularity' => null]);
+        }
+
+        $pages = [
+            collect($this->actingAs($user)->get(route('movies.index', ['sort' => 'year', 'dir' => 'desc', 'perPage' => 2, 'page' => 1]))
+                ->inertiaProps('movies.data'))->pluck('title')->all(),
+            collect($this->actingAs($user)->get(route('movies.index', ['sort' => 'year', 'dir' => 'desc', 'perPage' => 2, 'page' => 2]))
+                ->inertiaProps('movies.data'))->pluck('title')->all(),
+        ];
+
+        expect($pages[0])->toHaveCount(2)
+            ->and($pages[1])->toHaveCount(2)
+            ->and(array_intersect($pages[0], $pages[1]))->toBe([]);
+    });
+
+    it('stops the infinite scroll once every source ran out of distinct films', function () {
+        $user = User::factory()->create();
+
+        foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $title) {
+            Source::factory()->forSource(MovieSource::Wikidata)->create(['title' => $title]);
+        }
+
+        // The whitelist offers two of them again, so the source totals alone would
+        // promise more films than the merged listing can ever hand over.
+        foreach (['E', 'F'] as $title) {
+            Source::factory()
+                ->forSource(MovieSource::Whitelist)
+                ->duplicateOf(Source::query()->where('title', $title)->first())
+                ->create();
+        }
+
+        $response = $this->actingAs($user)->get(route('movies.index', ['perPage' => 1, 'page' => 7]));
+
+        $response->assertInertia(fn($assert) => $assert
+            ->has('movies.data', 0)
+            ->where('movies.meta.total', 6)
+        );
+
+        // The scroll metadata is a page level key, next to the props rather than inside them.
+        expect(data_get($response->viewData('page'), 'scrollProps.movies.nextPage'))->toBeNull();
     });
 });
 

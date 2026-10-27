@@ -126,7 +126,9 @@ describe('merged catalog search', function () {
         Source::factory()->forSource(MovieSource::Wikidata)->create(['imdb_id' => 'tt0000002', 'title' => 'M']);
         Source::factory()->forSource(MovieSource::Whitelist)->create(['imdb_id' => 'tt0000003', 'title' => 'Cops']);
 
-        $firstPage = $this->actingAs($user)->get(route('movies.index', ['perPage' => 2, 'page' => 1]));
+        $ordered = ['sort' => 'created_at', 'dir' => 'asc'];
+
+        $firstPage = $this->actingAs($user)->get(route('movies.index', [...$ordered, 'perPage' => 2, 'page' => 1]));
 
         $firstPage->assertInertia(fn($assert) => $assert
             ->has('movies.data', 2)
@@ -137,7 +139,7 @@ describe('merged catalog search', function () {
         expect(collect($firstPage->inertiaProps('movies.data'))->pluck('title')->all())
             ->toBe(['Metropolis', 'M']);
 
-        $secondPage = $this->actingAs($user)->get(route('movies.index', ['perPage' => 2, 'page' => 2]));
+        $secondPage = $this->actingAs($user)->get(route('movies.index', [...$ordered, 'perPage' => 2, 'page' => 2]));
 
         $secondPage->assertInertia(fn($assert) => $assert
             ->has('movies.data', 1)

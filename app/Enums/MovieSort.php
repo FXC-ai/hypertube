@@ -8,6 +8,7 @@ namespace App\Enums;
  */
 enum MovieSort: string
 {
+    case Popularity = 'popularity';
     case CreatedAt = 'created_at';
     case Name = 'name';
     case Year = 'year';
@@ -21,6 +22,7 @@ enum MovieSort: string
     public function column(): string
     {
         return match ($this) {
+            self::Popularity => 'popularity',
             self::CreatedAt => 'created_at',
             self::Name => 'title',
             self::Year => 'release_year',
@@ -34,6 +36,7 @@ enum MovieSort: string
     public function label(): string
     {
         return match ($this) {
+            self::Popularity => 'Popularity (downloads)',
             self::CreatedAt => 'Date added',
             self::Name => 'Name',
             self::Year => 'Production year',

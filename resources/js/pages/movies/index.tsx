@@ -25,7 +25,7 @@ import {
 import { edit as editSources } from '@/routes/sources';
 
 type WatchedFilter = 'all' | 'watched' | 'unwatched';
-type SortKey = 'created_at' | 'name' | 'year' | 'rating';
+type SortKey = 'popularity' | 'created_at' | 'name' | 'year' | 'rating';
 type SortDirection = 'asc' | 'desc';
 
 type Movie = {
@@ -35,6 +35,7 @@ type Movie = {
     imdb_id: string;
     watched: boolean;
     release_year: number | null;
+    popularity: number | null;
     genres: string[];
     data: Record<string, unknown> & {
         poster?: string | null;
@@ -94,8 +95,8 @@ function queryFor(filters: MovieFilters, patch: Partial<MovieFilters>) {
 
     return {
         search: merged.search || undefined,
-        sort: merged.sort === 'created_at' ? undefined : merged.sort,
-        dir: merged.dir === 'asc' ? undefined : merged.dir,
+        sort: merged.sort,
+        dir: merged.dir,
         genre: merged.genre || undefined,
         yearFrom: merged.yearFrom ?? undefined,
         yearTo: merged.yearTo ?? undefined,
@@ -135,6 +136,10 @@ function productionYear(movie: Movie): string | null {
     return typeof year === 'string' && year !== 'N/A' ? year : null;
 }
 
+function formatDownloads(count: number): string {
+    return new Intl.NumberFormat('en-US').format(count);
+}
+
 function MovieCard({ movie }: { movie: Movie }) {
     return (
         <div className="flex w-64 flex-col items-center gap-1 p-4">
@@ -159,6 +164,18 @@ function MovieCard({ movie }: { movie: Movie }) {
                             alt="stars"
                         />
                     </div>
+                )}
+
+                {movie.popularity ? (
+                    <div
+                        className="absolute bottom-3 left-3 rounded-lg bg-stone-900 px-2 py-1 text-xs"
+                        title={`${formatDownloads(movie.popularity)} downloads on archive.org`}
+                    >
+                        {formatDownloads(movie.popularity)}
+                        <span className="ml-1 text-white/70">downloads</span>
+                    </div>
+                ) : (
+                    <></>
                 )}
 
                 <Badge

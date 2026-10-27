@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Cache;
     'title',
     'titles',
     'torrent_url',
+    'internet_archive_id',
+    'popularity',
     'release_year',
     'imdb_rating',
     'genres',
@@ -31,6 +33,8 @@ use Illuminate\Support\Facades\Cache;
  * @property string $title
  * @property array<string, string>|null $titles
  * @property string|null $torrent_url
+ * @property string|null $internet_archive_id
+ * @property int|null $popularity
  * @property int|null $release_year
  * @property float|null $imdb_rating
  * @property string|null $genres
@@ -46,6 +50,7 @@ class Source extends Model
             'source' => MovieSource::class,
             'titles' => 'array',
             'imdb_rating' => 'float',
+            'popularity' => 'integer',
         ];
     }
 
@@ -55,6 +60,41 @@ class Source extends Model
     public static function firstForImdbId(string $imdbId): ?self
     {
         return self::where('imdb_id', $imdbId)->orderBy('id')->first();
+    }
+
+    /**
+     * The archive.org item a torrent link points to: the popularity of a movie is the
+     * download count of that item.
+     */
+    public static function identifierFromTorrentUrl(?string $torrentUrl): ?string
+    {
+        if ($torrentUrl === null) {
+            return null;
+        }
+
+        return preg_match('#archive\.org/download/([^/]+)/#', $torrentUrl, $matches) === 1
+            ? $matches[1]
+            : null;
+    }
+
+    /**
+     * The archive.org item of this entry, read from the link for the catalog rows
+     * imported before the identifier was kept.
+     */
+    public function archiveIdentifier(): ?string
+    {
+        return $this->internet_archive_id ?? self::identifierFromTorrentUrl($this->torrent_url);
+    }
+
+    /**
+     * The download count archive.org reports for an item, on every catalog entry
+     * offering it.
+     */
+    public static function storePopularity(string $identifier, int $downloads): void
+    {
+        self::query()
+            ->where('internet_archive_id', $identifier)
+            ->update(['popularity' => $downloads]);
     }
 
     /**

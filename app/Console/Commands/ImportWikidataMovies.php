@@ -16,7 +16,7 @@ const WHITELIST = [
     "tt42576262",
 ];
 
-#[Signature('import:wikidata-movies {--limit=1000000} {--dry-run} {--batch-size=1000} {--enrich=0}')]
+#[Signature('import:wikidata-movies {--limit=1000000} {--dry-run} {--batch-size=1000} {--enrich=0} {--popularity=200}')]
 #[Description('Import public domain films from Wikidata into the sources catalog table')]
 class ImportWikidataMovies extends Command
 {
@@ -27,6 +27,7 @@ class ImportWikidataMovies extends Command
             ['batch-size', null, InputOption::VALUE_OPTIONAL, 'Batch size for insert', 1000],
             ['dry-run', null, InputOption::VALUE_NONE, 'Show what would be imported without saving'],
             ['enrich', null, InputOption::VALUE_OPTIONAL, 'Fetch OMDb metadata for that many entries missing their IMDb grade', 0],
+            ['popularity', null, InputOption::VALUE_OPTIONAL, 'Fetch the archive.org download counts of that many entries missing them', 0],
         ];
     }
 
@@ -35,9 +36,11 @@ class ImportWikidataMovies extends Command
         $limit = (int) $this->option('limit');
         $batchSize = (int) $this->option('batch-size');
         $dryRun = $this->option('dry-run');
+        $popularityLimit = (int) ($this->option('popularity') ?? 0);
+        $enrichLimit = (int) ($this->option('enrich') ?? 0);
 
         $this->info('🎬 Importing public domain films from Wikidata...');
-        $this->info("Limit: {$limit} | Batch: {$batchSize} | Mode: " . ($dryRun ? 'DRY RUN' : 'LIVE'));
+        $this->info("Limit: {$limit} | Batch: {$batchSize} | Enrich Limit: {$enrichLimit} | Popularity Limit: {$popularityLimit} | Mode: " . ($dryRun ? 'DRY RUN' : 'LIVE'));
 
         $source = WikidataSource::factory(MovieSource::Wikidata);
 
@@ -57,15 +60,17 @@ class ImportWikidataMovies extends Command
 
         $this->newLine();
         $this->info('🎉 Import complete!');
-        $this->line('   '.($dryRun ? 'Would insert' : 'Inserted').':   '.$entryCount);
-        $this->line('   Whitelisted: '.count(WHITELIST));
+        $this->line('   ' . ($dryRun ? 'Would insert' : 'Inserted') . ':   ' . $entryCount);
+        $this->line('   Whitelisted: ' . count(WHITELIST));
 
-        $enrichLimit = (int) ($this->option('enrich') ?? 0);
-
-        if ($enrichLimit > 0 && ! $dryRun) {
+        if ($enrichLimit > 0 && !$dryRun) {
             $enriched = $this->enrichWithOmdbMetadata($enrichLimit);
 
-            $this->line('   OMDb enriched: '.$enriched.'/'.$enrichLimit.' (IMDb grade used by the filters)');
+            $this->line('   OMDb enriched: ' . $enriched . '/' . $enrichLimit . ' (IMDb grade used by the filters)');
+        }
+
+        if ($popularityLimit > 0 && !$dryRun) {
+            $this->call('archive:fetch-popularity', ['--limit' => $popularityLimit]);
         }
 
         return self::SUCCESS;
