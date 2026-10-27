@@ -7,7 +7,6 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'imdb_id',
@@ -41,8 +40,6 @@ class MovieData extends Model
             'awards' => 'array',
             'release_date' => 'date',
             'imdbRating' => 'float',
-            'imdbVotes' => 'integer',
-            'boxOffice' => 'float',
         ];
     }
 
@@ -68,7 +65,7 @@ class MovieData extends Model
                 'language' => isset($data['Language']) ? explode(',', $data['Language']) : null,
                 'awards' => isset($data['Awards']) ? ['text' => $data['Awards']] : null,
                 'imdbRating' => isset($data['imdbRating']) && ($data['imdbRating'] != 'N/A') ? $data['imdbRating'] : null,
-                'imdbVotes' =>  isset($data['imdbVotes']) && ($data['imdbVotes'] != 'N/A') ? $data['imdbVotes'] : null,
+                'imdbVotes' => isset($data['imdbVotes']) && ($data['imdbVotes'] != 'N/A') ? $data['imdbVotes'] : null,
                 'boxOffice' => isset($data['BoxOffice']) && ($data['BoxOffice'] != 'N/A') ? $data['BoxOffice'] : null,
                 'release_date' => isset($data['Released']) && $data['Released'] != 'N/A' ? Carbon::parse($data['Released']) : null,
             ],

@@ -28,6 +28,17 @@ import type { Comment } from '@/types/comment';
 type ConversionStatus =
     'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
 
+type DownloadStatus =
+    | 'pending'
+    | 'downloading'
+    | 'completed'
+    | 'failed'
+    | 'unsupported'
+    | 'purging';
+
+type ExternalSubtitleStatus =
+    'none' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed';
+
 type OmdbData = {
     imdbID: string;
     year: string;
@@ -47,17 +58,29 @@ type OmdbData = {
     boxOffice: number | null;
 } | null;
 
+type ExternalSubtitleTrack = {
+    id: number;
+    label: string;
+    language: string;
+    url: string;
+};
+
 type MoviePageData = {
     id: number;
     title: string;
     filename: string | null;
     source: string | null;
+    download_status: DownloadStatus;
+    download_error: string | null;
     conversion_attempt: string | null;
     conversion_status: ConversionStatus;
     conversion_error: string | null;
+    can_prepare: boolean;
     playable: boolean;
     preferredlanguage: string;
     movieData: OmdbData;
+    external_subtitles_status: ExternalSubtitleStatus;
+    external_subtitles: ExternalSubtitleTrack[];
 };
 
 type MovieShowProps = {
@@ -82,9 +105,11 @@ const conversionStatusLabel: Record<ConversionStatus, string> = {
 function HlsPlayer({
     src,
     preferredlanguage,
+    externalSubtitles,
 }: {
     src: string;
     preferredlanguage: string;
+    externalSubtitles: ExternalSubtitleTrack[];
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -190,12 +215,17 @@ function HlsPlayer({
     }, [preferredlanguage, src]);
 
     return (
-        <video
-            ref={videoRef}
-            className="aspect-video w-full bg-black object-contain"
-            controls
-            preload="metadata"
-        />
+        <video ref={videoRef} controls className="w-full">
+            {externalSubtitles.map((subtitle) => (
+                <track
+                    key={subtitle.id}
+                    kind="subtitles"
+                    src={subtitle.url}
+                    srcLang={subtitle.language}
+                    label={subtitle.label}
+                />
+            ))}
+        </video>
     );
 }
 
@@ -205,16 +235,45 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
     const isPreparing = ['queued', 'converting'].includes(
         moviePageData.conversion_status,
     );
-    const statusLabel = conversionStatusLabel[moviePageData.conversion_status];
+    const isUnsupported = moviePageData.download_status === 'unsupported';
+    const isPurging = moviePageData.download_status === 'purging';
+
+    const statusLabel = isPurging
+        ? 'Cleaning up stored video'
+        : isUnsupported
+          ? 'Unsupported torrent'
+          : conversionStatusLabel[moviePageData.conversion_status];
+
+    const displayedError = isPurging
+        ? null
+        : isUnsupported
+          ? moviePageData.download_error
+          : moviePageData.conversion_error;
+
+    const videoIsPlayable = moviePageData.playable;
+
+    const subtitlesAreTerminal = ['none', 'ready', 'failed'].includes(
+        moviePageData.external_subtitles_status,
+    );
 
     useEffect(() => {
         if (
-            moviePageData.conversion_status === 'playable' ||
-            moviePageData.conversion_status === 'failed'
+            !isPurging &&
+            (isUnsupported ||
+                moviePageData.conversion_status === 'failed' ||
+                (videoIsPlayable && subtitlesAreTerminal))
         ) {
             stop();
         }
-    }, [moviePageData.conversion_status, stop]);
+    }, [
+        isUnsupported,
+        moviePageData.conversion_status,
+        moviePageData.external_subtitles_status,
+        stop,
+        subtitlesAreTerminal,
+        videoIsPlayable,
+        isPurging,
+    ]);
 
     const startConversion = (): void => {
         conversionForm.post(conversionStore.url(moviePageData.id), {
@@ -252,16 +311,14 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                 <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
                     <Card className="overflow-hidden border-border/60 bg-black p-0 shadow-xl">
                         {moviePageData.playable &&
-                            moviePageData.conversion_attempt !== null ? (
+                        moviePageData.conversion_attempt !== null ? (
                             <HlsPlayer
-                                /*                                 src={manifest.url({
-                                                                        movie: moviePageData.id,
-                                                                        conversion_attempt: moviePageData.conversion_attempt
-                                                                    })} */
-
                                 src={`/storage/movies/${moviePageData.id}/hls/${moviePageData.conversion_attempt}/index.m3u8`}
                                 preferredlanguage={
                                     moviePageData.preferredlanguage
+                                }
+                                externalSubtitles={
+                                    moviePageData.external_subtitles
                                 }
                             />
                         ) : (
@@ -273,14 +330,22 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                 )}
                                 <div>
                                     <p className="font-medium text-foreground">
-                                        {isPreparing
-                                            ? 'The video is being prepared'
-                                            : 'The video is not available yet'}
+                                        {isPurging
+                                            ? 'This video is currently being cleaned up.'
+                                            : isUnsupported
+                                              ? 'This torrent has no supported video'
+                                              : isPreparing
+                                                ? 'The video is being prepared'
+                                                : 'The video is not available yet'}
                                     </p>
                                     <p className="mt-1 text-sm">
-                                        {isPreparing
-                                            ? 'This page will update automatically.'
-                                            : 'Prepare the video to start watching.'}
+                                        {isPurging
+                                            ? 'Please try again shortly.'
+                                            : isUnsupported
+                                              ? 'No MP4 or MKV file was found.'
+                                              : isPreparing
+                                                ? 'This page will update automatically.'
+                                                : 'Prepare the video to start watching.'}
                                     </p>
                                 </div>
                             </div>
@@ -321,14 +386,16 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                     #{moviePageData.id}
                                 </span>
                             </div>
-                            {moviePageData.conversion_error && (
+                            {displayedError && (
                                 <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                                    {moviePageData.conversion_error}
+                                    {displayedError}
                                 </p>
                             )}
-                            {(moviePageData.conversion_status === 'pending' ||
-                                moviePageData.conversion_status ===
-                                'failed') && (
+                            {moviePageData.can_prepare &&
+                                (moviePageData.conversion_status ===
+                                    'pending' ||
+                                    moviePageData.conversion_status ===
+                                        'failed') && (
                                     <Button
                                         type="button"
                                         className="w-full"
@@ -336,13 +403,13 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                         onClick={startConversion}
                                     >
                                         {moviePageData.conversion_status ===
-                                            'failed' ? (
+                                        'failed' ? (
                                             <RotateCcw />
                                         ) : (
                                             <Play />
                                         )}
                                         {moviePageData.conversion_status ===
-                                            'failed'
+                                        'failed'
                                             ? 'Retry'
                                             : 'Prepare video'}
                                     </Button>

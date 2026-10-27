@@ -12,6 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('movie_data', function (Blueprint $table) {
+            $table->id();
             $table->string('imdb_id')->unique();
             $table->string('source');
             $table->date('release_date')->nullable();

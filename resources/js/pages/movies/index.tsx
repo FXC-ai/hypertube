@@ -1,4 +1,5 @@
-import { Form, Head, InfiniteScroll, Link } from '@inertiajs/react';
+import { Form, Head, InfiniteScroll, Link, router } from '@inertiajs/react';
+import { Check } from 'lucide-react';
 import MovieController from '@/actions/App/Http/Controllers/MovieController';
 import Heading from '@/components/heading';
 
@@ -8,12 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
     index,
     select as selectMovie,
     show as showMovie,
 } from '@/routes/movies';
 import { edit as editSources } from '@/routes/sources';
+
+type WatchedFilter = 'all' | 'watched' | 'unwatched';
 
 type Movie = {
     id: number | null;
@@ -35,6 +39,7 @@ type MovieIndexProps = {
     };
     filters: {
         search: string | null;
+        watched: WatchedFilter;
         sources: string[];
     };
 };
@@ -43,6 +48,12 @@ const sourceLabels: Record<string, string> = {
     wikidata: 'Wikidata',
     whitelist: 'Whitelist',
 };
+
+const watchedFilterOptions: { value: WatchedFilter; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'watched', label: 'Watched' },
+    { value: 'unwatched', label: 'Unwatched' },
+];
 
 function formatRegistrationDate(date: string): string {
     return new Intl.DateTimeFormat('fr-FR', {
@@ -86,8 +97,12 @@ function MovieCard({ movie }: { movie: Movie }) {
                     {sourceLabels[movie.source] ?? movie.source}
                 </Badge>
                 {movie.watched && (
-                    <span className="absolute top-3 right-3 rounded-full bg-white p-1 text-xl text-blue-500">
-                        <img className="w-5" src="/watched.svg" alt="✓" />
+                    <span
+                        className="absolute top-3 right-3 flex items-center rounded-full bg-white p-1 text-blue-600 shadow ring-2 ring-black/5"
+                        title="Already watched"
+                    >
+                        <Check className="size-5" strokeWidth={3} aria-hidden />
+                        <span className="sr-only">Watched</span>
                     </span>
                 )}
             </div>
@@ -128,6 +143,21 @@ function MovieItem({ movie }: { movie: Movie }) {
 }
 
 export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
+    const watched = filters.watched ?? 'all';
+    const hasFilters = filters.search != null || watched !== 'all';
+
+    function selectWatchedFilter(value: WatchedFilter) {
+        router.visit(
+            index.url({
+                query: {
+                    search: filters.search || undefined,
+                    watched: value === 'all' ? undefined : value,
+                },
+            }),
+            { preserveScroll: true, replace: true },
+        );
+    }
+
     return (
         <>
             <Head title="Movies" />
@@ -182,7 +212,28 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                     </Form>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        {filters.search && (
+                        <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            value={watched}
+                            onValueChange={(value) => {
+                                if (value) {
+                                    selectWatchedFilter(value as WatchedFilter);
+                                }
+                            }}
+                        >
+                            {watchedFilterOptions.map(({ value, label }) => (
+                                <ToggleGroupItem
+                                    key={value}
+                                    value={value}
+                                    aria-label={`Show ${label.toLowerCase()} movies`}
+                                >
+                                    {label}
+                                </ToggleGroupItem>
+                            ))}
+                        </ToggleGroup>
+
+                        {hasFilters && (
                             <Button variant="outline" asChild>
                                 <Link href={index()} replace>
                                     Clear filters
@@ -216,7 +267,7 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                     </InfiniteScroll>
                 ) : filters.search != null ? (
                     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                        {`No movie found for ${filters.search}.`}
+                        {`No movie found for title ${filters.search}.`}
                     </div>
                 ) : (
                     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">

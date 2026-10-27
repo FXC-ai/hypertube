@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class MovieDataFactory extends Factory
 {
     /**
-     * Define the model's default state (canonical OMDb metadata).
+     * Define the model's default state: the canonical metadata of a movie.
      *
      * @return array<string, mixed>
      */
@@ -20,21 +20,65 @@ class MovieDataFactory extends Factory
     {
         return [
             'source' => MovieSource::Omdb->value,
-            'imdb_id' => 'tt' . fake()->numerify('######'),
-            'release_date' => fake()->date(),
-            'poster' => fake()->imageUrl(),
+            'imdb_id' => 'tt' . fake()->unique()->numerify('#######'),
+            'release_date' => fake()->dateTimeBetween('-100 years', 'now'),
+            'poster' => fake()->imageUrl(600, 900, 'movies'),
             'plot' => fake()->paragraph(),
-            'genres' => [fake()->word()],
-            'runtime' => fake()->numberBetween(60, 180),
-            'actors' => [fake()->name()],
+            'genres' => fake()->randomElements([
+                'Action',
+                'Comedy',
+                'Drama',
+                'Horror',
+                'Romance',
+                'Science Fiction',
+                'Thriller',
+            ], fake()->numberBetween(1, 3)),
+            'runtime' => fake()->numberBetween(60, 210),
+            'actors' => [
+                fake()->name(),
+                fake()->name(),
+                fake()->name(),
+            ],
             'director' => fake()->name(),
-            'writers' => [fake()->name()],
-            'rated' => fake()->randomElement(['G', 'PG', 'R']),
-            'language' => ['en'],
+            'writers' => [
+                fake()->name(),
+                fake()->name(),
+            ],
+            'rated' => fake()->randomElement([
+                'G',
+                'PG',
+                'PG-13',
+                'R',
+                'Not Rated',
+            ]),
+            'language' => fake()->randomElements([
+                'English',
+                'French',
+                'German',
+                'Italian',
+                'Spanish',
+            ], fake()->numberBetween(1, 2)),
             'imdbRating' => fake()->randomFloat(1, 1, 10),
-            'imdbVotes' => fake()->numberBetween(100, 100000),
-            'boxOffice' => null,
-            'awards' => null,
+            'imdbVotes' => fake()->numberBetween(100, 2_000_000),
+            'boxOffice' => fake()->randomFloat(2, 10_000, 500_000_000),
+            'awards' => [
+                'text' => fake()->sentence(),
+            ],
         ];
+    }
+
+    /**
+     * The metadata of a movie the catalog already offers.
+     */
+    public function forImdbId(string $imdbId): static
+    {
+        return $this->state(fn(): array => ['imdb_id' => $imdbId]);
+    }
+
+    public function withoutPoster(): static
+    {
+        return $this->state(fn(): array => [
+            'poster' => null,
+        ]);
     }
 }

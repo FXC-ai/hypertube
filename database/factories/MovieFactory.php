@@ -27,7 +27,7 @@ class MovieFactory extends Factory
 
         return [
             'filename' => $filename,
-            'imdb_id' => 'tt' . fake()->numerify('######'),
+            'imdb_id' => 'fake_imdb_id' . fake()->numerify('######'),
             'torrent_url' => null,
             ...$this->conversionAttributes($status),
         ];
@@ -38,9 +38,13 @@ class MovieFactory extends Factory
      */
     public function withCatalogEntry(?string $title = null, MovieSource $source = MovieSource::Wikidata): static
     {
-        return $this->has(
-            SourceFactory::new(['title' => $title ?? fake()->sentence(3), 'source' => $source->value])
-        );
+        return $this->afterCreating(function (Movie $movie) use ($title, $source): void {
+            SourceFactory::new([
+                'imdb_id' => $movie->imdb_id,
+                'title' => $title ?? fake()->sentence(3),
+                'source' => $source->value,
+            ])->create();
+        });
     }
 
     public function withConversionStatus(ConversionStatus $status): static

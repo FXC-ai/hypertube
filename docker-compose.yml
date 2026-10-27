@@ -1,5 +1,4 @@
 services:
-
   nginx:
     image: nginx:alpine
     ports:
@@ -23,6 +22,34 @@ services:
     volumes:
       - .:/var/www/html
     entrypoint: ./docker/entrypoint.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/hypertube-app-ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WWW_USER: "${HOST_UID:-1000}"
+        WWW_GROUP: "${HOST_GID:-1000}"
+    user: root
+    volumes:
+      - .:/var/www/html
+    environment:
+      MOVIE_CLEANUP_TIME: "${MOVIE_CLEANUP_TIME:-03:00}"
+    entrypoint: ./docker/scheduler-entrypoint.sh
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
   client-torrent:
     build:
@@ -35,3 +62,25 @@ services:
     volumes:
       - ./storage:/var/www/html/storage
 
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: "${DB_DATABASE:-hypertube}"
+      POSTGRES_USER: "${DB_USERNAME:-hypertube}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME:-hypertube} -d ${DB_DATABASE:-hypertube}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:

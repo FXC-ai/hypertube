@@ -4,6 +4,7 @@ use App\Enums\MovieSource;
 use App\Models\Movie;
 use App\Models\Source;
 use App\Models\User;
+use App\Models\WatchedMovie;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -101,10 +102,11 @@ describe('merged catalog search', function () {
         $response->assertInertia(fn($assert) => $assert->where('filters.search', 'cop'));
     });
 
-    it('marks the movies already loaded on this server', function () {
+    it('links the results to the movies already loaded on this server', function () {
         $user = User::factory()->create();
 
         $movie = Movie::factory()->create(['imdb_id' => 'tt0000001']);
+        WatchedMovie::factory()->create(['movie_id' => $movie->id, 'user_id' => $user->id]);
         Source::factory()->forSource(MovieSource::Wikidata)->create(['imdb_id' => 'tt0000001', 'title' => 'Metropolis']);
         Source::factory()->forSource(MovieSource::Whitelist)->create(['imdb_id' => 'tt0000003', 'title' => 'Cops']);
 
@@ -133,13 +135,13 @@ describe('merged catalog search', function () {
         );
 
         expect(collect($firstPage->inertiaProps('movies.data'))->pluck('title')->all())
-            ->toBe(['Cops', 'M']);
+            ->toBe(['Metropolis', 'M']);
 
         $secondPage = $this->actingAs($user)->get(route('movies.index', ['perPage' => 2, 'page' => 2]));
 
         $secondPage->assertInertia(fn($assert) => $assert
             ->has('movies.data', 1)
-            ->where('movies.data.0.title', 'Metropolis')
+            ->where('movies.data.0.title', 'Cops')
         );
     });
 
@@ -161,6 +163,8 @@ describe('merged catalog search', function () {
             );
 
         expect(Source::count())->toBe(1);
-        Http::assertSentCount(1);
+        expect(collect(Http::recorded())
+            ->filter(fn(array $recorded): bool => str_starts_with($recorded[0]->url(), 'http://www.omdbapi.com/'))
+            ->count())->toBe(1);
     });
 });

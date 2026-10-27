@@ -2,9 +2,13 @@
 
 namespace App\Services\Sources;
 
+use App\Data\MovieSearch;
 use App\Enums\MovieSource;
+use App\Enums\WatchedFilter;
 use App\Models\Source;
-use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Throwable;
@@ -35,28 +39,54 @@ final class WikidataSource implements MovieSourceProvider
     /**
      * @return array{items: list<Source>, total: int}
      */
-    public function search(Request $request, string $term, int $page, int $perPage): array
+    public function search(MovieSearch $criteria): array
     {
         $query = Source::query()->where('source', $this->source->value);
 
-        if ($term !== '') {
-            $query->where('title', 'like', '%'.$term.'%');
+        if ($criteria->term !== '') {
+            $query->where('title', 'like', '%'.$criteria->term.'%');
         }
 
-        $sort = in_array($request->input('sort'), ['created_at', 'title'], true) ? $request->input('sort') : 'created_at';
-        $dir = $request->input('dir') === 'asc' ? 'asc' : 'desc';
+        $this->restrictToWatched($query, $criteria);
+
+        $sort = in_array($criteria->sort, ['created_at', 'title'], true) ? $criteria->sort : 'created_at';
 
         // The merged listing slices a window built from every source, so this one has
         // to hand over enough rows to cover the requested page.
         $window = $query
-            ->orderBy($sort, $dir)
-            ->orderBy('id', $dir)
-            ->paginate($page * $perPage, ['*'], 'page', 1);
+            ->orderBy($sort, $criteria->direction)
+            ->orderBy('id', $criteria->direction)
+            ->paginate($criteria->windowSize(), ['*'], 'page', 1);
 
         return [
             'items' => array_values($window->getCollection()->all()),
             'total' => $window->total(),
         ];
+    }
+
+    /**
+     * The catalog lives in this database, so the watched restriction of the user can
+     * be applied here instead of after the sources have been merged.
+     */
+    private function restrictToWatched(Builder $query, MovieSearch $criteria): void
+    {
+        if ($criteria->watched === WatchedFilter::All) {
+            return;
+        }
+
+        $isWatched = fn(QueryBuilder $watched): QueryBuilder => $watched
+            ->select(DB::raw(1))
+            ->from('movies')
+            ->whereColumn('movies.imdb_id', 'sources.imdb_id')
+            ->whereExists(fn(QueryBuilder $viewer): QueryBuilder => $viewer
+                ->select(DB::raw(1))
+                ->from('watched_movies')
+                ->whereColumn('watched_movies.movie_id', 'movies.id')
+                ->where('watched_movies.user_id', $criteria->userId));
+
+        $criteria->watched === WatchedFilter::Watched
+            ? $query->whereExists($isWatched)
+            : $query->whereNotExists($isWatched);
     }
 
     public function entry(string $imdbId): ?Source

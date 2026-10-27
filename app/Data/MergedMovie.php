@@ -19,10 +19,10 @@ final readonly class MergedMovie
     ) {}
 
     /**
-     * The movie was already loaded on this server.
+     * The movie is on this server and the user asking for it already watched it.
      */
-    public function isLocal(): bool
+    public function isWatched(): bool
     {
-        return $this->movie !== null;
+        return $this->movie !== null && (bool) $this->movie->watched;
     }
 }

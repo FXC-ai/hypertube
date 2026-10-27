@@ -11,10 +11,13 @@ RUN apt-get update \
         libjpeg62-turbo-dev \
         libonig-dev \
         libpng-dev \
+        libpq-dev \
         libsqlite3-dev \
         libzip-dev \
         unzip \
         zip \
+        libicu-dev \
+        cron \
     && docker-php-ext-configure gd --with-jpeg \
     && docker-php-ext-install \
         bcmath \
@@ -23,8 +26,10 @@ RUN apt-get update \
         mbstring \
         pcntl \
         pdo \
+        pdo_pgsql \
         pdo_sqlite \
         zip \
+        intl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

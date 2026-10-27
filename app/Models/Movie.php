@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ConversionStatus;
 use App\Enums\DownloadStatus;
+use App\Enums\ExternalSubtitleStatus;
 use App\Enums\MovieSource;
 use App\Services\OmdbService;
 use Database\Factories\MovieFactory;
@@ -27,6 +28,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'download_id',
     'download_file_index',
     'download_error',
+    'external_subtitles',
+    'external_subtitles_status',
 ])]
 
 /**
@@ -63,6 +66,14 @@ class Movie extends Model
     public function sourceEntries(): HasMany
     {
         return $this->hasMany(Source::class, 'imdb_id', 'imdb_id')->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<WatchedMovie, $this>
+     */
+    public function watchedMovies(): HasMany
+    {
+        return $this->hasMany(WatchedMovie::class);
     }
 
     /**
@@ -117,14 +128,18 @@ class Movie extends Model
             'conversion_started_at' => 'datetime',
             'conversion_playable_at' => 'datetime',
             'conversion_completed_at' => 'datetime',
+            'external_subtitles' => 'array',
+            'external_subtitles_status' => ExternalSubtitleStatus::class,
+            'last_watched_at' => 'datetime',
         ];
     }
 
     public function isPlayable(): bool
     {
-        return in_array($this->conversion_status, [
-            ConversionStatus::Playable,
-            ConversionStatus::Converted,
-        ], true);
+        return $this->download_status !== DownloadStatus::Purging
+            && in_array($this->conversion_status, [
+                ConversionStatus::Playable,
+                ConversionStatus::Converted,
+            ], true);
     }
 }

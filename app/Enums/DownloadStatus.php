@@ -8,4 +8,6 @@ enum DownloadStatus: string
     case Downloading = 'downloading';
     case Completed = 'completed';
     case Failed = 'failed';
+    case Unsupported = 'unsupported';
+    case Purging = 'purging';
 }

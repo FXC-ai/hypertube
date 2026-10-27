@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\DownloadStatus;
+use App\Enums\ExternalSubtitleStatus;
 use App\Exceptions\TorrentClientException;
 use App\Models\Movie;
 use App\Services\Torrent\TorrentClient;
@@ -24,7 +25,8 @@ final class MonitorDownload implements ShouldQueue
 
     public int $tries = 1;
 
-    public function __construct(public int $movieId) {
+    public function __construct(public int $movieId)
+    {
         $this->onConnection('monitoring');
         $this->onQueue('monitoring');
     }
@@ -65,17 +67,17 @@ final class MonitorDownload implements ShouldQueue
             $download = $torrentClient->status($movie->download_id);
 
             Log::channel('my_debug')->info(
-                'Statut du téléchargement : ' . json_encode(
+                'Statut du téléchargement : '.json_encode(
                     [
                         'movie_id' => $this->movieId,
                         'id' => $download['id'] ?? $movie->download_id,
                         'status' => $download['status'] ?? null,
                         'piecesCompleted' => isset($download['piecesCompleted'], $download['totalPieces'])
-                            ? $download['piecesCompleted'] . ' / ' . $download['totalPieces']
+                            ? $download['piecesCompleted'].' / '.$download['totalPieces']
                             : null,
                     ],
                     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-                ) . "\n",
+                )."\n",
             );
         } catch (TorrentClientException $exception) {
             Log::channel('my_debug')->warning(
@@ -98,15 +100,28 @@ final class MonitorDownload implements ShouldQueue
             return;
         }
 
+        $hasExternalSubtitles = ($movie->external_subtitles ?? []) !== [];
+
         $update = match ($download['status'] ?? null) {
             null => [
                 'download_status' => DownloadStatus::Failed->value,
                 'download_error' => 'The Client Torrent no longer knows this download (restarted?).',
+                'external_subtitles_status' => $hasExternalSubtitles
+                    ? ExternalSubtitleStatus::Failed->value
+                    : ExternalSubtitleStatus::None->value,
             ],
-            'completed' => ['download_status' => DownloadStatus::Completed->value],
+            'completed' => [
+                'download_status' => DownloadStatus::Completed->value,
+                'external_subtitles_status' => $hasExternalSubtitles
+                    ? ExternalSubtitleStatus::Queued->value
+                    : ExternalSubtitleStatus::None->value,
+            ],
             'failed', 'cancelled' => [
                 'download_status' => DownloadStatus::Failed->value,
                 'download_error' => $download['error'] ?? "Download {$download['status']}.",
+                'external_subtitles_status' => $hasExternalSubtitles
+                    ? ExternalSubtitleStatus::Failed->value
+                    : ExternalSubtitleStatus::None->value,
             ],
             default => null,
         };
@@ -120,6 +135,7 @@ final class MonitorDownload implements ShouldQueue
         $updated = Movie::query()
             ->whereKey($movie->id)
             ->where('download_id', $movie->download_id)
+            ->where('download_status', DownloadStatus::Downloading->value)
             ->update($update);
 
         if ($updated !== 1) {
@@ -137,6 +153,10 @@ final class MonitorDownload implements ShouldQueue
         }
 
         if ($update['download_status'] === DownloadStatus::Completed->value) {
+            if ($hasExternalSubtitles) {
+                PrepareExternalSubtitles::dispatch($movie->id)->afterCommit();
+            }
+
             Log::channel('my_debug')->info(
                 "Le téléchargement du film est terminé.\n".json_encode(
                     [

@@ -9,8 +9,6 @@ use JsonException;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
-use App\Services\Media\MovieInput;
-
 final class MediaProbe
 {
     public function probe(MovieInput $movieInput): MediaInfo
@@ -25,6 +23,7 @@ final class MediaProbe
             'error',
             ...$movieInput->inputOptions(),
             '-show_streams',
+            '-show_format',
             '-of',
             'json',
             $movieInput->location,
@@ -47,6 +46,22 @@ final class MediaProbe
             throw new MediaConversionException('FFprobe response has no pist list.');
         }
 
+        $rawDuration = $decoded['format']['duration'] ?? null;
+
+        if (! is_numeric($rawDuration)) {
+            throw new MediaConversionException(
+                'FFprobe did not return a usable media duration.',
+            );
+        }
+
+        $durationSeconds = (float) $rawDuration;
+
+        if (! is_finite($durationSeconds) || $durationSeconds <= 0) {
+            throw new MediaConversionException(
+                'FFprobe returned an invalid media duration.',
+            );
+        }
+
         $streams = [];
 
         foreach ($decoded['streams'] as $rawStream) {
@@ -67,7 +82,7 @@ final class MediaProbe
             );
         }
 
-        return new MediaInfo($streams);
+        return new MediaInfo(streams: $streams, durationSeconds: $durationSeconds);
     }
 
     private function normalizeLanguage(?string $language): string

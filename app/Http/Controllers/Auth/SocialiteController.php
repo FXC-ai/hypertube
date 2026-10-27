@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
+use Illuminate\Http\Request;
 use Throwable;
 
 class SocialiteController extends Controller
@@ -43,7 +44,7 @@ class SocialiteController extends Controller
         }
 
         $suffix = substr(
-            hash('sha256', $provider.':'.$socialUser->getId()),
+            hash('sha256', $provider . ':' . $socialUser->getId()),
             0,
             3,
         );
@@ -52,7 +53,7 @@ class SocialiteController extends Controller
             $baseUsername,
             255 - strlen($suffix) - 1,
             '',
-        ).'-'.$suffix;
+        ) . '-' . $suffix;
     }
 
     private function downloadProfilepicture(?string $url): ?string
@@ -117,7 +118,7 @@ class SocialiteController extends Controller
             return null;
         }
 
-        $path = 'avatars/'.Str::uuid().'.'.$extension;
+        $path = 'avatars/' . Str::uuid() . '.' . $extension;
         Log::channel('my_debug')->debug('Return result of avatar storage', []);
 
         return Storage::disk('public')->put($path, $contents)
@@ -177,26 +178,54 @@ class SocialiteController extends Controller
         });
     }
 
-    public function callback(string $provider)
+    public function callback(Request $request, string $provider)
     {
+        Log::channel("my_debug")->info("callback appelé");
+        // on vérifie si le service externe a renvoyé une erreur
+        $providerError = $request->query('error');
+
+        if (is_string($providerError) && $providerError !== '') {
+            Log::warning('OAuth authorization was rejected by the provider.', [
+                'provider' => $provider,
+                'error' => in_array($providerError, [
+                    'access_denied',
+                    'server_error',
+                    'temporarily_unavailable',
+                ], true) ? $providerError : 'unknown',
+            ]);
+
+            return redirect()->route('login')->withErrors([
+                'social' => 'The external sign in request was cancelled or refused.',
+            ]);
+        }
+
         try {
             $socialUser = Socialite::driver($provider)->user();
+            if ($socialUser->getEmail() == null) {
+                return redirect()->route('login')->withErrors(
+                    [
+                        'social' => 'No mail adress had been provided to this provider account.',
+                    ]
+                );
+            }
+            $user = $this->findOrCreateUser($provider, $socialUser);
+
+            Auth::login($user, remember: true);
         } catch (InvalidStateException) {
             return redirect()->route('login')->withErrors([
                 'social' => 'That sign in attempt expired. Please try again.',
             ]);
-        }
+        } catch (Throwable $exception) {
+            report($exception);
 
-        if ($socialUser->getEmail() == null) {
             return redirect()->route('login')->withErrors([
-                'social' => 'No mail adress had been provided to this provider account.',
+                'social' => 'External sign in is temporarily unavailable. Please try again.',
             ]);
         }
 
-        $user = $this->findOrCreateUser($provider, $socialUser);
 
-        Auth::login($user, remember: true);
 
-        return redirect()->intended('/dashboard');
+
+        return redirect()->intended(route('movies.index', absolute: false));
     }
 }

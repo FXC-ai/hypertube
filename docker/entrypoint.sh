@@ -3,6 +3,7 @@
 set -e
 
 cd /var/www/html
+rm -f /tmp/hypertube-app-ready
 
 echo "Preparing Laravel..."
 
@@ -50,4 +51,5 @@ npm run dev -- --host 0.0.0.0 &
 # php artisan queue:listen --tries=1 --timeout=0 &
 
 echo "Starting PHP-FPM..."
+touch /tmp/hypertube-app-ready
 exec php-fpm -F

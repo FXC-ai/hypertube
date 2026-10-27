@@ -24,7 +24,7 @@ class IndexMovieResource extends JsonResource
             'source' => $this->resource->entry->source->value,
             'imdb_id' => $this->resource->entry->imdb_id,
             'created_at' => $this->resource->entry->created_at?->toIso8601String(),
-            'watched' => $this->resource->isLocal(),
+            'watched' => $this->resource->isWatched(),
             'data' => $this->resource->data?->displayArray(),
         ];
     }

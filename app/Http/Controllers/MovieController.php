@@ -3,18 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Data\MergedMovie;
+use App\Data\MovieSearch;
 use App\Enums\ConversionStatus;
+use App\Enums\DownloadStatus;
 use App\Enums\MovieSource;
+use App\Enums\WatchedFilter;
 use App\Http\Requests\IndexMovieRequest;
 use App\Http\Resources\CommentResource;
 use App\Http\Resources\IndexMovieResource;
 use App\Models\Movie;
 use App\Models\Source;
+use App\Models\WatchedMovie;
 use App\Services\OmdbService;
 use App\Services\Sources\SourceRegistry;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -30,6 +37,18 @@ class MovieController extends Controller
      */
     public function show(Movie $movie): InertiaResponse
     {
+        $movie = DB::transaction(function () use ($movie): Movie {
+            $lockedMovie = Movie::query()
+                ->lockForUpdate()
+                ->findOrFail($movie->id);
+
+            if ($lockedMovie->download_status !== DownloadStatus::Purging) {
+                WatchedMovie::markWatched(Auth::user(), $lockedMovie);
+            }
+
+            return $lockedMovie;
+        }, attempts: 3);
+
         return Inertia::render(
             'movies/show',
             [
@@ -44,6 +63,31 @@ class MovieController extends Controller
                     'playable' => $movie->isPlayable(),
                     'preferredlanguage' => Auth::user()->preferredlanguage?->value,
                     'movieData' => $movie->getEnrichedData()?->displayArray(),
+                    'download_status' => $movie->download_status->value,
+                    'download_error' => $movie->download_status === DownloadStatus::Unsupported
+                        ? $movie->download_error
+                        : null,
+                    'can_prepare' => ! in_array($movie->download_status, [
+                        DownloadStatus::Unsupported,
+                        DownloadStatus::Purging,
+                    ], true) && in_array($movie->conversion_status, [
+                        ConversionStatus::Pending,
+                        ConversionStatus::Failed,
+                    ], true),
+                    'external_subtitles_status' => $movie->external_subtitles_status->value,
+                    'external_subtitles' => $movie->download_status === DownloadStatus::Purging
+                        ? [] : collect($movie->external_subtitles ?? [])
+                            ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
+                            ->map(fn(array $subtitle): array => [
+                                'id' => $subtitle['file_index'],
+                                'label' => $subtitle['file_name'] . ' — External',
+                                'language' => $subtitle['language'],
+                                'url' => Storage::disk('public')->url(
+                                    "movies/{$movie->id}/{$subtitle['output_file']}"
+                                ),
+                            ])
+                            ->values()
+                            ->all(),
                 ],
                 'comments' => Inertia::scroll(
                     fn() => CommentResource::collection(
@@ -64,9 +108,20 @@ class MovieController extends Controller
         $search = $params['search'] ?? null;
         $page = (int) ($params['page'] ?? 1);
         $perPage = (int) ($params['perPage'] ?? 5);
-        $dir = ($params['dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $dir = ($params['dir'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $watched = WatchedFilter::from($params['watched'] ?? WatchedFilter::All->value);
+        $userId = Auth::id();
 
         $sources = $request->user()->enabledSources();
+        $criteria = new MovieSearch(
+            term: $search ?? '',
+            page: $page,
+            perPage: $perPage,
+            sort: $params['sort'] ?? 'created_at',
+            direction: $dir,
+            watched: $watched,
+            userId: $userId,
+        );
 
         $entries = [];
         $seen = [];
@@ -74,7 +129,7 @@ class MovieController extends Controller
         $total = 0;
 
         foreach ($sources as $source) {
-            $result = $this->registry->provider($source)->search($request, $search ?? '', $page, $perPage);
+            $result = $this->registry->provider($source)->search($criteria);
 
             foreach ($result['items'] as $entry) {
                 if (isset($seen[$entry->imdb_id])) {
@@ -103,6 +158,10 @@ class MovieController extends Controller
 
         $window = array_slice($entries, ($page - 1) * $perPage, $perPage);
         $localMovies = Movie::query()
+            ->withExists([
+                'watchedMovies as watched' => fn(Builder $query) => $query
+                    ->where('watched_movies.user_id', $userId),
+            ])
             ->whereIn('imdb_id', array_map(fn(Source $entry): string => $entry->imdb_id, $window))
             ->get()
             ->keyBy('imdb_id');
@@ -131,6 +190,7 @@ class MovieController extends Controller
                 'movies' => Inertia::scroll(fn() => IndexMovieResource::collection($movies)),
                 'filters' => [
                     'search' => $search,
+                    'watched' => $watched->value,
                     'sources' => array_map(fn(MovieSource $source): string => $source->value, $sources),
                 ],
             ]

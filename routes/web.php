@@ -11,12 +11,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
 
-Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->name('socialite.redirect');
-Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->name('socialite.callback');
-Route::whereIn('provider', ['github', 'fortytwo']);
+Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->whereIn('provider', ['github', 'fortytwo'])->name('socialite.redirect');
+Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->whereIn('provider', ['github', 'fortytwo'])->name('socialite.callback');
+
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'dashboard')->name('dashboard');
 
     Route::patch('/updateavatar', [ProfilePictureController::class, 'update'])->name('update.avatar');
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
@@ -38,4 +37,4 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
 });
 
-require __DIR__.'/settings.php';
+require __DIR__ . '/settings.php';
