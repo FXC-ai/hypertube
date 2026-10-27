@@ -7,6 +7,7 @@ use App\Data\MovieSearch;
 use App\Enums\ConversionStatus;
 use App\Enums\DownloadStatus;
 use App\Enums\MovieSource;
+use App\Enums\MovieSort;
 use App\Enums\WatchedFilter;
 use App\Http\Requests\IndexMovieRequest;
 use App\Http\Resources\CommentResource;
@@ -113,14 +114,26 @@ class MovieController extends Controller
         $userId = Auth::id();
 
         $sources = $request->user()->enabledSources();
+        $sourceValues = array_map(fn(MovieSource $source): string => $source->value, $sources);
+        // A search is ordered by name unless the listing asks for another criterion.
+        $sort = isset($params['sort'])
+            ? MovieSort::from($params['sort'])
+            : (filled($search) ? MovieSort::Name : MovieSort::CreatedAt);
+        $genre = filled($params['genre'] ?? null) ? (string) $params['genre'] : null;
+
         $criteria = new MovieSearch(
             term: $search ?? '',
             page: $page,
             perPage: $perPage,
-            sort: $params['sort'] ?? 'created_at',
+            sort: $sort,
             direction: $dir,
             watched: $watched,
             userId: $userId,
+            genre: $genre,
+            yearFrom: filled($params['yearFrom'] ?? null) ? (int) $params['yearFrom'] : null,
+            yearTo: filled($params['yearTo'] ?? null) ? (int) $params['yearTo'] : null,
+            ratingFrom: filled($params['ratingFrom'] ?? null) ? (float) $params['ratingFrom'] : null,
+            ratingTo: filled($params['ratingTo'] ?? null) ? (float) $params['ratingTo'] : null,
         );
 
         $entries = [];
@@ -146,8 +159,20 @@ class MovieController extends Controller
             $total += $result['total'];
         }
 
-        usort($entries, function (Source $a, Source $b) use ($dir): int {
-            $comparison = ($a->created_at?->getTimestamp() ?? 0) <=> ($b->created_at?->getTimestamp() ?? 0);
+        usort($entries, function (Source $a, Source $b) use ($sort, $dir): int {
+            $valueA = $this->sortValue($a, $sort);
+            $valueB = $this->sortValue($b, $sort);
+
+            // An entry missing the criterion is ranked last, whichever way the sort goes.
+            if ($valueA === null || $valueB === null) {
+                if ($valueA === $valueB) {
+                    return $a->id <=> $b->id;
+                }
+
+                return $valueA === null ? 1 : -1;
+            }
+
+            $comparison = $valueA <=> $valueB;
 
             if ($comparison === 0) {
                 $comparison = $a->id <=> $b->id;
@@ -191,10 +216,34 @@ class MovieController extends Controller
                 'filters' => [
                     'search' => $search,
                     'watched' => $watched->value,
-                    'sources' => array_map(fn(MovieSource $source): string => $source->value, $sources),
+                    'sort' => $sort->value,
+                    'dir' => $dir,
+                    'genre' => $genre,
+                    'yearFrom' => $criteria->yearFrom,
+                    'yearTo' => $criteria->yearTo,
+                    'ratingFrom' => $criteria->ratingFrom,
+                    'ratingTo' => $criteria->ratingTo,
+                    'genres' => Source::genreOptions($sourceValues),
+                    'sorts' => collect(MovieSort::cases())
+                        ->mapWithKeys(fn(MovieSort $case): array => [$case->value => $case->label()])
+                        ->all(),
+                    'sources' => $sourceValues,
                 ],
             ]
         );
+    }
+
+    /**
+     * The value a merged entry is ranked on, null when the catalog does not know it.
+     */
+    private function sortValue(Source $entry, MovieSort $sort): int|float|string|null
+    {
+        return match ($sort) {
+            MovieSort::CreatedAt => $entry->created_at?->getTimestamp(),
+            MovieSort::Name => $entry->title,
+            MovieSort::Year => $entry->release_year,
+            MovieSort::Rating => $entry->imdb_rating,
+        };
     }
 
     /**

@@ -9,6 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
     index,
@@ -18,6 +25,8 @@ import {
 import { edit as editSources } from '@/routes/sources';
 
 type WatchedFilter = 'all' | 'watched' | 'unwatched';
+type SortKey = 'created_at' | 'name' | 'year' | 'rating';
+type SortDirection = 'asc' | 'desc';
 
 type Movie = {
     id: number | null;
@@ -25,24 +34,40 @@ type Movie = {
     source: string;
     imdb_id: string;
     watched: boolean;
+    release_year: number | null;
+    genres: string[];
     data: Record<string, unknown> & {
         poster?: string | null;
         imdbRating?: number | string | null;
+        year?: string;
         ratingLabel?: string;
     };
     created_at: string | null;
+};
+
+type MovieFilters = {
+    search: string | null;
+    watched: WatchedFilter;
+    sort: SortKey;
+    dir: SortDirection;
+    genre: string | null;
+    yearFrom: number | null;
+    yearTo: number | null;
+    ratingFrom: number | null;
+    ratingTo: number | null;
+    genres: string[];
+    sorts: Record<string, string>;
+    sources: string[];
 };
 
 type MovieIndexProps = {
     movies: {
         data: Movie[];
     };
-    filters: {
-        search: string | null;
-        watched: WatchedFilter;
-        sources: string[];
-    };
+    filters: MovieFilters;
 };
+
+const ANY_GENRE = 'any';
 
 const sourceLabels: Record<string, string> = {
     wikidata: 'Wikidata',
@@ -55,12 +80,59 @@ const watchedFilterOptions: { value: WatchedFilter; label: string }[] = [
     { value: 'unwatched', label: 'Unwatched' },
 ];
 
+const directionOptions: { value: SortDirection; label: string }[] = [
+    { value: 'asc', label: 'Ascending' },
+    { value: 'desc', label: 'Descending' },
+];
+
+/**
+ * The listing is filtered and sorted server side, so a criterion change is a visit
+ * carrying every criterion: filters never get lost from one control to the next.
+ */
+function queryFor(filters: MovieFilters, patch: Partial<MovieFilters>) {
+    const merged = { ...filters, ...patch };
+
+    return {
+        search: merged.search || undefined,
+        sort: merged.sort === 'created_at' ? undefined : merged.sort,
+        dir: merged.dir === 'asc' ? undefined : merged.dir,
+        genre: merged.genre || undefined,
+        yearFrom: merged.yearFrom ?? undefined,
+        yearTo: merged.yearTo ?? undefined,
+        ratingFrom: merged.ratingFrom ?? undefined,
+        ratingTo: merged.ratingTo ?? undefined,
+        watched: merged.watched === 'all' ? undefined : merged.watched,
+    };
+}
+
+function hasActiveFilters(filters: MovieFilters): boolean {
+    return (
+        filters.search != null ||
+        filters.watched !== 'all' ||
+        filters.genre != null ||
+        filters.yearFrom != null ||
+        filters.yearTo != null ||
+        filters.ratingFrom != null ||
+        filters.ratingTo != null
+    );
+}
+
 function formatRegistrationDate(date: string): string {
     return new Intl.DateTimeFormat('fr-FR', {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
     }).format(new Date(date));
+}
+
+function productionYear(movie: Movie): string | null {
+    if (movie.release_year) {
+        return String(movie.release_year);
+    }
+
+    const year = movie.data?.year;
+
+    return typeof year === 'string' && year !== 'N/A' ? year : null;
 }
 
 function MovieCard({ movie }: { movie: Movie }) {
@@ -111,12 +183,20 @@ function MovieCard({ movie }: { movie: Movie }) {
                 {movie.title}
             </span>
 
+            {productionYear(movie) ? (
+                <span className="text-sm text-muted-foreground">
+                    {productionYear(movie)}
+                </span>
+            ) : (
+                <></>
+            )}
+
             {movie.created_at ? (
                 <time
                     dateTime={movie.created_at}
-                    className="shrink-0 text-sm text-muted-foreground"
+                    className="shrink-0 text-xs text-muted-foreground"
                 >
-                    {formatRegistrationDate(movie.created_at)}
+                    {`Added ${formatRegistrationDate(movie.created_at)}`}
                 </time>
             ) : (
                 <></>
@@ -142,20 +222,89 @@ function MovieItem({ movie }: { movie: Movie }) {
     );
 }
 
-export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
-    const watched = filters.watched ?? 'all';
-    const hasFilters = filters.search != null || watched !== 'all';
+function CriterionSelect({
+    label,
+    value,
+    options,
+    onChange,
+}: {
+    label: string;
+    value: string;
+    options: { value: string; label: string }[];
+    onChange: (value: string) => void;
+}) {
+    return (
+        <div className="flex flex-col gap-1">
+            <Label className="text-xs" htmlFor={`${label}-select`}>
+                {label}
+            </Label>
+            <Select value={value} onValueChange={onChange}>
+                <SelectTrigger
+                    id={`${label}-select`}
+                    className="w-52"
+                    size="sm"
+                >
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map(
+                        ({ value: optionValue, label: optionLabel }) => (
+                            <SelectItem key={optionValue} value={optionValue}>
+                                {optionLabel}
+                            </SelectItem>
+                        ),
+                    )}
+                </SelectContent>
+            </Select>
+        </div>
+    );
+}
 
-    function selectWatchedFilter(value: WatchedFilter) {
-        router.visit(
-            index.url({
-                query: {
-                    search: filters.search || undefined,
-                    watched: value === 'all' ? undefined : value,
-                },
-            }),
-            { preserveScroll: true, replace: true },
-        );
+function RangeInput({
+    id,
+    label,
+    name,
+    value,
+    min,
+    max,
+    step,
+}: {
+    id: string;
+    label: string;
+    name: string;
+    value: number | null;
+    min: number;
+    max: number;
+    step?: number;
+}) {
+    return (
+        <div className="flex flex-col gap-1">
+            <Label htmlFor={name} className="text-xs">
+                {label}
+            </Label>
+            <Input
+                id={id}
+                type="number"
+                name={name}
+                defaultValue={value ?? ''}
+                min={min}
+                max={max}
+                step={step}
+                className="w-24"
+            />
+        </div>
+    );
+}
+
+export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
+    const hasFilters = hasActiveFilters(filters);
+    const lastMeaningfulYear = new Date().getFullYear() + 1;
+
+    function apply(patch: Partial<MovieFilters>) {
+        router.visit(index.url({ query: queryFor(filters, patch) }), {
+            preserveScroll: true,
+            replace: true,
+        });
     }
 
     return (
@@ -167,12 +316,11 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                     <Heading
                         variant="small"
                         title="Search"
-                        description="Search for a movie by title"
+                        description="Search for a movie by title, then filter and sort the results"
                     />
 
                     <Form
                         {...MovieController.index.form()}
-                        className="flex flex-col gap-2 sm:flex-row sm:items-start"
                         options={{
                             preserveScroll: true,
                             replace: true,
@@ -180,58 +328,187 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                     >
                         {({ processing, errors }) => (
                             <>
-                                <div className="min-w-0 flex-1">
-                                    <Label htmlFor="search" className="sr-only">
-                                        Search
-                                    </Label>
-                                    <Input
-                                        id="search"
-                                        type="search"
-                                        name="search"
-                                        defaultValue={filters.search ?? ''}
-                                        placeholder="Search by title..."
-                                        aria-invalid={Boolean(errors.search)}
-                                        autoComplete="off"
-                                        maxLength={100}
+                                {/* Criteria set outside the form travel with the search. */}
+                                <input
+                                    type="hidden"
+                                    name="sort"
+                                    value={filters.sort}
+                                />
+                                <input
+                                    type="hidden"
+                                    name="dir"
+                                    value={filters.dir}
+                                />
+                                <input
+                                    type="hidden"
+                                    name="genre"
+                                    value={filters.genre ?? ''}
+                                />
+                                <input
+                                    type="hidden"
+                                    name="watched"
+                                    value={filters.watched}
+                                />
+
+                                <div className="flex flex-wrap items-end gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <Label
+                                            htmlFor="search"
+                                            className="sr-only"
+                                        >
+                                            Search
+                                        </Label>
+                                        <Input
+                                            key={`search-${filters.search ?? ''}`}
+                                            id="search"
+                                            type="search"
+                                            name="search"
+                                            defaultValue={filters.search ?? ''}
+                                            placeholder="Search by title..."
+                                            aria-invalid={Boolean(
+                                                errors.search,
+                                            )}
+                                            autoComplete="off"
+                                            maxLength={100}
+                                        />
+                                        <InputError
+                                            className="mt-2"
+                                            message={errors.search}
+                                        />
+                                    </div>
+
+                                    <RangeInput
+                                        key={`yearFrom-${filters.yearFrom ?? ''}`}
+                                        id="yearFrom"
+                                        label="Year from"
+                                        name="yearFrom"
+                                        value={filters.yearFrom}
+                                        min={1870}
+                                        max={lastMeaningfulYear}
                                     />
-                                    <InputError
-                                        className="mt-2"
-                                        message={errors.search}
+                                    <RangeInput
+                                        key={`yearTo-${filters.yearTo ?? ''}`}
+                                        id="yearTo"
+                                        label="Year to"
+                                        name="yearTo"
+                                        value={filters.yearTo}
+                                        min={1870}
+                                        max={lastMeaningfulYear}
                                     />
+                                    <RangeInput
+                                        key={`ratingFrom-${filters.ratingFrom ?? ''}`}
+                                        id="ratingFrom"
+                                        label="IMDb from"
+                                        name="ratingFrom"
+                                        value={filters.ratingFrom}
+                                        min={0}
+                                        max={10}
+                                        step={0.1}
+                                    />
+                                    <RangeInput
+                                        key={`ratingTo-${filters.ratingTo ?? ''}`}
+                                        id="ratingTo"
+                                        label="IMDb to"
+                                        name="ratingTo"
+                                        value={filters.ratingTo}
+                                        min={0}
+                                        max={10}
+                                        step={0.1}
+                                    />
+
+                                    <Button
+                                        type="submit"
+                                        disabled={processing}
+                                        className="shrink-0"
+                                    >
+                                        {processing ? 'Searching…' : 'Search'}
+                                    </Button>
                                 </div>
 
-                                <Button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="sm:shrink-0"
-                                >
-                                    {processing ? 'Searching…' : 'Search'}
-                                </Button>
+                                {(errors.yearFrom ||
+                                    errors.yearTo ||
+                                    errors.ratingFrom ||
+                                    errors.ratingTo) && (
+                                    <InputError className="mt-2">
+                                        {
+                                            (errors.yearFrom ??
+                                                errors.yearTo ??
+                                                errors.ratingFrom ??
+                                                errors.ratingTo) as string
+                                        }
+                                    </InputError>
+                                )}
                             </>
                         )}
                     </Form>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        <ToggleGroup
-                            type="single"
-                            variant="outline"
-                            value={watched}
-                            onValueChange={(value) => {
-                                if (value) {
-                                    selectWatchedFilter(value as WatchedFilter);
-                                }
-                            }}
-                        >
-                            {watchedFilterOptions.map(({ value, label }) => (
-                                <ToggleGroupItem
-                                    key={value}
-                                    value={value}
-                                    aria-label={`Show ${label.toLowerCase()} movies`}
-                                >
-                                    {label}
-                                </ToggleGroupItem>
-                            ))}
-                        </ToggleGroup>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <CriterionSelect
+                            label="Sort by"
+                            value={filters.sort}
+                            options={Object.entries(filters.sorts).map(
+                                ([value, label]) => ({ value, label }),
+                            )}
+                            onChange={(value) =>
+                                apply({ sort: value as SortKey })
+                            }
+                        />
+
+                        <CriterionSelect
+                            label="Direction"
+                            value={filters.dir}
+                            options={directionOptions}
+                            onChange={(value) =>
+                                apply({ dir: value as SortDirection })
+                            }
+                        />
+
+                        <CriterionSelect
+                            label="Genre"
+                            value={filters.genre ?? ANY_GENRE}
+                            options={[
+                                { value: ANY_GENRE, label: 'Any genre' },
+                                ...filters.genres.map((genre) => ({
+                                    value: genre,
+                                    label:
+                                        genre.charAt(0).toUpperCase() +
+                                        genre.slice(1),
+                                })),
+                            ]}
+                            onChange={(value) =>
+                                apply({
+                                    genre: value === ANY_GENRE ? null : value,
+                                })
+                            }
+                        />
+
+                        <div className="flex flex-col gap-1">
+                            <Label className="text-xs">Watched</Label>
+                            <ToggleGroup
+                                type="single"
+                                variant="outline"
+                                value={filters.watched}
+                                onValueChange={(value) => {
+                                    if (value) {
+                                        apply({
+                                            watched: value as WatchedFilter,
+                                        });
+                                    }
+                                }}
+                            >
+                                {watchedFilterOptions.map(
+                                    ({ value, label }) => (
+                                        <ToggleGroupItem
+                                            key={value}
+                                            value={value}
+                                            aria-label={`Show ${label.toLowerCase()} movies`}
+                                        >
+                                            {label}
+                                        </ToggleGroupItem>
+                                    ),
+                                )}
+                            </ToggleGroup>
+                        </div>
 
                         {hasFilters && (
                             <Button variant="outline" asChild>
@@ -240,8 +517,10 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                                 </Link>
                             </Button>
                         )}
+                    </div>
 
-                        <span className="text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <span>
                             Sources queried:{' '}
                             {filters.sources
                                 .map((source) => sourceLabels[source] ?? source)
@@ -268,6 +547,10 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                 ) : filters.search != null ? (
                     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                         {`No movie found for title ${filters.search}.`}
+                    </div>
+                ) : hasFilters ? (
+                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                        No movie matches these criteria.
                     </div>
                 ) : (
                     <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">

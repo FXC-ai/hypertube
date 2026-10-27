@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\MovieSource;
 use App\Models\MovieData;
+use App\Models\Source;
 use App\Services\OmdbService;
 use Illuminate\Support\Facades\Http;
 
@@ -50,3 +52,25 @@ test('missing optional OMDb fields do not prevent movie data from being stored',
     'missing IMDb votes' => ['imdbVotes', 'imdbVotes', 'imdbVotes'],
     'missing release date' => ['Released', 'release_date', 'released'],
 ]);
+
+test('the catalog copy of the grade and of the production year follows the metadata', function () {
+    $imdbId = 'tt0000001';
+
+    Source::factory()->create(['imdb_id' => $imdbId, 'release_year' => null]);
+    Source::factory()->forSource(MovieSource::Whitelist)->create(['imdb_id' => $imdbId, 'release_year' => 1927]);
+
+    Http::fake([
+        'www.omdbapi.com/*' => Http::response([
+            'Response' => 'True',
+            'imdbRating' => '8.3',
+            'Released' => '01 Jan 2020',
+        ]),
+    ]);
+
+    (new OmdbService('test-api-key'))->enrichByImdbId($imdbId);
+
+    $entries = Source::query()->orderBy('id')->get();
+
+    expect($entries->pluck('imdb_rating')->all())->toBe([8.3, 8.3])
+        ->and($entries->pluck('release_year')->all())->toBe([2020, 1927]);
+});

@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\MovieData;
+use App\Models\Source;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -89,6 +91,16 @@ final class OmdbService
             return null;
         }
 
-        return MovieData::storeFromOmdb($imdbId, $data);
+        $movieData = MovieData::storeFromOmdb($imdbId, $data);
+
+        // The catalog is filtered and sorted on its own copy of the grade and of the
+        // production year, since Wikidata does not know the IMDb grade at all.
+        $releaseYear = isset($data['Released']) && $data['Released'] !== 'N/A'
+            ? Carbon::parse($data['Released'])->year
+            : null;
+
+        Source::syncMetadata($imdbId, $movieData->imdbRating, $releaseYear);
+
+        return $movieData;
     }
 }
