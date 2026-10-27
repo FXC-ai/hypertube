@@ -1,12 +1,12 @@
 
 ## Priorité
 
- - les sous-titres sont dispos uniquement pendant la conversion pour TPB AFK ?
  - Probleme avec les photos de profil de 42
  - Corriger les erreurs HLS et les avertissements du client torrent.
 
 ## Pour Ben
 
+- Probleme d'insertion des films dans la db
 - Trier les résultats recherchés par nom.
 - Afficher par défaut les médias populaires avec un véritable critère de popularité.
 - Ajouter les tris et filtres par nom, genre, note IMDb, année et direction (nom ;genre ; note IMDb ; année de production ; direction du tri)

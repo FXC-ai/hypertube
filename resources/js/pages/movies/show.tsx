@@ -223,17 +223,19 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
     const isPreparing = ['queued', 'converting'].includes(moviePageData.conversion_status);
     const isUnsupported = moviePageData.download_status === 'unsupported';
     const isPurging = moviePageData.download_status === 'purging';
-
+    const downloadFailed = moviePageData.download_status === 'failed';
 
     const statusLabel = isPurging
         ? 'Cleaning up stored video'
         : isUnsupported
             ? 'Unsupported torrent'
-            : conversionStatusLabel[moviePageData.conversion_status];
+            : downloadFailed
+                ? 'Unavailable'
+                : conversionStatusLabel[moviePageData.conversion_status];
 
     const displayedError = isPurging
         ? null
-        : isUnsupported
+        : isUnsupported || downloadFailed
             ? moviePageData.download_error
             : moviePageData.conversion_error;
 
@@ -249,6 +251,7 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
             !isPurging &&
             (
                 isUnsupported ||
+                downloadFailed ||
                 moviePageData.conversion_status === 'failed' ||
                 (videoIsPlayable && subtitlesAreTerminal)
             )
@@ -262,7 +265,8 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
         stop,
         subtitlesAreTerminal,
         videoIsPlayable,
-        isPurging
+        isPurging,
+        downloadFailed
     ]);
 
     const startConversion = (): void => {
@@ -313,9 +317,11 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                                 isPurging ? 'This video is currently being cleaned up.'
                                                     : isUnsupported
                                                         ? 'This torrent has no supported video'
-                                                        : isPreparing
-                                                            ? 'The video is being prepared'
-                                                            : 'The video is not available yet'
+                                                        : downloadFailed
+                                                            ? 'This movie is not vailable'
+                                                            : isPreparing
+                                                                ? 'The video is being prepared'
+                                                                : 'The video is not available yet'
                                             }
                                         </p>
                                         <p className="mt-1 text-sm">
@@ -323,9 +329,11 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                                 isPurging ? 'Please try again shortly.'
                                                     : isUnsupported
                                                         ? 'No MP4 or MKV file was found.'
-                                                        : isPreparing
-                                                            ? 'This page will update automatically.'
-                                                            : 'Prepare the video to start watching.'
+                                                        : downloadFailed
+                                                            ? 'The source torrent is missing.'
+                                                            : isPreparing
+                                                                ? 'This page will update automatically.'
+                                                                : 'Prepare the video to start watching.'
                                             }
                                         </p>
                                     </div>
@@ -381,12 +389,12 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                         disabled={conversionForm.processing}
                                         onClick={startConversion}
                                     >
-                                        {moviePageData.conversion_status === 'failed' ? (
+                                        {downloadFailed || moviePageData.conversion_status === 'failed' ? (
                                             <RotateCcw />
                                         ) : (
                                             <Play />
                                         )}
-                                        {moviePageData.conversion_status === 'failed'
+                                        {downloadFailed || moviePageData.conversion_status === 'failed'
                                             ? 'Retry'
                                             : 'Prepare video'}
                                     </Button>
