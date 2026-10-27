@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\MovieSource;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,9 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'movie_id',
-    'source',
     'imdb_id',
+    'source',
     'release_date',
     'poster',
     'plot',
@@ -40,12 +40,10 @@ class MovieData extends Model
             'language' => 'array',
             'awards' => 'array',
             'release_date' => 'date',
+            'imdbRating' => 'float',
+            'imdbVotes' => 'integer',
+            'boxOffice' => 'float',
         ];
-    }
-
-    public function movie(): BelongsTo
-    {
-        return $this->belongsTo(Movie::class);
     }
 
     public static function findByImdbId(string $imdbId): ?self
@@ -58,8 +56,7 @@ class MovieData extends Model
         return static::updateOrCreate(
             ['imdb_id' => $imdbId],
             [
-                'movie_id' => null,
-                'source' => 'omdb',
+                'source' => MovieSource::Omdb->value,
                 'poster' => $data['Poster'] ?? null,
                 'plot' => $data['Plot'] ?? null,
                 'genres' => isset($data['Genre']) ? explode(',', $data['Genre']) : null,
@@ -70,11 +67,36 @@ class MovieData extends Model
                 'rated' => $data['Rated'] ?? null,
                 'language' => isset($data['Language']) ? explode(',', $data['Language']) : null,
                 'awards' => isset($data['Awards']) ? ['text' => $data['Awards']] : null,
-                'imdbRating' => ($data['imdbRating'] != 'N/A') ? $data['imdbRating'] : null,
-                'imdbVotes' => ($data['imdbVotes'] != 'N/A') ? $data['imdbVotes'] : null,
-                'boxOffice' => ($data['BoxOffice'] != 'N/A') ? $data['BoxOffice'] : null,
-                'release_date' => $data['Released'] != 'N/A' ? Carbon::parse($data['Released']) : null,
+                'imdbRating' => isset($data['imdbRating']) && ($data['imdbRating'] != 'N/A') ? $data['imdbRating'] : null,
+                'imdbVotes' =>  isset($data['imdbVotes']) && ($data['imdbVotes'] != 'N/A') ? $data['imdbVotes'] : null,
+                'boxOffice' => isset($data['BoxOffice']) && ($data['BoxOffice'] != 'N/A') ? $data['BoxOffice'] : null,
+                'release_date' => isset($data['Released']) && $data['Released'] != 'N/A' ? Carbon::parse($data['Released']) : null,
             ],
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function displayArray(): array
+    {
+        return [
+            'imdbID' => $this->imdb_id,
+            'year' => $this->release_date?->format('Y') ?? 'N/A',
+            'rated' => $this->rated,
+            'released' => $this->release_date?->format('d M Y'),
+            'runtime' => $this->runtime ? (string) $this->runtime . ' min' : 'N/A',
+            'genre' => $this->genres ? implode(', ', $this->genres) : 'N/A',
+            'director' => $this->director ?? 'N/A',
+            'writer' => $this->writers ? implode(', ', $this->writers) : 'N/A',
+            'actors' => $this->actors ? implode(', ', $this->actors) : 'N/A',
+            'plot' => $this->plot ?? 'No plot available.',
+            'language' => $this->language ? implode(', ', $this->language) : 'N/A',
+            'poster' => $this->poster ?? null,
+            'imdbRating' => $this->imdbRating,
+            'imdbVotes' => $this->imdbVotes,
+            'boxOffice' => $this->boxOffice,
+            'awards' => is_array($this->awards) ? ($this->awards['text'] ?? 'N/A') : 'N/A',
+        ];
     }
 }

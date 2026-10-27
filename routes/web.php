@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\MovieSource;
 use App\Http\Controllers\Auth\SocialiteController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\MovieController;
@@ -23,6 +24,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
     Route::get('/movies', [MovieController::class, 'index'])->name('movies.index');
+
+    Route::get('/movies/sources/{source}/imdb/{imdb_id}', [MovieController::class, 'select'])
+        ->where('source', implode('|', array_map(fn(MovieSource $source): string => $source->value, MovieSource::catalogSources())))
+        ->name('movies.select');
 
     Route::post('/movies/{movie}/conversion', [MovieConversionController::class, 'store'])->name('movies.conversion.store');
     Route::get('/movies/{movie}/conversion', [MovieConversionController::class, 'show'])->name('movies.conversion.show');

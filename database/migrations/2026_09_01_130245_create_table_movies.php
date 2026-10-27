@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::create('movies', function (Blueprint $table) {
             $table->id();
             $table->timestamps();
-            $table->string('title');
             $table->string('filepath')->unique();
             $table->string('filename');
         });
