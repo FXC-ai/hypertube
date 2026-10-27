@@ -251,7 +251,6 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
             !isPurging &&
             (
                 isUnsupported ||
-                moviePageData.conversion_status === 'failed' ||
                 (videoIsPlayable && subtitlesAreTerminal)
             )
         ) {
@@ -259,7 +258,6 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
         }
     }, [
         isUnsupported,
-        moviePageData.conversion_status,
         moviePageData.external_subtitles_status,
         stop,
         subtitlesAreTerminal,
