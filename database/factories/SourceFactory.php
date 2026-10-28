@@ -29,6 +29,15 @@ class SourceFactory extends Factory
                 'en' => fake()->sentence(3),
             ],
             'torrent_url' => "https://archive.org/download/{$internetArchiveId}/{$internetArchiveId}_archive.torrent",
+            'internet_archive_id' => $internetArchiveId,
+            'release_year' => fake()->numberBetween(1880, 2020),
+            'genres' => Source::storedGenres([fake()->randomElement([
+                'drama film',
+                'comedy film',
+                'horror film',
+                'western film',
+                'documentary film',
+            ])]),
         ];
     }
 

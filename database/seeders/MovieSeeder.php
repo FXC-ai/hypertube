@@ -60,9 +60,15 @@ class MovieSeeder extends Seeder
                 ->create(['title' => $title]);
         }
 
+        // A whitelisted short film whose archive.org item is real, so the popularity
+        // fetch has something to report in this development database.
         Source::factory()
             ->forSource(MovieSource::Whitelist)
-            ->create(['title' => 'Cops']);
+            ->create([
+                'title' => 'Cops',
+                'internet_archive_id' => 'Cops',
+                'torrent_url' => 'https://archive.org/download/Cops/Cops_archive.torrent',
+            ]);
 
         // The whitelist curates a movie the public domain catalog offers too.
         Source::factory()

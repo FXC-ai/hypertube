@@ -47,14 +47,19 @@ final class WikidataSource implements MovieSourceProvider
             $query->where('title', 'like', '%'.$criteria->term.'%');
         }
 
+        $this->restrictToGenres($query, $criteria);
+        $this->restrictToYears($query, $criteria);
+        $this->restrictToRatings($query, $criteria);
         $this->restrictToWatched($query, $criteria);
 
-        $sort = in_array($criteria->sort, ['created_at', 'title'], true) ? $criteria->sort : 'created_at';
-
         // The merged listing slices a window built from every source, so this one has
-        // to hand over enough rows to cover the requested page.
+        // to hand over enough rows to cover the requested page. An entry missing the
+        // criterion is always ranked last, whatever the direction.
+        $column = $criteria->sort->column();
+
         $window = $query
-            ->orderBy($sort, $criteria->direction)
+            ->orderByRaw($column.' is null')
+            ->orderBy($column, $criteria->direction)
             ->orderBy('id', $criteria->direction)
             ->paginate($criteria->windowSize(), ['*'], 'page', 1);
 
@@ -65,8 +70,53 @@ final class WikidataSource implements MovieSourceProvider
     }
 
     /**
+     * Genres are stored as pipe delimited lowercase labels, so a criterion is matched
+     * as a whole label instead of inside another one.
+     *
+     * @param Builder<Source> $query
+     */
+    private function restrictToGenres(Builder $query, MovieSearch $criteria): void
+    {
+        if ($criteria->genre === null) {
+            return;
+        }
+
+        $query->where('genres', 'like', $criteria->genrePattern());
+    }
+
+    /**
+     * @param Builder<Source> $query
+     */
+    private function restrictToYears(Builder $query, MovieSearch $criteria): void
+    {
+        if ($criteria->yearFrom !== null) {
+            $query->where('release_year', '>=', $criteria->yearFrom);
+        }
+
+        if ($criteria->yearTo !== null) {
+            $query->where('release_year', '<=', $criteria->yearTo);
+        }
+    }
+
+    /**
+     * @param Builder<Source> $query
+     */
+    private function restrictToRatings(Builder $query, MovieSearch $criteria): void
+    {
+        if ($criteria->ratingFrom !== null) {
+            $query->where('imdb_rating', '>=', $criteria->ratingFrom);
+        }
+
+        if ($criteria->ratingTo !== null) {
+            $query->where('imdb_rating', '<=', $criteria->ratingTo);
+        }
+    }
+
+    /**
      * The catalog lives in this database, so the watched restriction of the user can
      * be applied here instead of after the sources have been merged.
+     *
+     * @param Builder<Source> $query
      */
     private function restrictToWatched(Builder $query, MovieSearch $criteria): void
     {
@@ -164,12 +214,21 @@ final class WikidataSource implements MovieSourceProvider
                 continue;
             }
 
+            $releaseYear = (int) ($result['releaseYear']['value'] ?? 0);
+
             $rows[] = [
                 'source' => $this->source->value,
                 'imdb_id' => $imdbId,
                 'title' => $defaultTitle,
                 'titles' => $titles === [] ? null : json_encode($titles),
                 'torrent_url' => $result['torrentURL']['value'] ?? null,
+                'internet_archive_id' => $internetArchiveId,
+                'release_year' => $releaseYear > 0 ? $releaseYear : null,
+                // Wikidata knows nothing about the IMDb grade: OMDb fills it later.
+                'imdb_rating' => null,
+                // Nor about the download counts: archive.org fills them later.
+                'popularity' => null,
+                'genres' => Source::storedGenres(explode('|', $result['genresCsv']['value'] ?? '')),
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -192,20 +251,40 @@ final class WikidataSource implements MovieSourceProvider
         return json_last_error() === JSON_ERROR_NONE && is_array($decoded) ? $decoded : [];
     }
 
+    /**
+     * The catalog rows carry the criteria the listing is filtered and sorted on, so
+     * the year and the genres come from Wikidata with the movie itself. The IMDb grade
+     * is not known there and is filled later from OMDb.
+     */
     private function getQuery(int $limit): string
     {
         return sprintf(
             <<<'SPARQL'
-            SELECT ?film ?imdbID ?internetArchiveID ?archivePage ?torrentURL ?titlesJson
+            SELECT ?film ?imdbID ?internetArchiveID ?archivePage ?torrentURL ?titlesJson ?releaseYear ?genresCsv
             WHERE {
               {
-                SELECT ?film ?imdbID ?internetArchiveID ?torrentURL
+                SELECT ?film ?imdbID ?internetArchiveID
                        (CONCAT("{", GROUP_CONCAT(?langTitle; separator=", "), "}") AS ?titlesJson)
+                       (MIN(?yearStr) AS ?releaseYear)
+                       (GROUP_CONCAT(DISTINCT ?genreStr; separator="|") AS ?genresCsv)
                 WHERE {
                   ?film wdt:P724 ?internetArchiveID.
                   ?film wdt:P31/wdt:P279* wd:Q11424 .
 
                   ?film wdt:P345 ?imdbID .
+
+                  # Publication year, empty when Wikidata does not know it: the aggregate
+                  # has to stay bound, or the film would vanish from the projection.
+                  OPTIONAL { ?film wdt:P577 ?publicationDate . }
+                  BIND(IF(BOUND(?publicationDate), SUBSTR(STR(?publicationDate), 1, 4), "") AS ?yearStr)
+
+                  # English genre labels, empty when the film has none or none in english.
+                  OPTIONAL {
+                    ?film wdt:P136 ?genre .
+                    ?genre rdfs:label ?genreLabel .
+                    FILTER(LANG(?genreLabel) = "en")
+                  }
+                  BIND(IF(BOUND(?genreLabel), LCASE(STR(?genreLabel)), "") AS ?genreStr)
 
                   # Récupération de tous les labels existants
                   ?film rdfs:label ?label .
@@ -217,7 +296,7 @@ final class WikidataSource implements MovieSourceProvider
                   # Construction de la paire clé-valeur JSON : "fr": "Mon Titre"
                   BIND(CONCAT('"', ?lang, '": "', REPLACE(STR(?label), '"', '\"'), '"') AS ?langTitle)
                 }
-                GROUP BY ?film ?imdbID ?internetArchiveID ?torrentURL
+                GROUP BY ?film ?imdbID ?internetArchiveID
               }
 
               BIND(URI(CONCAT("https://archive.org/download/", ?internetArchiveID, "/", ?internetArchiveID, "_archive.torrent")) AS ?torrentURL)

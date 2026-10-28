@@ -52,7 +52,7 @@ describe('watched relation', function () {
         WatchedMovie::factory()->create(['movie_id' => $watched->id, 'user_id' => $watcher->id]);
 
         $this->actingAs($user)
-            ->get(route('movies.index'))
+            ->get(route('movies.index', ['sort' => 'created_at', 'dir' => 'asc']))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('movies/index')
@@ -63,7 +63,7 @@ describe('watched relation', function () {
             );
 
         $this->actingAs($watcher)
-            ->get(route('movies.index'))
+            ->get(route('movies.index', ['sort' => 'created_at', 'dir' => 'asc']))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('movies.data.0.watched', true)
