@@ -19,8 +19,7 @@ stop:
 	docker compose down
 
 clean:
-	docker compose down
-	docker volume prune -a
+	docker compose down -v
 	find storage/app/public/movies -mindepth 1 -maxdepth 1 -type d ! -name '1' -exec rm -rf -- {} +
 	rm -rf -- storage/app/public/movies/1/hls
 	find storage/app/public/avatars -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
