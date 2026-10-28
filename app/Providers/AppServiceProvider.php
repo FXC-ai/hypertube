@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passport\Passport;
 use Laravel\Socialite\Socialite;
 
 class AppServiceProvider extends ServiceProvider
@@ -26,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        Passport::enablePasswordGrant();
 
         Socialite::extend(
             'fortytwo',
@@ -50,12 +53,12 @@ class AppServiceProvider extends ServiceProvider
         );
 
         Password::defaults(
-            fn(): Password => Password::min(8)
-            //->mixedCase()
-            //->letters()
-            //->numbers()
-            //->symbols()
-            //->uncompromised()
+            fn (): Password => Password::min(8)
+            // ->mixedCase()
+            // ->letters()
+            // ->numbers()
+            // ->symbols()
+            // ->uncompromised()
         );
     }
 }

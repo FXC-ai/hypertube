@@ -6,8 +6,8 @@ use App\Data\MergedMovie;
 use App\Data\MovieSearch;
 use App\Enums\ConversionStatus;
 use App\Enums\DownloadStatus;
-use App\Enums\MovieSource;
 use App\Enums\MovieSort;
+use App\Enums\MovieSource;
 use App\Enums\WatchedFilter;
 use App\Http\Requests\IndexMovieRequest;
 use App\Http\Resources\CommentResource;
@@ -22,7 +22,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -70,27 +69,27 @@ class MovieController extends Controller
                         DownloadStatus::Unsupported => $movie->download_error,
                         default => null,
                     },
-                    'can_prepare' => ! in_array($movie->download_status, [
+                    'can_prepare' => !in_array($movie->download_status, [
                         DownloadStatus::Unsupported,
                         DownloadStatus::Purging,
                     ], true) && in_array($movie->conversion_status, [
-                        ConversionStatus::Pending,
-                        ConversionStatus::Failed,
-                    ], true),
+                            ConversionStatus::Pending,
+                            ConversionStatus::Failed,
+                        ], true),
                     'external_subtitles_status' => $movie->external_subtitles_status->value,
                     'external_subtitles' => $movie->download_status === DownloadStatus::Purging
                         ? [] : collect($movie->external_subtitles ?? [])
-                        ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
-                        ->map(fn(array $subtitle): array => [
-                            'id' => $subtitle['file_index'],
-                            'label' => $subtitle['file_name'] . ' — External',
-                            'language' => $subtitle['language'],
-                            'url' => Storage::disk('public')->url(
-                                "movies/{$movie->id}/{$subtitle['output_file']}"
-                            ),
-                        ])
-                        ->values()
-                        ->all(),
+                            ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
+                            ->map(fn(array $subtitle): array => [
+                                'id' => $subtitle['file_index'],
+                                'label' => $subtitle['file_name'] . ' — External',
+                                'language' => $subtitle['language'],
+                                'url' => Storage::disk('public')->url(
+                                    "movies/{$movie->id}/{$subtitle['output_file']}"
+                                ),
+                            ])
+                            ->values()
+                            ->all(),
                 ],
                 'comments' => Inertia::scroll(
                     fn() => CommentResource::collection(
