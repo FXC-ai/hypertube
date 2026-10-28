@@ -31,6 +31,77 @@ services:
       timeout: 2s
       retries: 60
 
+  worker-monitoring:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WWW_USER: "${HOST_UID:-1000}"
+        WWW_GROUP: "${HOST_GID:-1000}"
+    volumes:
+      - .:/var/www/html
+    command:
+      - php
+      - artisan
+      - queue:work
+      - monitoring
+      - --queue=monitoring
+      - --tries=1
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  worker-subtitles:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WWW_USER: "${HOST_UID:-1000}"
+        WWW_GROUP: "${HOST_GID:-1000}"
+    volumes:
+      - .:/var/www/html
+    command:
+      - php
+      - artisan
+      - queue:work
+      - subtitles
+      - --queue=subtitles
+      - --tries=1
+      - --timeout=120
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  worker-conversions:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WWW_USER: "${HOST_UID:-1000}"
+        WWW_GROUP: "${HOST_GID:-1000}"
+    volumes:
+      - .:/var/www/html
+    command:
+      - php
+      - artisan
+      - queue:work
+      - conversions
+      - --queue=conversions
+      - --tries=1
+      - --timeout=21540
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
   scheduler:
     build:
       context: .

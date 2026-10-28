@@ -5,6 +5,8 @@ use App\Models\Movie;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use App\Enums\DownloadStatus;
+use App\Enums\ConversionStatus;
 
 test('the movie page exposes only prepared external subtitles through public URLs', function () {
     config(['services.omdb.key' => null]);
@@ -30,7 +32,7 @@ test('the movie page exposes only prepared external subtitles through public URL
 
     $response = $this->actingAs($user)->get(route('movies.show', $movie));
 
-    $response->assertOk()->assertInertia(fn (Assert $page) => $page
+    $response->assertOk()->assertInertia(fn(Assert $page) => $page
         ->component('movies/show')
         ->where('moviePageData.external_subtitles_status', ExternalSubtitleStatus::Ready->value)
         ->has('moviePageData.external_subtitles', 1)
@@ -47,4 +49,36 @@ test('the movie page exposes only prepared external subtitles through public URL
 
     expect(json_encode($tracks, JSON_THROW_ON_ERROR))
         ->not->toContain(Storage::disk('public')->path("movies/{$movie->id}"));
+});
+
+test('the movie page present an error message if the download fail', function () {
+    $user = User::factory()->create();
+    $movie = Movie::factory()->create(
+        [
+            'download_status' => DownloadStatus::Failed,
+            'download_error' => 'Client Torrent answered 502: HTTP 403',
+        ]
+    );
+    $response = $this->actingAs($user)->get(route('movies.show', $movie));
+
+    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+        ->component('movies/show')
+        ->where('moviePageData.download_status', DownloadStatus::Failed->value)
+        ->where(
+            'moviePageData.download_error',
+            'This movie is not available.',
+        ));
+});
+
+test('the movie page present an error message if the conversion fail', function () {
+    $user = User::factory()->create();
+    $movie = Movie::factory()->create([
+        'conversion_status' => ConversionStatus::Failed,
+        'conversion_error' => 'ffmpeg exited with code 1: technical details...',
+    ]);
+    $response = $this->actingAs($user)->get(route('movies.show', $movie));
+
+    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+        ->component('movies/show')
+        ->where('moviePageData.conversion_error', 'The conversion failed.'));
 });

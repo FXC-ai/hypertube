@@ -59,14 +59,16 @@ class MovieController extends Controller
                     'source' => $movie->source?->value,
                     'conversion_attempt' => $movie->conversion_attempt,
                     'conversion_status' => $movie->conversion_status->value,
-                    'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
+                    'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? 'The conversion failed.' : null,
                     'playable' => $movie->isPlayable(),
                     'preferredlanguage' => Auth::user()->preferredlanguage?->value,
                     'movieData' => $movie->getEnrichedData()?->displayArray(),
                     'download_status' => $movie->download_status->value,
-                    'download_error' => $movie->download_status === DownloadStatus::Unsupported
-                        ? $movie->download_error
-                        : null,
+                    'download_error' => match ($movie->download_status) {
+                        DownloadStatus::Failed => 'This movie is not available.',
+                        DownloadStatus::Unsupported => $movie->download_error,
+                        default => null,
+                    },
                     'can_prepare' => ! in_array($movie->download_status, [
                         DownloadStatus::Unsupported,
                         DownloadStatus::Purging,
@@ -77,17 +79,17 @@ class MovieController extends Controller
                     'external_subtitles_status' => $movie->external_subtitles_status->value,
                     'external_subtitles' => $movie->download_status === DownloadStatus::Purging
                         ? [] : collect($movie->external_subtitles ?? [])
-                            ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
-                            ->map(fn(array $subtitle): array => [
-                                'id' => $subtitle['file_index'],
-                                'label' => $subtitle['file_name'] . ' — External',
-                                'language' => $subtitle['language'],
-                                'url' => Storage::disk('public')->url(
-                                    "movies/{$movie->id}/{$subtitle['output_file']}"
-                                ),
-                            ])
-                            ->values()
-                            ->all(),
+                        ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
+                        ->map(fn(array $subtitle): array => [
+                            'id' => $subtitle['file_index'],
+                            'label' => $subtitle['file_name'] . ' — External',
+                            'language' => $subtitle['language'],
+                            'url' => Storage::disk('public')->url(
+                                "movies/{$movie->id}/{$subtitle['output_file']}"
+                            ),
+                        ])
+                        ->values()
+                        ->all(),
                 ],
                 'comments' => Inertia::scroll(
                     fn() => CommentResource::collection(

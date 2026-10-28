@@ -121,7 +121,7 @@ final class MovieConversionController extends Controller
 
                     'status' => $movie->conversion_status->value,
                     'attempt' => $movie->conversion_attempt,
-                    'error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
+                    'error' => $movie->conversion_status === ConversionStatus::Failed ? 'The conversion failed.' : null,
                     'playable' => $movie->isPlayable(),
                 ],
             ]
