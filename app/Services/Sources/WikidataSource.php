@@ -44,7 +44,7 @@ final class WikidataSource implements MovieSourceProvider
         $query = Source::query()->where('source', $this->source->value);
 
         if ($criteria->term !== '') {
-            $query->where('title', 'like', '%'.$criteria->term.'%');
+            $query->where('titles', 'ilike', '%' . $criteria->term . '%');
         }
 
         $this->restrictToGenres($query, $criteria);
@@ -58,7 +58,7 @@ final class WikidataSource implements MovieSourceProvider
         $column = $criteria->sort->column();
 
         $window = $query
-            ->orderByRaw($column.' is null')
+            ->orderByRaw($column . ' is null')
             ->orderBy($column, $criteria->direction)
             ->orderBy('id', $criteria->direction)
             ->paginate($criteria->windowSize(), ['*'], 'page', 1);
@@ -193,7 +193,7 @@ final class WikidataSource implements MovieSourceProvider
             throw new RuntimeException("Failed to query Wikidata: {$e->getMessage()}", 0, $e);
         }
 
-        if (! $response->successful()) {
+        if (!$response->successful()) {
             throw new RuntimeException("Wikidata query failed with status: {$response->status()}");
         }
 
@@ -203,7 +203,7 @@ final class WikidataSource implements MovieSourceProvider
             $imdbId = $result['imdbID']['value'] ?? null;
             $internetArchiveId = $result['internetArchiveID']['value'] ?? null;
 
-            if (! $imdbId || ! $internetArchiveId) {
+            if (!$imdbId || !$internetArchiveId) {
                 continue;
             }
 
