@@ -29,7 +29,8 @@ class MovieController extends Controller
 {
     public function __construct(
         private SourceRegistry $registry
-    ) {}
+    ) {
+    }
 
     /**
      * Display the specified resource.
@@ -58,26 +59,40 @@ class MovieController extends Controller
                     'source' => $movie->source?->value,
                     'conversion_attempt' => $movie->conversion_attempt,
                     'conversion_status' => $movie->conversion_status->value,
-                    'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? $movie->conversion_error : null,
+                    'conversion_error' => $movie->conversion_status === ConversionStatus::Failed ? 'The conversion failed.' : null,
                     'playable' => $movie->isPlayable(),
                     'preferredlanguage' => Auth::user()->preferredlanguage?->value,
                     'movieData' => $movie->getEnrichedData()?->displayArray(),
                     'download_status' => $movie->download_status->value,
-                    'download_error' => $movie->download_status === DownloadStatus::Unsupported
-                        ? $movie->download_error
-                        : null,
-                    'can_prepare' => ! in_array($movie->download_status, [
+                    'download_error' => match ($movie->download_status) {
+                        DownloadStatus::Failed => 'This movie is not available.',
+                        DownloadStatus::Unsupported => $movie->download_error,
+                        default => null,
+                    },
+                    'can_prepare' => !in_array($movie->download_status, [
                         DownloadStatus::Unsupported,
                         DownloadStatus::Purging,
                     ], true) && in_array($movie->conversion_status, [
-                        ConversionStatus::Pending,
-                        ConversionStatus::Failed,
-                    ], true),
+                            ConversionStatus::Pending,
+                            ConversionStatus::Failed,
+                        ], true),
                     'external_subtitles_status' => $movie->external_subtitles_status->value,
-                    'external_subtitles' => $movie->availableSubtitles(),
+                    'external_subtitles' => $movie->download_status === DownloadStatus::Purging
+                        ? [] : collect($movie->external_subtitles ?? [])
+                            ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
+                            ->map(fn(array $subtitle): array => [
+                                'id' => $subtitle['file_index'],
+                                'label' => $subtitle['file_name'] . ' — External',
+                                'language' => $subtitle['language'],
+                                'url' => Storage::disk('public')->url(
+                                    "movies/{$movie->id}/{$subtitle['output_file']}"
+                                ),
+                            ])
+                            ->values()
+                            ->all(),
                 ],
                 'comments' => Inertia::scroll(
-                    fn () => CommentResource::collection(
+                    fn() => CommentResource::collection(
                         $movie->comments()->with('user')->latest()->paginate(20)
                     ),
                 ),
@@ -100,7 +115,7 @@ class MovieController extends Controller
         $userId = Auth::id();
 
         $sources = $request->user()->enabledSources();
-        $sourceValues = array_map(fn (MovieSource $source): string => $source->value, $sources);
+        $sourceValues = array_map(fn(MovieSource $source): string => $source->value, $sources);
         // An empty listing shows the most popular films first, a search is ordered by
         // name, and an explicit criterion always wins over both.
         $sort = isset($params['sort'])
@@ -177,16 +192,16 @@ class MovieController extends Controller
         $window = array_slice($entries, ($page - 1) * $perPage, $perPage);
         $localMovies = Movie::query()
             ->withExists([
-                'watchedMovies as watched' => fn (Builder $query) => $query
+                'watchedMovies as watched' => fn(Builder $query) => $query
                     ->where('watched_movies.user_id', $userId),
             ])
-            ->whereIn('imdb_id', array_map(fn (Source $entry): string => $entry->imdb_id, $window))
+            ->whereIn('imdb_id', array_map(fn(Source $entry): string => $entry->imdb_id, $window))
             ->get()
             ->keyBy('imdb_id');
         $omdb = OmdbService::factory();
 
         $results = array_map(
-            fn (Source $entry): MergedMovie => new MergedMovie(
+            fn(Source $entry): MergedMovie => new MergedMovie(
                 $entry,
                 $localMovies[$entry->imdb_id] ?? null,
                 $omdb->enrichByImdbId($entry->imdb_id),
@@ -210,7 +225,7 @@ class MovieController extends Controller
         return Inertia::render(
             'movies/index',
             [
-                'movies' => Inertia::scroll(fn () => IndexMovieResource::collection($movies)),
+                'movies' => Inertia::scroll(fn() => IndexMovieResource::collection($movies)),
                 'filters' => [
                     'search' => $search,
                     'watched' => $watched->value,
@@ -223,7 +238,7 @@ class MovieController extends Controller
                     'ratingTo' => $criteria->ratingTo,
                     'genres' => Source::genreOptions($sourceValues),
                     'sorts' => collect(MovieSort::cases())
-                        ->mapWithKeys(fn (MovieSort $case): array => [$case->value => $case->label()])
+                        ->mapWithKeys(fn(MovieSort $case): array => [$case->value => $case->label()])
                         ->all(),
                     'sources' => $sourceValues,
                 ],
