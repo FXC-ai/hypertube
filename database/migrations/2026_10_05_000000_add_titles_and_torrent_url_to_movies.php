@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::table('movies', function (Blueprint $table) {
             $table->string('filename')->nullable()->change();
-            $table->json('titles')->nullable();
             $table->string('torrent_url')->nullable();
         });
     }
@@ -25,7 +24,7 @@ return new class extends Migration
     {
         Schema::table('movies', function (Blueprint $table) {
             $table->string('filename')->nullable(false)->change();
-            // $table->removeColumn(['titles', 'torrent_url']);
+            $table->removeColumn(['torrent_url']);
         });
     }
 };

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Languages;
+use App\Enums\MovieSource;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -25,8 +26,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $remember_token
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property array<string, bool>|null $sources
  */
-#[Fillable(['username', 'email', 'firstname', 'lastname', 'password', 'preferredlanguage', 'profilepicture'])]
+#[Fillable(['username', 'email', 'firstname', 'lastname', 'password', 'preferredlanguage', 'profilepicture', 'sources'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -44,6 +46,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'preferredlanguage' => Languages::class,
+            'sources' => 'array',
         ];
     }
 
@@ -67,5 +70,28 @@ class User extends Authenticatable implements MustVerifyEmail
         return WatchedMovie::where('user_id', $this->id)
             ->where('movie_id', $movie->id)
             ->exists();
+    }
+
+    /**
+     * Catalog sources this user is allowed to query, intersected with the sources
+     * globally enabled in the configuration.
+     *
+     * @return list<MovieSource>
+     */
+    public function enabledSources(): array
+    {
+        $preferences = MovieSource::defaultPreferences();
+
+        $sources = is_array($this->sources) ? $this->sources : [];
+
+        foreach ($sources as $source => $enabled) {
+            $preferences[$source] = (bool) $enabled;
+        }
+
+        return array_values(array_filter(
+            MovieSource::catalogSources(),
+            fn(MovieSource $source): bool => $preferences[$source->value]
+                && (bool) config("services.sources.{$source->value}.enabled", true),
+        ));
     }
 }

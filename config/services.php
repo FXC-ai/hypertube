@@ -51,4 +51,13 @@ return [
         'key' => env('OMDB_API_KEY'),
     ],
 
+    'sources' => [
+        'wikidata' => [
+            'enabled' => env('SOURCE_WIKIDATA_ENABLED', true),
+        ],
+        'whitelist' => [
+            'enabled' => env('SOURCE_WHITELIST_ENABLED', true),
+        ],
+    ],
+
 ];

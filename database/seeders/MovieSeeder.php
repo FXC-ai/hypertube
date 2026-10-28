@@ -4,8 +4,10 @@ namespace Database\Seeders;
 
 use App\Enums\ConversionStatus;
 use App\Enums\DownloadStatus;
+use App\Enums\MovieSource;
 use App\Models\Movie;
 use App\Models\MovieData;
+use App\Models\Source;
 use Illuminate\Database\Seeder;
 
 class MovieSeeder extends Seeder
@@ -15,18 +17,18 @@ class MovieSeeder extends Seeder
      */
     public function run(): void
     {
-        $testMkv = Movie::factory()
+        // A movie already downloaded on this server, with its metadata.
+        $downloaded = Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
+            ->withCatalogEntry('Mkv test with multiple subtitles')
             ->create([
-                'title' => 'Mkv test with multiple subtitles',
                 'download_status' => DownloadStatus::Completed,
                 'filename' => 'test.mkv',
-                'titles' => '{"en":"Mkv test"}',
                 'torrent_url' => null,
             ]);
 
         MovieData::factory()
-            ->forMovie($testMkv)
+            ->forImdbId($downloaded->imdb_id)
             ->create([
                 'release_date' => '2000-01-01',
                 'runtime' => 2,
@@ -36,10 +38,11 @@ class MovieSeeder extends Seeder
                 'imdbRating' => 0,
             ]);
 
+        // A movie the catalog offers, ready to be downloaded.
         Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
+            ->withCatalogEntry('Mkv test evaluation', MovieSource::Whitelist)
             ->create([
-                'title' => 'Mkv test evaluation',
                 'download_status' => DownloadStatus::Pending,
                 'filename' => null,
                 'titles' => '{"en":"Mkv de test evaluation "}',
@@ -47,5 +50,24 @@ class MovieSeeder extends Seeder
                 //'torrent_url' => 'https://itorrents.org/torrent/79816060EA56D56F2A2148CD45705511079F9BCA.torrent',
                 'imdb_id' => 'tt2608732'
             ]);
+
+        // Movies the catalog offers but that this server has not loaded yet.
+        $publicDomain = [];
+
+        foreach (['Night of the Living Dead', 'Nosferatu', 'Metropolis'] as $title) {
+            $publicDomain[] = Source::factory()
+                ->forSource(MovieSource::Wikidata)
+                ->create(['title' => $title]);
+        }
+
+        Source::factory()
+            ->forSource(MovieSource::Whitelist)
+            ->create(['title' => 'Cops']);
+
+        // The whitelist curates a movie the public domain catalog offers too.
+        Source::factory()
+            ->forSource(MovieSource::Whitelist)
+            ->duplicateOf($publicDomain[0])
+            ->create();
     }
 }

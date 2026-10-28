@@ -22,7 +22,7 @@ class IndexMovieRequest extends FormRequest
             'sort' => ['nullable', 'string', Rule::in(['created_at'])],
             'dir' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
             'watched' => ['nullable', Rule::enum(WatchedFilter::class)],
-            'page' => ['nullable', 'integer', 'min:1'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

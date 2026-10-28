@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\MovieData;
 use App\Services\OmdbService;
 use Illuminate\Support\Facades\Http;
 
@@ -36,8 +37,8 @@ test('missing optional OMDb fields do not prevent movie data from being stored',
     $movieData = (new OmdbService('test-api-key'))->enrichByImdbId($imdbId);
 
     expect($movieData)
-        ->toBeArray()
-        ->and($movieData[$normalizedField])->toBeNull();
+        ->toBeInstanceOf(MovieData::class)
+        ->and($movieData->displayArray()[$normalizedField])->toBeNull();
 
     $this->assertDatabaseHas('movie_data', [
         'imdb_id' => $imdbId,

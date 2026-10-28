@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\ConversionStatus;
+use App\Enums\MovieSource;
 use App\Models\Movie;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -25,16 +26,25 @@ class MovieFactory extends Factory
         $status = fake()->randomElement(ConversionStatus::cases());
 
         return [
-            'title' => fake()->sentence(3),
-            'titles' => [
-                'fr' => fake()->sentence(3),
-                'en' => fake()->sentence(3),
-            ],
             'filename' => $filename,
             'imdb_id' => 'fake_imdb_id' . fake()->numerify('######'),
             'torrent_url' => null,
             ...$this->conversionAttributes($status),
         ];
+    }
+
+    /**
+     * Attach the catalog entry a Movie was created from.
+     */
+    public function withCatalogEntry(?string $title = null, MovieSource $source = MovieSource::Wikidata): static
+    {
+        return $this->afterCreating(function (Movie $movie) use ($title, $source): void {
+            SourceFactory::new([
+                'imdb_id' => $movie->imdb_id,
+                'title' => $title ?? fake()->sentence(3),
+                'source' => $source->value,
+            ])->create();
+        });
     }
 
     public function withConversionStatus(ConversionStatus $status): static

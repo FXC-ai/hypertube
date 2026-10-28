@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'react';
 
 import CommentForm from '@/components/comment-form';
 import CommentItem from '@/components/comment-item';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -24,7 +25,8 @@ import { show } from '@/routes/movies';
 import { store as conversionStore } from '@/routes/movies/conversion';
 import type { Comment } from '@/types/comment';
 
-type ConversionStatus = 'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
+type ConversionStatus =
+    'pending' | 'queued' | 'converting' | 'playable' | 'converted' | 'failed';
 
 type DownloadStatus =
     | 'pending'
@@ -34,7 +36,8 @@ type DownloadStatus =
     | 'unsupported'
     | 'purging';
 
-type ExternalSubtitleStatus = 'none' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed';
+type ExternalSubtitleStatus =
+    'none' | 'pending' | 'queued' | 'processing' | 'ready' | 'failed';
 
 type OmdbData = {
     imdbID: string;
@@ -50,6 +53,9 @@ type OmdbData = {
     language: string;
     poster: string | null;
     awards: string;
+    imdbRating: number | null;
+    imdbVotes: number | null;
+    boxOffice: number | null;
 } | null;
 
 type ExternalSubtitleTrack = {
@@ -63,6 +69,7 @@ type MoviePageData = {
     id: number;
     title: string;
     filename: string | null;
+    source: string | null;
     download_status: DownloadStatus;
     download_error: string | null;
     conversion_attempt: string | null;
@@ -79,6 +86,11 @@ type MoviePageData = {
 type MovieShowProps = {
     moviePageData: MoviePageData;
     comments: { data: Comment[]; meta: { total: number } };
+};
+
+const sourceLabels: Record<string, string> = {
+    wikidata: 'Wikidata',
+    whitelist: 'Whitelist',
 };
 
 const conversionStatusLabel: Record<ConversionStatus, string> = {
@@ -220,7 +232,9 @@ function HlsPlayer({
 export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
     const conversionForm = useForm({});
     const { stop } = usePoll(2000, {});
-    const isPreparing = ['queued', 'converting'].includes(moviePageData.conversion_status);
+    const isPreparing = ['queued', 'converting'].includes(
+        moviePageData.conversion_status,
+    );
     const isUnsupported = moviePageData.download_status === 'unsupported';
     const isPurging = moviePageData.download_status === 'purging';
     const downloadFailed = moviePageData.download_status === 'failed';
@@ -276,8 +290,6 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
         moviePageData.conversion_attempt,
     );
 
-    console.log('Data: ', moviePageData.movieData);
-
     return (
         <>
             <Head title={moviePageData.title} />
@@ -287,6 +299,16 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                             {moviePageData.title}
                         </h1>
+                        {moviePageData.source && (
+                            <Badge
+                                variant="secondary"
+                                className="mt-2"
+                                title="Legal catalog"
+                            >
+                                {sourceLabels[moviePageData.source] ??
+                                    moviePageData.source}
+                            </Badge>
+                        )}
                     </div>
                 </section>
 
@@ -377,8 +399,10 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                 </p>
                             )}
                             {moviePageData.can_prepare &&
-                                (moviePageData.conversion_status === 'pending' ||
-                                    moviePageData.conversion_status === 'failed') && (
+                                (moviePageData.conversion_status ===
+                                    'pending' ||
+                                    moviePageData.conversion_status ===
+                                    'failed') && (
                                     <Button
                                         type="button"
                                         className="w-full"
@@ -389,157 +413,170 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                             <RotateCcw />
                                         ) : (
                                             <Play />
-                                        )}
+                                        )
+                                        }
                                         {downloadFailed || moviePageData.conversion_status === 'failed'
                                             ? 'Retry'
-                                            : 'Prepare video'}
-                                    </Button>
-                                )}
-                        </CardContent>
-                    </Card>
+                                            : 'Prepare video'
+                                        }
+                                    </Button >
+                                )
+                            }
+                        </CardContent >
+                    </Card >
 
-                    {moviePageData.movieData && (
-                        <Card className="border-border/60 shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="flex items-center gap-2 text-lg">
-                                    <Info className="size-5" />
-                                    About this movie
-                                </CardTitle>
-                                <CardDescription>
-                                    Movie details from OMDb.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {moviePageData.movieData.poster && (
-                                    <div className="flex justify-center">
-                                        <img
-                                            src={moviePageData.movieData.poster}
-                                            alt={`${moviePageData.title}`}
-                                            className="max-w-50 rounded-lg text-center shadow-md"
-                                        />
+                    {
+                        moviePageData.movieData && (
+                            <Card className="border-border/60 shadow-sm">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="flex items-center gap-2 text-lg">
+                                        <Info className="size-5" />
+                                        About this movie
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Movie details from OMDb.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {moviePageData.movieData.poster && (
+                                        <div className="flex justify-center">
+                                            <img
+                                                src={moviePageData.movieData.poster}
+                                                alt={`${moviePageData.title}`}
+                                                className="max-w-50 rounded-lg text-center shadow-md"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                                        <div>
+                                            <span className="text-muted-foreground">
+                                                Year:
+                                            </span>
+                                            <span className="ml-2 font-medium">
+                                                {moviePageData.movieData.year}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">
+                                                Rated:
+                                            </span>
+                                            <span className="ml-2 font-medium">
+                                                {moviePageData.movieData.rated ??
+                                                    'N/A'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">
+                                                Released:
+                                            </span>
+                                            <span className="ml-2 font-medium">
+                                                {moviePageData.movieData.released ??
+                                                    'N/A'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">
+                                                Runtime:
+                                            </span>
+                                            <span className="ml-2 font-medium">
+                                                {moviePageData.movieData.runtime}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="ml-2 font-medium">
+                                                {moviePageData.movieData
+                                                    .imdbRating ?? 'N/A'}
+                                            </span>
+                                        </div>
                                     </div>
-                                )}
 
-                                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                                     <div>
                                         <span className="text-muted-foreground">
-                                            Year:
+                                            Genre:
                                         </span>
                                         <span className="ml-2 font-medium">
-                                            {moviePageData.movieData.year}
+                                            {moviePageData.movieData.genre}
                                         </span>
                                     </div>
+
                                     <div>
                                         <span className="text-muted-foreground">
-                                            Rated:
+                                            Director:
                                         </span>
                                         <span className="ml-2 font-medium">
-                                            {moviePageData.movieData.rated ??
-                                                'N/A'}
+                                            {moviePageData.movieData.director}
                                         </span>
                                     </div>
+
                                     <div>
                                         <span className="text-muted-foreground">
-                                            Released:
+                                            Writer:
                                         </span>
                                         <span className="ml-2 font-medium">
-                                            {moviePageData.movieData.released ??
-                                                'N/A'}
+                                            {moviePageData.movieData.writer}
                                         </span>
                                     </div>
+
                                     <div>
                                         <span className="text-muted-foreground">
-                                            Runtime:
+                                            Actors:
                                         </span>
                                         <span className="ml-2 font-medium">
-                                            {moviePageData.movieData.runtime}
+                                            {moviePageData.movieData.actors}
                                         </span>
                                     </div>
-                                </div>
 
-                                <div>
-                                    <span className="text-muted-foreground">
-                                        Genre:
-                                    </span>
-                                    <span className="ml-2 font-medium">
-                                        {moviePageData.movieData.genre}
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <span className="text-muted-foreground">
-                                        Director:
-                                    </span>
-                                    <span className="ml-2 font-medium">
-                                        {moviePageData.movieData.director}
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <span className="text-muted-foreground">
-                                        Writer:
-                                    </span>
-                                    <span className="ml-2 font-medium">
-                                        {moviePageData.movieData.writer}
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <span className="text-muted-foreground">
-                                        Actors:
-                                    </span>
-                                    <span className="ml-2 font-medium">
-                                        {moviePageData.movieData.actors}
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <span className="text-muted-foreground">
-                                        Plot:
-                                    </span>
-                                    <p className="mt-1 text-muted-foreground">
-                                        {moviePageData.movieData.plot}
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <span className="text-muted-foreground">
-                                        Language:
-                                    </span>
-                                    <span className="ml-2 font-medium">
-                                        {moviePageData.movieData.language}
-                                    </span>
-                                </div>
-
-                                {moviePageData.movieData.awards !== 'N/A' && (
-                                    <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                                        <strong>Awards:</strong>{' '}
-                                        {moviePageData.movieData.awards}
+                                    <div>
+                                        <span className="text-muted-foreground">
+                                            Plot:
+                                        </span>
+                                        <p className="mt-1 text-muted-foreground">
+                                            {moviePageData.movieData.plot}
+                                        </p>
                                     </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
 
-                    {!moviePageData.movieData && (
-                        <Card className="border-border/60 shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="flex items-center gap-2 text-lg">
-                                    <Info className="size-5" />
-                                    About this movie
-                                </CardTitle>
-                                <CardDescription>
-                                    A dedicated space for the movie details.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm text-muted-foreground">
-                                    No additional information available for this
-                                    movie.
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                                    <div>
+                                        <span className="text-muted-foreground">
+                                            Language:
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                            {moviePageData.movieData.language}
+                                        </span>
+                                    </div>
+
+                                    {moviePageData.movieData.awards !== 'N/A' && (
+                                        <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                                            <strong>Awards:</strong>{' '}
+                                            {moviePageData.movieData.awards}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )
+                    }
+
+                    {
+                        !moviePageData.movieData && (
+                            <Card className="border-border/60 shadow-sm">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="flex items-center gap-2 text-lg">
+                                        <Info className="size-5" />
+                                        About this movie
+                                    </CardTitle>
+                                    <CardDescription>
+                                        A dedicated space for the movie details.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm text-muted-foreground">
+                                        No additional information available for this
+                                        movie.
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )
+                    }
 
                     <Card className="border-border/60 shadow-sm">
                         <CardHeader className="pb-3">
@@ -577,8 +614,8 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                             </div>
                         </CardContent>
                     </Card>
-                </div>
-            </div>
+                </div >
+            </div >
         </>
     );
 }

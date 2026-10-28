@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\MovieSource;
 use App\Models\MovieData;
-use App\Models\Movie;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -11,11 +11,15 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class MovieDataFactory extends Factory
 {
+    /**
+     * Define the model's default state: the canonical metadata of a movie.
+     *
+     * @return array<string, mixed>
+     */
     public function definition(): array
     {
         return [
-            'movie_id' => null,
-            'source' => 'omdb',
+            'source' => MovieSource::Omdb->value,
             'imdb_id' => 'tt' . fake()->unique()->numerify('#######'),
             'release_date' => fake()->dateTimeBetween('-100 years', 'now'),
             'poster' => fake()->imageUrl(600, 900, 'movies'),
@@ -63,12 +67,12 @@ class MovieDataFactory extends Factory
         ];
     }
 
-    public function forMovie(Movie $movie): static
+    /**
+     * The metadata of a movie the catalog already offers.
+     */
+    public function forImdbId(string $imdbId): static
     {
-        return $this->state(fn(): array => [
-            'movie_id' => $movie->getKey(),
-            'imdb_id' => $movie->imdb_id,
-        ]);
+        return $this->state(fn(): array => ['imdb_id' => $imdbId]);
     }
 
     public function withoutPoster(): static

@@ -13,13 +13,7 @@ return new class extends Migration
     {
         Schema::create('movie_data', function (Blueprint $table) {
             $table->id();
-            $table->string('imdb_id');
-            $table->foreignId('movie_id')
-                ->nullable()
-                ->after('id')
-                ->constrained('movies')
-                ->nullOnDelete();
-            $table->unique(['imdb_id', 'movie_id']);
+            $table->string('imdb_id')->unique();
             $table->string('source');
             $table->date('release_date')->nullable();
             $table->timestamps();

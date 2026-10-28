@@ -46,8 +46,8 @@ describe('watched relation', function () {
     it('exposes the watched flag of the authenticated user on the index', function () {
         $user = User::factory()->create();
         $watcher = User::factory()->create();
-        $watched = Movie::factory()->create(['title' => 'Inception']);
-        $unwatched = Movie::factory()->create(['title' => 'Inception of nothing']);
+        $watched = Movie::factory()->withCatalogEntry('Inception')->create();
+        $unwatched = Movie::factory()->withCatalogEntry('Inception of nothing')->create();
 
         WatchedMovie::factory()->create(['movie_id' => $watched->id, 'user_id' => $watcher->id]);
 
@@ -75,8 +75,8 @@ describe('watched relation', function () {
 describe('watched filter', function () {
     it('returns only watched movies', function () {
         $user = User::factory()->create();
-        $watched = Movie::factory()->create(['title' => 'Watched one']);
-        Movie::factory()->create(['title' => 'Untouched one']);
+        $watched = Movie::factory()->withCatalogEntry('Watched one')->create();
+        Movie::factory()->withCatalogEntry('Untouched one')->create();
         WatchedMovie::factory()->create(['movie_id' => $watched->id, 'user_id' => $user->id]);
 
         $this->actingAs($user)
@@ -92,8 +92,8 @@ describe('watched filter', function () {
 
     it('returns only unwatched movies', function () {
         $user = User::factory()->create();
-        $watched = Movie::factory()->create(['title' => 'Watched one']);
-        $unwatched = Movie::factory()->create(['title' => 'Untouched one']);
+        $watched = Movie::factory()->withCatalogEntry('Watched one')->create();
+        $unwatched = Movie::factory()->withCatalogEntry('Untouched one')->create();
         WatchedMovie::factory()->create(['movie_id' => $watched->id, 'user_id' => $user->id]);
 
         $this->actingAs($user)
@@ -109,8 +109,8 @@ describe('watched filter', function () {
 
     it('returns every movie when no filter is given', function () {
         $user = User::factory()->create();
-        $watched = Movie::factory()->create(['title' => 'Watched one']);
-        Movie::factory()->create(['title' => 'Untouched one']);
+        $watched = Movie::factory()->withCatalogEntry('Watched one')->create();
+        Movie::factory()->withCatalogEntry('Untouched one')->create();
         WatchedMovie::factory()->create(['movie_id' => $watched->id, 'user_id' => $user->id]);
 
         $this->actingAs($user)
@@ -124,8 +124,8 @@ describe('watched filter', function () {
 
     it('combines with the title search', function () {
         $user = User::factory()->create();
-        $watchedMatch = Movie::factory()->create(['title' => 'Inception']);
-        Movie::factory()->create(['title' => 'Alien']);
+        $watchedMatch = Movie::factory()->withCatalogEntry('Inception')->create();
+        Movie::factory()->withCatalogEntry('Alien')->create();
         WatchedMovie::factory()->create(['movie_id' => $watchedMatch->id, 'user_id' => $user->id]);
 
         $this->actingAs($user)

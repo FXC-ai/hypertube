@@ -5,20 +5,32 @@ import Heading from '@/components/heading';
 
 import InputError from '@/components/input-error';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { index } from '@/routes/movies';
+import {
+    index,
+    select as selectMovie,
+    show as showMovie,
+} from '@/routes/movies';
+import { edit as editSources } from '@/routes/sources';
 
 type WatchedFilter = 'all' | 'watched' | 'unwatched';
 
 type Movie = {
-    id: number;
+    id: number | null;
     title: string;
+    source: string;
+    imdb_id: string;
     watched: boolean;
-    data: any;
-    created_at: string;
+    data: Record<string, unknown> & {
+        poster?: string | null;
+        imdbRating?: number | string | null;
+        ratingLabel?: string;
+    };
+    created_at: string | null;
 };
 
 type MovieIndexProps = {
@@ -28,7 +40,13 @@ type MovieIndexProps = {
     filters: {
         search: string | null;
         watched: WatchedFilter;
+        sources: string[];
     };
+};
+
+const sourceLabels: Record<string, string> = {
+    wikidata: 'Wikidata',
+    whitelist: 'Whitelist',
 };
 
 const watchedFilterOptions: { value: WatchedFilter; label: string }[] = [
@@ -45,16 +63,13 @@ function formatRegistrationDate(date: string): string {
     }).format(new Date(date));
 }
 
-function MovieItem({ movie }: { movie: Movie }) {
+function MovieCard({ movie }: { movie: Movie }) {
     return (
-        <Link
-            href={`/movies/${movie.id}`}
-            className="flex w-64 flex-col items-center gap-1 p-4 hover:bg-muted/50"
-        >
+        <div className="flex w-64 flex-col items-center gap-1 p-4">
             <div className="relative w-full">
                 <object
                     className="aspect-2/3 w-full rounded"
-                    data={movie.data?.poster}
+                    data={movie.data?.poster ?? undefined}
                 >
                     <img
                         className="aspect-2/3 w-full rounded"
@@ -74,6 +89,13 @@ function MovieItem({ movie }: { movie: Movie }) {
                     </div>
                 )}
 
+                <Badge
+                    variant="secondary"
+                    className="absolute top-3 left-3"
+                    title="Legal catalog"
+                >
+                    {sourceLabels[movie.source] ?? movie.source}
+                </Badge>
                 {movie.watched && (
                     <span
                         className="absolute top-3 right-3 flex items-center rounded-full bg-white p-1 text-blue-600 shadow ring-2 ring-black/5"
@@ -99,6 +121,23 @@ function MovieItem({ movie }: { movie: Movie }) {
             ) : (
                 <></>
             )}
+        </div>
+    );
+}
+
+function MovieItem({ movie }: { movie: Movie }) {
+    // A movie this server does not have yet is loaded from the source that offered it.
+    const href =
+        movie.id === null
+            ? selectMovie({ source: movie.source, imdb_id: movie.imdb_id })
+            : showMovie({ movie: movie.id });
+
+    return (
+        <Link
+            href={href}
+            className="flex w-64 flex-col items-center gap-1 p-4 hover:bg-muted/50"
+        >
+            <MovieCard movie={movie} />
         </Link>
     );
 }
@@ -143,7 +182,7 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                             <>
                                 <div className="min-w-0 flex-1">
                                     <Label htmlFor="search" className="sr-only">
-                                        Username
+                                        Search
                                     </Label>
                                     <Input
                                         id="search"
@@ -201,6 +240,17 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                                 </Link>
                             </Button>
                         )}
+
+                        <span className="text-sm text-muted-foreground">
+                            Sources queried:{' '}
+                            {filters.sources
+                                .map((source) => sourceLabels[source] ?? source)
+                                .join(', ')}
+                        </span>
+
+                        <Button variant="link" asChild className="px-0">
+                            <Link href={editSources()}>Manage sources</Link>
+                        </Button>
                     </div>
                 </div>
 
@@ -209,7 +259,7 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                         <div className="flex flex-wrap justify-center">
                             {movies.data.map((movie) => (
                                 <MovieItem
-                                    key={movie.id}
+                                    key={movie.imdb_id}
                                     movie={movie}
                                 ></MovieItem>
                             ))}
