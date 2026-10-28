@@ -1,6 +1,6 @@
 init:
 	docker compose up -d --build --scale worker-conversions=3
-	docker compose exec app php artisan db:seed
+	docker compose exec app php artisan migrate:fresh --seed
 	
 
 import-movies:

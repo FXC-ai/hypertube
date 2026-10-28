@@ -20,7 +20,7 @@ class MovieSeeder extends Seeder
         // A movie already downloaded on this server, with its metadata.
         $downloaded = Movie::factory()
             ->withConversionStatus(ConversionStatus::Pending)
-            ->withCatalogEntry('Mkv test with multiple subtitles')
+            ->withCatalogEntry('Mkv test with multiple subtitles', MovieSource::Whitelist)
             ->create([
                 'download_status' => DownloadStatus::Completed,
                 'filename' => 'test.mkv',

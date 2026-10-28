@@ -24,13 +24,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Illuminate\Support\Facades\Storage;
 
 class MovieController extends Controller
 {
     public function __construct(
         private SourceRegistry $registry
-    ) {
-    }
+    ) {}
 
     /**
      * Display the specified resource.
@@ -73,23 +73,23 @@ class MovieController extends Controller
                         DownloadStatus::Unsupported,
                         DownloadStatus::Purging,
                     ], true) && in_array($movie->conversion_status, [
-                            ConversionStatus::Pending,
-                            ConversionStatus::Failed,
-                        ], true),
+                        ConversionStatus::Pending,
+                        ConversionStatus::Failed,
+                    ], true),
                     'external_subtitles_status' => $movie->external_subtitles_status->value,
                     'external_subtitles' => $movie->download_status === DownloadStatus::Purging
                         ? [] : collect($movie->external_subtitles ?? [])
-                            ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
-                            ->map(fn(array $subtitle): array => [
-                                'id' => $subtitle['file_index'],
-                                'label' => $subtitle['file_name'] . ' — External',
-                                'language' => $subtitle['language'],
-                                'url' => Storage::disk('public')->url(
-                                    "movies/{$movie->id}/{$subtitle['output_file']}"
-                                ),
-                            ])
-                            ->values()
-                            ->all(),
+                        ->filter(fn(array $subtitle): bool => is_string($subtitle['output_file'] ?? null))
+                        ->map(fn(array $subtitle): array => [
+                            'id' => $subtitle['file_index'],
+                            'label' => $subtitle['file_name'] . ' — External',
+                            'language' => $subtitle['language'],
+                            'url' => Storage::disk('public')->url(
+                                "movies/{$movie->id}/{$subtitle['output_file']}"
+                            ),
+                        ])
+                        ->values()
+                        ->all(),
                 ],
                 'comments' => Inertia::scroll(
                     fn() => CommentResource::collection(
