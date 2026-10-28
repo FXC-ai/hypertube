@@ -8,6 +8,14 @@ use App\Models\User;
 class CommentPolicy
 {
     /**
+     * A comment may only be rewritten by the user who wrote it.
+     */
+    public function update(User $user, Comment $comment): bool
+    {
+        return $user->id === $comment->user_id;
+    }
+
+    /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Comment $comment): bool

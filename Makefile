@@ -21,9 +21,10 @@ OUTPUT_DIR ?= /var/www/html/storage/app/public/movies/999
 .DEFAULT_GOAL := help
 
 .PHONY: help up down build logs ps restart clean fclean volumes images \
-	client-up client-logs client-shell \
-	torrent-dev torrent-test torrent-test-all torrent-lint \
-	api-health api-test api-cancel
+ 	client-up client-logs client-shell \
+ 	oauth-client docs \
+ 	torrent-dev torrent-test torrent-test-all torrent-lint \
+ 	api-health api-test api-cancel
 
 help: ## Liste les commandes
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -61,6 +62,14 @@ volumes: ## Liste les volumes Docker du projet
 
 images: ## Liste les images du projet
 	$(COMPOSE) images
+
+## API RESTful (OAuth2 + Swagger)
+
+oauth-client: ## Crée le client OAuth2 « password grant » (affiche le client_id/secret une seule fois)
+	$(COMPOSE) exec -T app php artisan passport:client --password --name="Hypertube API" --no-interaction
+
+docs: ## Régénère la spec Swagger (UI : http://localhost:8000/api/documentation)
+	$(COMPOSE) exec -T app php artisan l5-swagger:generate
 
 ## Client Torrent (Docker)
 

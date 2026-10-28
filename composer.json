@@ -10,11 +10,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "darkaonline/l5-swagger": "^11.2",
         "doctrine/dbal": "^4.4",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel/chisel": "^0.1.0",
         "laravel/fortify": "^1.37.2",
         "laravel/framework": "^13.17",
+        "laravel/passport": "^13.10",
         "laravel/socialite": "^5.30",
         "laravel/tinker": "^3.0",
         "laravel/wayfinder": "^0.1.14",
@@ -51,6 +53,8 @@
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
             "@php artisan migrate --force",
+            "@php artisan passport:install --no-interaction",
+            "@php artisan l5-swagger:generate",
             "npm install",
             "npm run build"
         ],

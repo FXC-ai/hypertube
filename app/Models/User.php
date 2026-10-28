@@ -13,6 +13,10 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
+use League\OAuth2\Server\Entities\ClientEntityInterface;
 
 /**
  * @property int $id
@@ -30,10 +34,10 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable(['username', 'email', 'firstname', 'lastname', 'password', 'preferredlanguage', 'profilepicture', 'sources'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * Get the attributes that should be cast.
@@ -53,6 +57,31 @@ class User extends Authenticatable implements MustVerifyEmail
     public function socialAccounts()
     {
         return $this->hasMany(SocialAccount::class);
+    }
+
+    /**
+     * The account a password grant authenticates: an email address or a username.
+     */
+    public function findForPassport(string $username, ClientEntityInterface $client): ?self
+    {
+        return self::query()
+            ->where('email', $username)
+            ->orWhere('username', $username)
+            ->first();
+    }
+
+    /**
+     * The picture of this user, as a link an API consumer can load.
+     */
+    public function profilePictureUrl(): ?string
+    {
+        if (filled($this->profilepicture)) {
+            return str_starts_with((string) $this->profilepicture, 'http')
+                ? (string) $this->profilepicture
+                : Storage::disk('public')->url((string) $this->profilepicture);
+        }
+
+        return null;
     }
 
     /**
@@ -90,7 +119,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
         return array_values(array_filter(
             MovieSource::catalogSources(),
-            fn(MovieSource $source): bool => $preferences[$source->value]
+            fn (MovieSource $source): bool => $preferences[$source->value]
                 && (bool) config("services.sources.{$source->value}.enabled", true),
         ));
     }

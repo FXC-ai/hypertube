@@ -2,22 +2,24 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
+use App\Actions\DownloadProfilePicture;
 use App\Models\SocialAccount;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
-use Illuminate\Http\Request;
 use Throwable;
 
-class SocialiteController extends Controller
+class SocialiteController
 {
+    public function __construct(
+        private readonly DownloadProfilePicture $downloadProfilePicture,
+    ) {}
+
     public function redirect(string $provider)
     {
         return Socialite::driver($provider)->redirect();
@@ -44,7 +46,7 @@ class SocialiteController extends Controller
         }
 
         $suffix = substr(
-            hash('sha256', $provider . ':' . $socialUser->getId()),
+            hash('sha256', $provider.':'.$socialUser->getId()),
             0,
             3,
         );
@@ -53,77 +55,12 @@ class SocialiteController extends Controller
             $baseUsername,
             255 - strlen($suffix) - 1,
             '',
-        ) . '-' . $suffix;
+        ).'-'.$suffix;
     }
 
     private function downloadProfilepicture(?string $url): ?string
     {
-        if ($url === null || $url === '') {
-            Log::channel('my_debug')->debug('Return null: URL is empty', []);
-
-            return null;
-        }
-
-        try {
-            $response = Http::connectTimeout(3)
-                ->timeout(10)
-                ->get($url);
-        } catch (Throwable) {
-            Log::channel('my_debug')->debug('Return null: HTTP request threw an exception', []);
-
-            return null;
-        }
-
-        if (! $response->successful()) {
-            Log::channel('my_debug')->debug('Return null: HTTP response was unsuccessful', []);
-
-            return null;
-        }
-
-        $contents = $response->body();
-
-        if ($contents === '' || strlen($contents) > 2 * 1024 * 1024) {
-            Log::channel('my_debug')->debug('Return null: image is empty or larger than 2 MB', []);
-
-            return null;
-        }
-
-        $imageInformation = getimagesizefromstring($contents);
-
-        if ($imageInformation === false) {
-            Log::channel('my_debug')->debug('Return null: invalid image contents', []);
-
-            return null;
-        }
-
-        [$width, $height] = $imageInformation;
-
-        if ($width > 4000 || $height > 4000) {
-            Log::channel('my_debug')->debug('Return null: image dimensions exceed 2000 px', []);
-
-            return null;
-        }
-
-        $extension = match ($imageInformation['mime']) {
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/webp' => 'webp',
-            'image/gif' => 'gif',
-            default => null,
-        };
-
-        if ($extension === null) {
-            Log::channel('my_debug')->debug('Return null: unsupported image MIME type', []);
-
-            return null;
-        }
-
-        $path = 'avatars/' . Str::uuid() . '.' . $extension;
-        Log::channel('my_debug')->debug('Return result of avatar storage', []);
-
-        return Storage::disk('public')->put($path, $contents)
-            ? $path
-            : null;
+        return ($this->downloadProfilePicture)($url);
     }
 
     protected function findOrCreateUser(string $provider, $socialUser): User
@@ -180,7 +117,7 @@ class SocialiteController extends Controller
 
     public function callback(Request $request, string $provider)
     {
-        Log::channel("my_debug")->info("callback appelé");
+        Log::channel('my_debug')->info('callback appelé');
         // on vérifie si le service externe a renvoyé une erreur
         $providerError = $request->query('error');
 
@@ -222,9 +159,6 @@ class SocialiteController extends Controller
                 'social' => 'External sign in is temporarily unavailable. Please try again.',
             ]);
         }
-
-
-
 
         return redirect()->intended(route('movies.index', absolute: false));
     }

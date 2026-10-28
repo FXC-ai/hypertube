@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
     'imdb_id',
@@ -41,6 +42,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string|null $torrent_url
  * @property ConversionStatus $conversion_status
  * @property DownloadStatus $download_status
+ * @property array<array<string, mixed>|null>|null $external_subtitles
+ * @property-read MovieData|null $movieData
  * @property-read string|null $title
  * @property-read MovieSource|null $source
  */
@@ -97,6 +100,43 @@ class Movie extends Model
     public function getSourceAttribute(): ?MovieSource
     {
         return $this->sourceEntry()?->source;
+    }
+
+    /**
+     * The subtitle files this movie can be watched with, as links a player loads.
+     *
+     * @return list<array{id: int, label: string, language: string|null, url: string}>
+     */
+    public function availableSubtitles(): array
+    {
+        if ($this->download_status === DownloadStatus::Purging) {
+            return [];
+        }
+
+        $stored = $this->getAttributeValue('external_subtitles');
+
+        if (! is_array($stored)) {
+            return [];
+        }
+
+        $available = [];
+
+        foreach ($stored as $subtitle) {
+            if (! is_array($subtitle) || ! is_string($subtitle['output_file'] ?? null)) {
+                continue;
+            }
+
+            $available[] = [
+                'id' => (int) ($subtitle['file_index'] ?? 0),
+                'label' => (string) ($subtitle['file_name'] ?? 'Subtitle').' — External',
+                'language' => isset($subtitle['language']) && is_string($subtitle['language'])
+                    ? $subtitle['language']
+                    : null,
+                'url' => Storage::disk('public')->url("movies/{$this->id}/{$subtitle['output_file']}"),
+            ];
+        }
+
+        return $available;
     }
 
     /**
