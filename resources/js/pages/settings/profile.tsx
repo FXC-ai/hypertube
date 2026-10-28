@@ -34,7 +34,7 @@ export default function Profile({
 }) {
     const { auth } = usePage<PageProps>().props;
     const getInitials = useInitials();
-
+    console.log("debug = ", auth.user.profilepicture);
     return (
         <>
             <Head title="Profile settings" />
@@ -191,11 +191,11 @@ export default function Profile({
 
                                         {status ===
                                             'verification-link-sent' && (
-                                            <div className="mt-2 text-sm font-medium text-green-600">
-                                                A new verification link has been
-                                                sent to your email address.
-                                            </div>
-                                        )}
+                                                <div className="mt-2 text-sm font-medium text-green-600">
+                                                    A new verification link has been
+                                                    sent to your email address.
+                                                </div>
+                                            )}
                                     </div>
                                 )}
 

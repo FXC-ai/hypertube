@@ -14,9 +14,9 @@ return new class extends Migration {
             $table->id();
             $table->string('source');
             $table->string('imdb_id');
-            $table->string('title');
+            $table->text('title');
             $table->json('titles')->nullable();
-            $table->string('torrent_url')->nullable();
+            $table->text('torrent_url')->nullable();
             $table->timestamps();
 
             $table->unique(['source', 'imdb_id']);

@@ -1,6 +1,9 @@
 init:
 	docker compose up -d --build --scale worker-conversions=3
 	docker compose exec app php artisan db:seed
+	
+
+import-movies:
 	docker compose exec app php artisan import:wikidata-movies
 
 logs-workers:
@@ -16,9 +19,11 @@ stop:
 	docker compose down
 
 clean:
+	docker compose down
 	docker volume prune -a
 	find storage/app/public/movies -mindepth 1 -maxdepth 1 -type d ! -name '1' -exec rm -rf -- {} +
 	rm -rf -- storage/app/public/movies/1/hls
+	find storage/app/public/avatars -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 
 fclean: clean
 	docker system prune -a

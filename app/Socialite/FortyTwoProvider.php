@@ -38,7 +38,7 @@ class FortyTwoProvider extends AbstractProvider implements ProviderInterface
             [
                 RequestOptions::HEADERS => [
                     'Accept' => 'application/json',
-                    'Authorization' => 'Bearer '.$token,
+                    'Authorization' => 'Bearer ' . $token,
                 ],
             ],
         );
@@ -54,7 +54,7 @@ class FortyTwoProvider extends AbstractProvider implements ProviderInterface
 
     protected function mapUserToObject(array $user): User
     {
-        Log::channel('my_debug')->debug('mapUserToObject user = ', [$user]);
+        Log::channel('my_debug')->debug('mapUserToObject user = ', [Arr::get($user, 'image.link'), $user]);
 
         $newUser = (new User)->setRaw($user)->map(
             [
