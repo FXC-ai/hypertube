@@ -45,8 +45,7 @@ class MovieSeeder extends Seeder
             ->create([
                 'download_status' => DownloadStatus::Pending,
                 'filename' => null,
-                'torrent_url' => 'https://webtor.io/79816060ea56d56f2a2148cd45705511079f9bca.torrent?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0b3JyZW50LWZpbGUiLCJleHAiOjE3OTMxMTI3NjksImlhdCI6MTc5MzA5MTE2OSwic3ViIjoiNzk4MTYwNjBlYTU2ZDU2ZjJhMjE0OGNkNDU3MDU1MTEwNzlmOWJjYSJ9.M98_BMO4afakzBYC_10381ucNTUnG_F90hn3Jc9ZPvw',
-                //'torrent_url' => 'https://itorrents.org/torrent/79816060EA56D56F2A2148CD45705511079F9BCA.torrent',
+                'torrent_url' => 'https://webtor.io/79816060ea56d56f2a2148cd45705511079f9bca.torrent?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0b3JyZW50LWZpbGUiLCJleHAiOjE3OTMyODQzODIsImlhdCI6MTc5MzI2Mjc4Miwic3ViIjoiNzk4MTYwNjBlYTU2ZDU2ZjJhMjE0OGNkNDU3MDU1MTEwNzlmOWJjYSJ9.8Q2eKigb3L7vPfQ_PseAYXKc7OCn_piAWWWRjV4ARic',
                 'imdb_id' => 'tt2608732'
             ]);
 
