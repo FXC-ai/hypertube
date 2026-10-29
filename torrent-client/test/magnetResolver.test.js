@@ -202,3 +202,32 @@ test('cancelling one caller does not fail the others; the fetch stops once nobod
   assert.equal(lonelySignal.aborted, true);
   releaseLonely();
 });
+
+test('slow exact sources share the overall timeout: the answer never comes later than timeoutMs', async () => {
+  const fetched = [];
+  const resolver = createMagnetResolver({
+    announceFn: async () => ({ peers: [] }),
+    fetchMetadataFn: async () => INFO,
+    fetchImpl: async (url, { signal }) => {
+      fetched.push(url);
+
+      // Never answers: only the timeout signal ends it.
+      return new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason));
+      });
+    },
+    timeoutMs: 300,
+    exactSourceTimeoutMs: 200,
+    reannounceMs: 20,
+  });
+  const sources = ['a', 'b', 'c', 'd', 'e']
+    .map((name) => `&xs=${encodeURIComponent(`https://slow.test/${name}.torrent`)}`)
+    .join('');
+  const startedAt = Date.now();
+
+  await assert.rejects(resolver.resolve(`${MAGNET}${sources}`), MagnetError);
+
+  // 300 ms in all, not 5 x 200 ms of exact sources followed by 300 ms of peers.
+  assert.ok(Date.now() - startedAt < 600, `took ${Date.now() - startedAt} ms`);
+  assert.ok(fetched.length <= 3, `${fetched.length} exact sources tried`);
+});

@@ -6,6 +6,8 @@ import { parseTorrentFile } from './torrentFile.js';
 import { announce as defaultAnnounce } from './trackers/announce.js';
 import { generatePeerId } from './trackers/peerId.js';
 
+const MAX_EXACT_SOURCES = 3;
+
 // Turns a magnet link into .torrent bytes.
 //
 // 1. Exact sources first (xs=, the URL of the .torrent itself, as webtorrent.io gives): the
@@ -113,11 +115,19 @@ export function createMagnetResolver({
     }
   }
 
+  // `timeoutMs` covers everything: exact sources share it with the peers, each one gets at most
+  // `exactSourceTimeoutMs` of what is left, and only the first MAX_EXACT_SOURCES are tried, so a
+  // slow xs can never push the answer past what the caller (Laravel waits 60 s) expects.
   async function fetchTorrent(magnet, signal) {
     const failures = [];
+    const deadline = Date.now() + timeoutMs;
 
-    for (const url of magnet.exactSources) {
-      const bytes = await fromExactSource(url, magnet.infoHash, signal, failures);
+    for (const url of magnet.exactSources.slice(0, MAX_EXACT_SOURCES)) {
+      if (Date.now() >= deadline) {
+        break;
+      }
+
+      const bytes = await fromExactSource(url, magnet.infoHash, { signal, deadline, failures });
 
       if (bytes) {
         return bytes;
@@ -127,7 +137,6 @@ export function createMagnetResolver({
     const infoHash = Buffer.from(magnet.infoHash, 'hex');
     const peerId = generatePeerIdFn();
     const trackers = [...new Set([...magnet.trackers, ...FALLBACK_TRACKERS])];
-    const deadline = Date.now() + timeoutMs;
     const tried = new Set();
     let peersSeen = 0;
 
@@ -161,14 +170,16 @@ export function createMagnetResolver({
   }
 
   // The .torrent an exact source points at, or null (reason added to `failures`).
-  async function fromExactSource(url, expectedHash, signal, failures) {
+  async function fromExactSource(url, expectedHash, { signal, deadline, failures }) {
     if (!/^https?:\/\//i.test(url)) {
       return null;
     }
 
+    const budgetMs = Math.max(1, Math.min(exactSourceTimeoutMs, deadline - Date.now()));
+
     try {
       const response = await fetchImpl(url, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(exactSourceTimeoutMs)]),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(budgetMs)]),
       });
 
       if (!response.ok) {
