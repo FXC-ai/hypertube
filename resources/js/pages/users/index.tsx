@@ -71,8 +71,6 @@ function UserItem({ user }: { user: User }) {
 }
 
 export default function UsersIndex({ users, filters }: UserIndexProps) {
-    console.log(filters, users);
-
     return (
         <>
             <Head title="Users" />

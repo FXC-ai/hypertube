@@ -34,7 +34,7 @@ export default function Profile({
 }) {
     const { auth } = usePage<PageProps>().props;
     const getInitials = useInitials();
-    console.log("debug = ", auth.user.profilepicture);
+
     return (
         <>
             <Head title="Profile settings" />
