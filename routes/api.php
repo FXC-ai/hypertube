@@ -14,7 +14,15 @@ Route::get('/', [MovieController::class, 'describe'])->name('api.describe');
 
 Route::get('/movies', [MovieController::class, 'index'])->name('api.movies.index');
 
-Route::middleware('auth:api')->group(function (): void {
+/*
+ * Ids are bigint columns: anything else must answer 404, not reach PostgreSQL, which rejects
+ * "abc" or 99999999999999999999 with an error (500). 18 digits always fit in a bigint.
+ */
+Route::middleware('auth:api')->where([
+    'movie' => '[0-9]{1,18}',
+    'user' => '[0-9]{1,18}',
+    'comment' => '[0-9]{1,18}',
+])->group(function (): void {
     Route::get('/movies/{movie}', [MovieController::class, 'show'])->name('api.movies.show');
 
     Route::get('/users', [UserController::class, 'index'])->name('api.users.index');

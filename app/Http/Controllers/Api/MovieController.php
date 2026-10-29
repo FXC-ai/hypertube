@@ -18,8 +18,8 @@ use OpenApi\Attributes as OA;
     description: <<<'TEXT'
     The RESTful API of this Hypertube instance, secured by OAuth2 (Laravel Passport).
 
-    **Getting a token** — `POST /oauth/token` with the confidential client created by
-    `make oauth-client` (its id and secret live in `.env` as `PASSPORT_API_CLIENT_ID`
+    **Getting a token** - `POST /oauth/token` with the confidential client created by
+    `php artisan api:client` (its id and secret live in `.env` as `PASSPORT_API_CLIENT_ID`
     and `PASSPORT_API_CLIENT_SECRET`):
 
     ```
@@ -29,7 +29,7 @@ use OpenApi\Attributes as OA;
 
     The returned `access_token` is then sent as `Authorization: Bearer <token>`.
 
-    **RESTfulness** — collections are plural nouns, verbs are HTTP methods, and the
+    **RESTfulness** - collections are plural nouns, verbs are HTTP methods, and the
     codes mean what they say: 200 read, 201 created, 204 deleted, 401 missing token,
     403 forbidden, 404 unknown resource, 405 unsupported method, 422 invalid payload.
     No other endpoint than the ones documented here is exposed.
@@ -43,7 +43,7 @@ use OpenApi\Attributes as OA;
         new OA\Flow(
             flow: 'password',
             tokenUrl: '/oauth/token',
-            refreshUrl: '/oauth/token/refresh',
+            refreshUrl: '/oauth/token',
             scopes: [],
         ),
     ],
@@ -89,7 +89,7 @@ class MovieController extends Controller
         tags: ['Movies'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(parameter: 'movie', name: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The movie.', ref: '#/components/schemas/Movie'),
