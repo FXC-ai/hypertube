@@ -104,3 +104,34 @@ test('a client that was not given the password grant cannot issue a token', func
         'password' => 'password',
     ])->assertStatus(400);
 });
+
+test('passport only exposes the token route', function (string $method, string $uri) {
+    $this->json($method, $uri)->assertNotFound();
+})->with([
+    ['GET', '/oauth/authorize'],
+    ['POST', '/oauth/authorize'],
+    ['GET', '/oauth/device'],
+    ['POST', '/oauth/device/code'],
+    ['POST', '/oauth/token/refresh'],
+]);
+
+test('a refresh token is exchanged at the token route', function () {
+    $client = passwordGrantClient();
+    User::factory()->create(['username' => 'player']);
+
+    $refreshToken = $this->postJson('/oauth/token', [
+        'grant_type' => 'password',
+        'client_id' => $client->id,
+        'client_secret' => $client->plainSecret,
+        'username' => 'player',
+        'password' => 'password',
+    ])->json('refresh_token');
+
+    $this->postJson('/oauth/token', [
+        'grant_type' => 'refresh_token',
+        'refresh_token' => $refreshToken,
+        'client_id' => $client->id,
+        'client_secret' => $client->plainSecret,
+    ])->assertOk()
+        ->assertJsonStructure(['access_token', 'refresh_token']);
+});
