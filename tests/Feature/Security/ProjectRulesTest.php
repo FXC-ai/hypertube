@@ -46,3 +46,8 @@ test('the pages leave no debugging output in the browser console', function () {
 
     expect($files)->toBe([]);
 });
+
+test('a copy of the example environment hides error details', function () {
+    // With APP_DEBUG=true any error page shows the stack trace and the SQL request.
+    expect(file(base_path('.env.example'), FILE_IGNORE_NEW_LINES))->toContain('APP_DEBUG=false');
+});
