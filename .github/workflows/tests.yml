@@ -15,6 +15,7 @@ jobs:
 
     # composer setup runs the migrations on PostgreSQL, as in Docker. The job runs on the
     # runner, not in a container: the service is reached on 127.0.0.1, not on "postgres".
+    # The tests keep the in-memory SQLite of phpunit.xml.
     services:
       postgres:
         image: postgres:17-alpine
@@ -29,15 +30,6 @@ jobs:
           --health-interval 2s
           --health-timeout 2s
           --health-retries 30
-
-    # Real environment variables win over .env, which composer setup copies from .env.example.
-    env:
-      DB_CONNECTION: pgsql
-      DB_HOST: 127.0.0.1
-      DB_PORT: 5432
-      DB_DATABASE: hypertube
-      DB_USERNAME: hypertube
-      DB_PASSWORD: hypertube
 
     steps:
       - name: Checkout code
@@ -60,6 +52,16 @@ jobs:
 
       - name: Setup Application
         run: composer setup
+        # Only this step: real environment variables win over .env (copied from .env.example)
+        # and over the <env> of phpunit.xml, so set for the whole job they would send the
+        # tests to PostgreSQL too.
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: hypertube
+          DB_USERNAME: hypertube
+          DB_PASSWORD: hypertube
 
       - name: Run CI Checks
         run: composer ci:check
