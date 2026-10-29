@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Run the migrations.
      */
@@ -20,7 +21,9 @@ return new class extends Migration {
             $table->timestamps();
 
             $table->unique(['source', 'imdb_id']);
-            $table->index(['source', 'title', 'titles']);
+            // titles is JSON: PostgreSQL has no B-tree operator for it, and a search
+            // with ILIKE '%...%' could not use such an index anyway.
+            $table->index(['source', 'title']);
             $table->index('imdb_id');
         });
     }

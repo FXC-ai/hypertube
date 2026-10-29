@@ -22,9 +22,7 @@ final class WikidataSource implements MovieSourceProvider
 {
     private const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
 
-    public function __construct(private readonly MovieSource $source)
-    {
-    }
+    public function __construct(private readonly MovieSource $source) {}
 
     public static function factory(MovieSource $source): self
     {
@@ -44,7 +42,12 @@ final class WikidataSource implements MovieSourceProvider
         $query = Source::query()->where('source', $this->source->value);
 
         if ($criteria->term !== '') {
-            $query->where('titles', 'ilike', '%' . $criteria->term . '%');
+            // The main title or any translated one. whereLike is case-insensitive on every
+            // driver and casts the JSON column to text on PostgreSQL (json has no ILIKE).
+            $pattern = '%'.$criteria->term.'%';
+            $query->where(fn ($match) => $match
+                ->whereLike('title', $pattern)
+                ->orWhereLike('titles', $pattern));
         }
 
         $this->restrictToGenres($query, $criteria);
@@ -58,7 +61,7 @@ final class WikidataSource implements MovieSourceProvider
         $column = $criteria->sort->column();
 
         $window = $query
-            ->orderByRaw($column . ' is null')
+            ->orderByRaw($column.' is null')
             ->orderBy($column, $criteria->direction)
             ->orderBy('id', $criteria->direction)
             ->paginate($criteria->windowSize(), ['*'], 'page', 1);
@@ -73,7 +76,7 @@ final class WikidataSource implements MovieSourceProvider
      * Genres are stored as pipe delimited lowercase labels, so a criterion is matched
      * as a whole label instead of inside another one.
      *
-     * @param Builder<Source> $query
+     * @param  Builder<Source>  $query
      */
     private function restrictToGenres(Builder $query, MovieSearch $criteria): void
     {
@@ -85,7 +88,7 @@ final class WikidataSource implements MovieSourceProvider
     }
 
     /**
-     * @param Builder<Source> $query
+     * @param  Builder<Source>  $query
      */
     private function restrictToYears(Builder $query, MovieSearch $criteria): void
     {
@@ -99,7 +102,7 @@ final class WikidataSource implements MovieSourceProvider
     }
 
     /**
-     * @param Builder<Source> $query
+     * @param  Builder<Source>  $query
      */
     private function restrictToRatings(Builder $query, MovieSearch $criteria): void
     {
@@ -116,7 +119,7 @@ final class WikidataSource implements MovieSourceProvider
      * The catalog lives in this database, so the watched restriction of the user can
      * be applied here instead of after the sources have been merged.
      *
-     * @param Builder<Source> $query
+     * @param  Builder<Source>  $query
      */
     private function restrictToWatched(Builder $query, MovieSearch $criteria): void
     {
@@ -124,11 +127,11 @@ final class WikidataSource implements MovieSourceProvider
             return;
         }
 
-        $isWatched = fn(QueryBuilder $watched): QueryBuilder => $watched
+        $isWatched = fn (QueryBuilder $watched): QueryBuilder => $watched
             ->select(DB::raw(1))
             ->from('movies')
             ->whereColumn('movies.imdb_id', 'sources.imdb_id')
-            ->whereExists(fn(QueryBuilder $viewer): QueryBuilder => $viewer
+            ->whereExists(fn (QueryBuilder $viewer): QueryBuilder => $viewer
                 ->select(DB::raw(1))
                 ->from('watched_movies')
                 ->whereColumn('watched_movies.movie_id', 'movies.id')
@@ -151,7 +154,7 @@ final class WikidataSource implements MovieSourceProvider
      * Refresh the catalog rows of this source, and duplicate the whitelisted movies
      * so the curated source exposes them too.
      *
-     * @param list<string> $whitelist
+     * @param  list<string>  $whitelist
      */
     public function import(int $limit, array $whitelist = [], int $batchSize = 500, bool $dryRun = false): int
     {
@@ -193,7 +196,7 @@ final class WikidataSource implements MovieSourceProvider
             throw new RuntimeException("Failed to query Wikidata: {$e->getMessage()}", 0, $e);
         }
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             throw new RuntimeException("Wikidata query failed with status: {$response->status()}");
         }
 
@@ -203,7 +206,7 @@ final class WikidataSource implements MovieSourceProvider
             $imdbId = $result['imdbID']['value'] ?? null;
             $internetArchiveId = $result['internetArchiveID']['value'] ?? null;
 
-            if (!$imdbId || !$internetArchiveId) {
+            if (! $imdbId || ! $internetArchiveId) {
                 continue;
             }
 
