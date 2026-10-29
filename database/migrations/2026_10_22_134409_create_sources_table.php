@@ -15,13 +15,13 @@ return new class extends Migration {
             $table->string('source');
             $table->string('imdb_id');
             $table->text('title');
-            $table->json('titles')->nullable();
+            $table->jsonb('titles')->nullable();
             $table->text('torrent_url')->nullable();
             $table->timestamps();
 
             $table->unique(['source', 'imdb_id']);
             $table->index(['source']);
-            // $table->index(['titles']);
+            $table->index(['titles']);
             $table->index(['title']);
             $table->index('imdb_id');
         });
