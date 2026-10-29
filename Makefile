@@ -1,3 +1,6 @@
+COMPOSE ?= docker compose
+
+.PHONY: init import-movies logs-workers restart-workers start stop clean fclean test show-movies demo-scheduler oauth-client docs
 
 init:
 	docker compose up -d --build --scale worker-conversions=3
@@ -43,8 +46,8 @@ demo-scheduler:
 
 ## API RESTful (OAuth2 + Swagger)
 
-oauth-client: ## Crée le client OAuth2 « password grant » (affiche le client_id/secret une seule fois)
-	$(COMPOSE) exec -T app php artisan passport:client --password --name="Hypertube API" --no-interaction
+oauth-client: ## Crée ou recrée le client OAuth2 « password grant » de l'API (id et secret dans .env)
+	$(COMPOSE) exec -T app php artisan api:client
 
 docs: ## Régénère la spec Swagger (UI : http://localhost:8000/api/documentation)
 	$(COMPOSE) exec -T app php artisan l5-swagger:generate

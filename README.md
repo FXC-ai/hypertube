@@ -137,7 +137,7 @@ conteneur `app` le recréent avec les mêmes credentials s'il a disparu de la ba
 `migrate:fresh` sans `--seed` :
 
 ```bash
-docker compose exec app php artisan api:client
+make oauth-client   # ou : docker compose exec app php artisan api:client
 ```
 
 Seule la route `POST /oauth/token` de Passport est exposée (grants `password` et
