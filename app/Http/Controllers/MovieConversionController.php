@@ -24,7 +24,7 @@ final class MovieConversionController extends Controller
         ];
 
         Log::channel('my_debug')->info(
-            "Une demande de préparation du film a été reçue.\n" . json_encode(
+            "Une demande de préparation du film a été reçue.\n".json_encode(
                 [
                     ...$context,
                     'download_status' => $movie->download_status?->value,
@@ -32,25 +32,26 @@ final class MovieConversionController extends Controller
                     'has_torrent' => $movie->torrent_url !== null,
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
+            )."\n",
         );
 
         if ($movie->download_status === DownloadStatus::Purging) {
             Log::channel('my_debug')->debug(
-                "La préparation du film est refusée car le film est en cours de purge.\n" . json_encode(
+                "La préparation du film est refusée car le film est en cours de purge.\n".json_encode(
                     $context,
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
+
             return to_route('movies.show', $movie);
         }
 
         if ($movie->download_status === DownloadStatus::Unsupported) {
             Log::channel('my_debug')->debug(
-                "La préparation du film est refusée car son torrent n’est pas pris en charge.\n" . json_encode(
+                "La préparation du film est refusée car son torrent n’est pas pris en charge.\n".json_encode(
                     [...$context, 'reason' => 'torrent_unsupported'],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             return to_route('movies.show', $movie);
@@ -67,14 +68,14 @@ final class MovieConversionController extends Controller
             DownloadMovie::dispatch($movie->id)->afterCommit();
 
             Log::channel('my_debug')->info(
-                "Le job de téléchargement du film a été ajouté à la file d’attente.\n" . json_encode(
+                "Le job de téléchargement du film a été ajouté à la file d’attente.\n".json_encode(
                     [
                         ...$context,
                         'previous_download_status' => $movie->download_status?->value,
                         'job' => DownloadMovie::class,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             return to_route('movies.show', $movie);
@@ -91,13 +92,14 @@ final class MovieConversionController extends Controller
                 'conversion_started_at' => null,
                 'conversion_playable_at' => null,
                 'conversion_completed_at' => null,
+                'audio_language' => null,
             ]);
 
         if ($queued === 1) {
             ConvertMovie::dispatch($movie->id)->afterCommit();
 
             Log::channel('my_debug')->info(
-                "Le job de conversion du film a été ajouté à la file d’attente.\n" . json_encode(
+                "Le job de conversion du film a été ajouté à la file d’attente.\n".json_encode(
                     [
                         ...$context,
                         'previous_conversion_status' => $movie->conversion_status?->value,
@@ -105,7 +107,7 @@ final class MovieConversionController extends Controller
                         'job' => ConvertMovie::class,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
         }
 

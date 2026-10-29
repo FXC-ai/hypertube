@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Storage;
     'conversion_started_at',
     'conversion_playable_at',
     'conversion_completed_at',
+    'audio_language',
     'download_status',
     'download_id',
     'download_file_index',
@@ -42,6 +43,7 @@ use Illuminate\Support\Facades\Storage;
  * @property string|null $torrent_url
  * @property ConversionStatus $conversion_status
  * @property DownloadStatus $download_status
+ * @property string|null $audio_language
  * @property array<array<string, mixed>|null>|null $external_subtitles
  * @property-read MovieData|null $movieData
  * @property-read string|null $title

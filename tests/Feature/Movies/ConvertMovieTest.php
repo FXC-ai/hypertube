@@ -69,6 +69,7 @@ test('a queued movie is claimed atomically and conversion reaches converted', fu
     ));
 
     expect($movie->conversion_status)->toBe(ConversionStatus::Converted)
+        ->and($movie->audio_language)->toBe('eng')
         ->and($hlsMediaInfo->durationSeconds)->toBeGreaterThan(0.0)
         ->and($movie->conversion_attempt)->not->toBeNull()
         ->and($movie->conversion_started_at)->not->toBeNull()

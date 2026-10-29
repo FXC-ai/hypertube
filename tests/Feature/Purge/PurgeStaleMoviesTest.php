@@ -141,6 +141,7 @@ test('it resets every temporary movie field after a successful purge', function 
         'conversion_started_at' => now()->subDays(40),
         'conversion_playable_at' => now()->subDays(40)->addMinute(),
         'conversion_completed_at' => now()->subDays(40)->addMinutes(2),
+        'audio_language' => 'eng',
         'external_subtitles' => [
             [
                 'file_index' => 3,
@@ -169,6 +170,7 @@ test('it resets every temporary movie field after a successful purge', function 
         ->and($movie->conversion_started_at)->toBeNull()
         ->and($movie->conversion_playable_at)->toBeNull()
         ->and($movie->conversion_completed_at)->toBeNull()
+        ->and($movie->audio_language)->toBeNull()
         ->and($movie->external_subtitles)->toBeNull()
         ->and($movie->external_subtitles_status)->toBe(ExternalSubtitleStatus::None)
         ->and($movie->last_watched_at)->toBeNull();

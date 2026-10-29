@@ -145,6 +145,7 @@ final class PurgeStaleMovies extends Command implements Isolatable
                     'conversion_started_at' => null,
                     'conversion_playable_at' => null,
                     'conversion_completed_at' => null,
+                    'audio_language' => null,
                     'external_subtitles' => null,
                     'external_subtitles_status' => ExternalSubtitleStatus::None->value,
                     'last_watched_at' => null,

@@ -52,7 +52,7 @@ final class ConvertMovie implements ShouldQueue
         ];
 
         Log::channel('my_debug')->debug(
-            $context['class'] . "\n" . json_encode(
+            $context['class']."\n".json_encode(
                 [
                     'method' => $context['method'],
                     'explication' => 'Le job de conversion du film démarre.',
@@ -61,7 +61,7 @@ final class ConvertMovie implements ShouldQueue
                     ],
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
+            )."\n",
         );
 
         $attempt = (string) Str::uuid();
@@ -77,11 +77,12 @@ final class ConvertMovie implements ShouldQueue
                 'conversion_started_at' => $startedAt,
                 'conversion_playable_at' => null,
                 'conversion_completed_at' => null,
+                'audio_language' => null,
             ]);
 
         if ($claimed !== 1) {
             Log::channel('my_debug')->debug(
-                $context['class'] . "\n" . json_encode(
+                $context['class']."\n".json_encode(
                     [
                         'method' => $context['method'],
                         'explication' => 'La conversion ne démarre pas car le film n’est plus en attente de conversion.',
@@ -90,7 +91,7 @@ final class ConvertMovie implements ShouldQueue
                         ],
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             return;
@@ -99,7 +100,7 @@ final class ConvertMovie implements ShouldQueue
         $movie = Movie::query()->findOrFail($this->movieId);
 
         Log::channel('my_debug')->info(
-            $context['class'] . "\n" . json_encode(
+            $context['class']."\n".json_encode(
                 [
                     'method' => $context['method'],
                     'explication' => 'Le film à convertir a été chargé.',
@@ -110,7 +111,7 @@ final class ConvertMovie implements ShouldQueue
                     ],
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
+            )."\n",
         );
 
         try {
@@ -130,8 +131,16 @@ final class ConvertMovie implements ShouldQueue
             $sourceMediaInfo = $probe->probe($fileOrStream);
             $tracksSelected = $trackSelector->select($sourceMediaInfo);
 
+            Movie::query()
+                ->whereKey($movie->id)
+                ->where('conversion_attempt', $attempt)
+                ->where('conversion_status', ConversionStatus::Converting->value)
+                ->update([
+                    'audio_language' => $tracksSelected->audio->language,
+                ]);
+
             Log::channel('my_debug')->info(
-                $context['class'] . "\n" . json_encode(
+                $context['class']."\n".json_encode(
                     [
                         'method' => $context['method'],
                         'explication' => 'Les pistes du film ont été analysées et sélectionnées.',
@@ -142,7 +151,7 @@ final class ConvertMovie implements ShouldQueue
                         ],
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             $published = false;
@@ -177,7 +186,7 @@ final class ConvertMovie implements ShouldQueue
 
                 if ($published) {
                     Log::channel('my_debug')->info(
-                        "Le film est désormais disponible à la lecture, mais sa conversion continue.\n" . json_encode(
+                        "Le film est désormais disponible à la lecture, mais sa conversion continue.\n".json_encode(
                             [
                                 'class' => self::class,
                                 'method' => 'handle',
@@ -185,7 +194,7 @@ final class ConvertMovie implements ShouldQueue
                                 'attempt' => $attempt,
                             ],
                             JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                        ) . "\n",
+                        )."\n",
                     );
                 }
             };
@@ -201,7 +210,7 @@ final class ConvertMovie implements ShouldQueue
                 throw new \RuntimeException('FFmpeg finished without producing avaible hls segment.');
             }
 
-            $playlistPath = $outputDirectory . DIRECTORY_SEPARATOR . 'video.m3u8';
+            $playlistPath = $outputDirectory.DIRECTORY_SEPARATOR.'video.m3u8';
 
             $hlsMediaInfo = $probe->probe(new MovieInput(
                 location: $playlistPath,
@@ -224,7 +233,7 @@ final class ConvertMovie implements ShouldQueue
                 ]);
 
             Log::channel('my_debug')->info(
-                $context['class'] . "\n" . json_encode(
+                $context['class']."\n".json_encode(
                     [
                         'method' => $context['method'],
                         'explication' => 'La conversion du film est terminée.',
@@ -234,11 +243,11 @@ final class ConvertMovie implements ShouldQueue
                         ],
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
         } catch (Throwable $exception) {
             Log::channel('my_debug')->error(
-                $context['class'] . "\n" . json_encode(
+                $context['class']."\n".json_encode(
                     [
                         'method' => $context['method'],
                         'explication' => 'La conversion HLS du film a échoué.',
@@ -254,7 +263,7 @@ final class ConvertMovie implements ShouldQueue
                         ],
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             Movie::query()

@@ -1,18 +1,19 @@
 <?php
 
+use App\Enums\ConversionStatus;
+use App\Enums\DownloadStatus;
 use App\Enums\ExternalSubtitleStatus;
 use App\Models\Movie;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
-use App\Enums\DownloadStatus;
-use App\Enums\ConversionStatus;
 
 test('the movie page exposes only prepared external subtitles through public URLs', function () {
     config(['services.omdb.key' => null]);
 
-    $user = User::factory()->create();
+    $user = User::factory()->create(['preferredlanguage' => 'english']);
     $movie = Movie::factory()->create([
+        'audio_language' => 'fra',
         'external_subtitles_status' => ExternalSubtitleStatus::Ready,
         'external_subtitles' => [
             [
@@ -32,8 +33,13 @@ test('the movie page exposes only prepared external subtitles through public URL
 
     $response = $this->actingAs($user)->get(route('movies.show', $movie));
 
-    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->component('movies/show')
+        ->where('moviePageData.audio_language', [
+            'code' => 'fra',
+            'label' => 'French',
+        ])
+        ->where('moviePageData.subtitles_auto_enabled', true)
         ->where('moviePageData.external_subtitles_status', ExternalSubtitleStatus::Ready->value)
         ->has('moviePageData.external_subtitles', 1)
         ->where('moviePageData.external_subtitles.0', [
@@ -51,6 +57,60 @@ test('the movie page exposes only prepared external subtitles through public URL
         ->not->toContain(Storage::disk('public')->path("movies/{$movie->id}"));
 });
 
+test('the movie page keeps subtitles available without auto enabling them when the audio matches the user language', function () {
+    config(['services.omdb.key' => null]);
+
+    $user = User::factory()->create(['preferredlanguage' => 'english']);
+    $movie = Movie::factory()->create([
+        'audio_language' => 'eng',
+        'external_subtitles_status' => ExternalSubtitleStatus::Ready,
+        'external_subtitles' => [[
+            'file_index' => 3,
+            'file_name' => 'Movie.english.srt',
+            'language' => 'eng',
+            'output_file' => 'subtitles/external_00_eng.vtt',
+        ]],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('movies.show', $movie))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('moviePageData.audio_language', [
+                'code' => 'eng',
+                'label' => 'English',
+            ])
+            ->where('moviePageData.subtitles_auto_enabled', false)
+            ->has('moviePageData.external_subtitles', 1));
+});
+
+test('the movie page keeps subtitles available without auto enabling them when the audio language is unknown', function () {
+    config(['services.omdb.key' => null]);
+
+    $user = User::factory()->create(['preferredlanguage' => 'french']);
+    $movie = Movie::factory()->create([
+        'audio_language' => 'und',
+        'external_subtitles_status' => ExternalSubtitleStatus::Ready,
+        'external_subtitles' => [[
+            'file_index' => 3,
+            'file_name' => 'Movie.french.srt',
+            'language' => 'fra',
+            'output_file' => 'subtitles/external_00_fra.vtt',
+        ]],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('movies.show', $movie))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('moviePageData.audio_language', [
+                'code' => 'und',
+                'label' => 'Unknown',
+            ])
+            ->where('moviePageData.subtitles_auto_enabled', false)
+            ->has('moviePageData.external_subtitles', 1));
+});
+
 test('the movie page present an error message if the download fail', function () {
     $user = User::factory()->create();
     $movie = Movie::factory()->create(
@@ -61,7 +121,7 @@ test('the movie page present an error message if the download fail', function ()
     );
     $response = $this->actingAs($user)->get(route('movies.show', $movie));
 
-    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->component('movies/show')
         ->where('moviePageData.download_status', DownloadStatus::Failed->value)
         ->where(
@@ -78,7 +138,7 @@ test('the movie page present an error message if the conversion fail', function 
     ]);
     $response = $this->actingAs($user)->get(route('movies.show', $movie));
 
-    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->component('movies/show')
         ->where('moviePageData.conversion_error', 'The conversion failed.'));
 });
