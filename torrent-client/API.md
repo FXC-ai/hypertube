@@ -59,8 +59,8 @@ Corps JSON : `torrentUrl` **ou** `torrentBase64`, mêmes règles que pour `POST 
 | `mainVideoIndex` | Le plus gros fichier `"video"`, ou `null` s'il n'y en a aucun. |
 | `files[].suggested` | Proposition du client : la vidéo principale et tous les fichiers de sous-titres non vides (archive.org publie parfois des sous-titres de 0 octet). **C'est une suggestion** : Laravel reste libre de choisir d'autres index. |
 
-**400** - JSON invalide, ni `torrentUrl` ni `torrentBase64`, ou `.torrent` malformé.
-**502** - `torrentUrl` injoignable ou réponse HTTP non-2xx.
+**400** - JSON invalide, ni `torrentUrl` ni `torrentBase64`, `.torrent` malformé, ou magnet sans infohash BitTorrent (`xt=urn:btih:`).
+**502** - `torrentUrl` injoignable ou réponse HTTP non-2xx ; pour un magnet, aucun pair n'a fourni les métadonnées à temps (45 s).
 
 Attention aux sources qui régénèrent leur `.torrent` (archive.org, voir [docs/testing-torrent-sources.md](../docs/testing-torrent-sources.md)) : entre l'inspection et le téléchargement, le `.torrent` servi à la même URL peut avoir changé, et les index ne plus désigner les mêmes fichiers. D'où `expectedInfoHash`.
 
@@ -95,11 +95,13 @@ Corps JSON - deux façons de fournir le torrent, une seule à la fois :
 | Champ | Type | Description |
 |---|---|---|
 | `outputDir` | string | **Obligatoire.** Chemin absolu où écrire les fichiers du torrent, à l'intérieur du volume partagé. Pour un film, utiliser exactement `storage/app/public/movies/{movieId}` (vu depuis `app`, donc `/var/www/html/storage/app/public/movies/{movieId}` côté conteneur) - c'est le chemin que `Storage::disk('public')->path("movies/{id}/{filename}")` va relire côté Laravel. Les fichiers y sont écrits à plat, sous leur `fileName` (voir `POST /torrents/inspect`). |
-| `torrentUrl` | string | URL d'un `.torrent` que le service télécharge lui-même avant de démarrer. |
+| `torrentUrl` | string | URL d'un `.torrent` que le service télécharge lui-même avant de démarrer, **ou un lien magnet** (`magnet:?xt=urn:btih:...`, voir ci-dessous). |
 | `torrentBase64` | string | Contenu brut du `.torrent`, encodé en base64, si vous l'avez déjà en mémoire côté Laravel plutôt qu'une URL à fetch. |
 
 | `fileIndexes` | int[] | *Optionnel.* Index des fichiers à télécharger (voir `POST /torrents/inspect`). Absent : les fichiers `suggested` de l'inspection. Pas un tableau, liste vide, doublon, ou autre chose que des entiers positifs : `400`. Index hors bornes : le job passe en `"failed"` (le `.torrent` n'est récupéré qu'après la réponse `202`, le nombre de fichiers n'est donc pas encore connu). Les octets des autres fichiers ne sont jamais écrits sur disque, et ces fichiers ne sont pas créés. |
 | `expectedInfoHash` | string | *Optionnel, recommandé dès qu'on passe `fileIndexes`.* L'`infoHash` renvoyé par l'inspection (40 caractères hexadécimaux, sinon `400`). Si le `.torrent` récupéré a un autre infohash, le job passe en `"failed"` avec une erreur explicite au lieu de télécharger des fichiers qui ne sont peut-être plus les bons. |
+
+**Liens magnet.** Un magnet ne contient que l'infohash (hex ou base32), et parfois un nom (`dn`), des trackers (`tr`) et des web-seeds (`ws`). Le service demande alors le dictionnaire `info` aux pairs (BEP 10 et BEP 9), le vérifie contre l'infohash, puis continue comme avec un `.torrent`. Les pairs viennent des trackers du magnet et de quelques trackers publics de secours, interrogés en parallèle. Il n'y a pas de DHT : un essaim joignable uniquement par le DHT échoue avec une erreur explicite. Les métadonnées sont gardées en mémoire par infohash : un `inspect` suivi d'un `POST /downloads` ne les récupère qu'une fois. Un magnet n'a souvent aucun web-seed : tout dépend des pairs disponibles.
 
 Fournir `torrentUrl` **ou** `torrentBase64`, pas les deux (si les deux sont présents, `torrentUrl` est ignoré - `torrentBase64` prend le dessus). Ni l'un ni l'autre : `400`.
 

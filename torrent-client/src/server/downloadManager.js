@@ -9,6 +9,8 @@ import {
   resolveFileIndexes,
   validateFileIndexesShape,
 } from '../fileSelection.js';
+import { isMagnet, MagnetError, parseMagnet } from '../magnet.js';
+import { createMagnetResolver } from '../magnetResolver.js';
 import { recheckPieces } from '../recheck.js';
 import { createPieceAvailability, PRIORITY } from '../stream/pieceAvailability.js';
 import { downloadTorrent as defaultDownloadTorrent } from '../swarm/downloadTorrent.js';
@@ -54,6 +56,7 @@ export function createDownloadManager({
   generatePeerIdFn = generatePeerId,
   fetchImpl = fetch,
   trackerPort = DEFAULT_TRACKER_PORT,
+  magnetResolver = createMagnetResolver(),
   torrentFetchAttempts = 3,
   torrentFetchRetryDelayMs = 1000,
   fetchArchiveFileHashesFn = (item) => fetchArchiveFileHashes(item, { fetchImpl }),
@@ -127,7 +130,7 @@ export function createDownloadManager({
 
   async function run(job, { torrentBytes, torrentUrl, fileIndexes, expectedInfoHash }) {
     try {
-      const bytes = torrentBytes ?? (await fetchTorrentBytes(torrentUrl));
+      const bytes = torrentBytes ?? (await fetchTorrentBytes(torrentUrl, job.controller.signal));
 
       if (job.controller.signal.aborted) {
         throw new CancelledError();
@@ -416,8 +419,17 @@ export function createDownloadManager({
   }
 
   // A network error is retried (a dropped connection is common, and failing here fails the whole
-  // job); an HTTP error is the server's answer and is not.
-  async function fetchTorrentBytes(torrentUrl) {
+  // job); an HTTP error is the server's answer and is not. A magnet link has no .torrent to
+  // download: its metadata comes from peers (magnetResolver.js).
+  async function fetchTorrentBytes(torrentUrl, signal) {
+    if (isMagnet(torrentUrl)) {
+      try {
+        return await magnetResolver.resolve(torrentUrl, { signal });
+      } catch (err) {
+        throw err instanceof MagnetError ? new TorrentFetchError(err.message) : err;
+      }
+    }
+
     let response;
 
     for (let attempt = 1; !response; attempt += 1) {
@@ -509,8 +521,17 @@ async function readHead(path, length) {
   }
 }
 
+// A malformed magnet is a bad request, caught before any job is created.
 function requireTorrentSource({ torrentBytes, torrentUrl }) {
   if (!torrentBytes && !torrentUrl) {
     throw new DownloadManagerError('Provide either torrentBytes or torrentUrl');
+  }
+
+  if (!torrentBytes && isMagnet(torrentUrl)) {
+    try {
+      parseMagnet(torrentUrl);
+    } catch (err) {
+      throw new DownloadManagerError(err.message);
+    }
   }
 }

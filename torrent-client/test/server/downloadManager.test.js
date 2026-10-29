@@ -363,3 +363,38 @@ test('an unverified piece completes the job only if the whole file matches archi
   assert.equal(bad.status.status, 'failed');
   assert.match(bad.status.error, /does not match the SHA-1 archive.org publishes/);
 });
+
+test('a magnet link is resolved through the magnet resolver, a malformed one is a bad request', async () => {
+  const { MagnetError } = await import('../../src/magnet.js');
+  const resolved = [];
+  const manager = managerFor(multiFileTorrent(), {
+    magnetResolver: {
+      resolve: async (uri) => {
+        resolved.push(uri);
+
+        if (uri.includes('ffff')) {
+          throw new MagnetError('No peer found for magnet ffff (no DHT support)');
+        }
+
+        return Buffer.from('torrent bytes');
+      },
+    },
+    fetchImpl: async () => {
+      throw new Error('a magnet must never be fetched over HTTP');
+    },
+  });
+  const magnet = `magnet:?xt=urn:btih:${'ab'.repeat(20)}`;
+
+  const inspection = await manager.inspectTorrent({ torrentUrl: magnet });
+  assert.equal(inspection.mainVideoIndex, 1);
+  assert.deepEqual(resolved, [magnet]);
+
+  await assert.rejects(
+    manager.startDownload({ torrentUrl: 'magnet:?dn=no-hash', outputDir: '/o' }),
+    DownloadManagerError,
+  );
+  await assert.rejects(
+    manager.inspectTorrent({ torrentUrl: `magnet:?xt=urn:btih:${'ff'.repeat(20)}` }),
+    (err) => err instanceof TorrentFetchError && /no DHT support/.test(err.message),
+  );
+});
