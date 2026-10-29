@@ -34,6 +34,7 @@ show-movies:
 	docker compose exec app php artisan tinker --execute='dump(App\Models\MovieData::all()->toArray());'
 
 demo-scheduler:
+	docker compose exec app php artisan tinker --execute="print_r(App\Models\Movie::where('id', '$(ARG)')->first()?->toArray());"
 	docker compose exec app php artisan tinker --execute="App\Models\Movie::where('id', '$(ARG)')->update(['last_watched_at' => '2000-01-01']);"
 	docker compose exec app php artisan tinker --execute="print_r(App\Models\Movie::where('id', '$(ARG)')->first()?->toArray());"
 	docker compose exec --user webapp scheduler php artisan movies:purge-stale --isolated
