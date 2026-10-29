@@ -39,6 +39,8 @@ final class HlsCommandBuilder
 
         array_push(
             $arguments,
+            '-vf',
+            'pad=ceil(iw/2)*2:ceil(ih/2)*2',
             '-c:v',
             'libx264',
             '-preset',
@@ -70,8 +72,8 @@ final class HlsCommandBuilder
             '-hls_flags',
             'independent_segments+temp_file',
             '-hls_segment_filename',
-            $outputDirectory.$separator.'video_%05d.ts',
-            $outputDirectory.$separator.'video.m3u8',
+            $outputDirectory . $separator . 'video_%05d.ts',
+            $outputDirectory . $separator . 'video.m3u8',
         );
 
         foreach ($tracks->subtitles as $position => $subtitle) {
@@ -88,14 +90,14 @@ final class HlsCommandBuilder
                 '-segment_time',
                 (string) $segmentDuration,
                 '-segment_list',
-                $outputDirectory.$separator."{$prefix}.m3u8",
+                $outputDirectory . $separator . "{$prefix}.m3u8",
                 '-segment_list_type',
                 'm3u8',
                 '-segment_list_flags',
                 '+live',
                 '-segment_list_size',
                 '0',
-                $outputDirectory.$separator."{$prefix}_%05d.vtt",
+                $outputDirectory . $separator . "{$prefix}_%05d.vtt",
             );
         }
 
