@@ -31,7 +31,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/movies/{movie}/conversion', [MovieConversionController::class, 'store'])->name('movies.conversion.store');
     Route::get('/movies/{movie}/conversion', [MovieConversionController::class, 'show'])->name('movies.conversion.show');
 
-    Route::get('/movies/{movie}/comments', [CommentController::class, 'index'])->name('movies.comments.index');
     Route::post('/movies/{movie}/comments', [CommentController::class, 'store'])->name('movies.comments.store');
 
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])->name('comments.destroy');
