@@ -45,4 +45,19 @@ return [
 
     'connection' => env('PASSPORT_CONNECTION'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Client
+    |--------------------------------------------------------------------------
+    |
+    | The confidential password grant client of the REST API. `php artisan
+    | api:client` creates it, and writes these values to .env, when missing.
+    |
+    */
+
+    'api_client' => [
+        'id' => env('PASSPORT_API_CLIENT_ID'),
+        'secret' => env('PASSPORT_API_CLIENT_SECRET'),
+    ],
+
 ];

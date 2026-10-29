@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
 
 class DatabaseSeeder extends Seeder
 {
@@ -25,5 +26,10 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([MovieSeeder::class, UserSeeder::class]);
+
+        // migrate:fresh just emptied oauth_clients: put back the API client .env still names.
+        if (filled(config('passport.api_client.id'))) {
+            Artisan::call('api:client');
+        }
     }
 }
