@@ -1,5 +1,9 @@
+import { Link, router } from '@inertiajs/react';
+import { LogOut } from 'lucide-react';
 import { Breadcrumbs } from '@/components/breadcrumbs';
+import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { logout } from '@/routes';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
 export function AppSidebarHeader({
@@ -13,6 +17,24 @@ export function AppSidebarHeader({
                 <SidebarTrigger className="-ml-1" />
                 <Breadcrumbs breadcrumbs={breadcrumbs} />
             </div>
+
+            {/* On a phone the sidebar, and its "Log out", is folded away: keep it one click away. */}
+            <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto md:hidden"
+                asChild
+            >
+                <Link
+                    href={logout()}
+                    as="button"
+                    onClick={() => router.flushAll()}
+                    data-test="mobile-logout-button"
+                >
+                    <LogOut className="h-4 w-4" />
+                    Log out
+                </Link>
+            </Button>
         </header>
     );
 }

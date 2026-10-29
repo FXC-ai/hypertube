@@ -160,28 +160,13 @@ function HlsPlayer({
             hls.startLoad(0);
         });
 
-        hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
-            console.log('HLS manifest parsed', data);
-        });
-
-        hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-            console.log('Playlist HLS chargée', {
-                live: data.details.live,
-                segments: data.details.fragments.length,
-                firstSegment: data.details.fragments[0]?.sn,
-                lastSegment: data.details.fragments.at(-1)?.sn,
-                duration: data.details.totalduration,
-                endSN: data.details.endSN,
-                totalduration: data.details.totalduration,
-                hasEndList: data.details.live === false,
-            });
-        });
-
-        hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
-            console.log('HLS fragment loaded', data.frag.sn);
-        });
-
+        // hls.js retries on its own after a non-fatal error (a segment not converted yet, a
+        // stalled buffer while the torrent downloads): only a fatal one is worth reporting.
         hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (!data.fatal) {
+                return;
+            }
+
             console.error('HLS error', {
                 type: data.type,
                 details: data.details,
@@ -191,7 +176,7 @@ function HlsPlayer({
                 text: data.response?.text,
             });
 
-            if (data.fatal && data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
                 hls.recoverMediaError();
             }
         });
@@ -284,11 +269,6 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
             preserveScroll: true,
         });
     };
-
-    console.log(
-        'moviePageData.conversion_attempt = ',
-        moviePageData.conversion_attempt,
-    );
 
     return (
         <>

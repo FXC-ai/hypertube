@@ -368,7 +368,7 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                                 />
 
                                 <div className="flex flex-wrap items-end gap-3">
-                                    <div className="min-w-0 flex-1">
+                                    <div className="w-full min-w-0 sm:w-auto sm:min-w-48 sm:flex-1">
                                         <Label
                                             htmlFor="search"
                                             className="sr-only"

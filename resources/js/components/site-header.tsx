@@ -1,7 +1,7 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import AppLogo from '@/components/app-logo';
 import { Button } from '@/components/ui/button';
-import { home, login, register } from '@/routes';
+import { home, login, logout, register } from '@/routes';
 import { index as moviesIndex } from '@/routes/movies';
 
 export function SiteHeader() {
@@ -19,11 +19,23 @@ export function SiteHeader() {
                     className="flex items-center gap-2"
                 >
                     {auth.user ? (
-                        <Button asChild>
-                            <Link href={moviesIndex()} prefetch>
-                                Movie library
-                            </Link>
-                        </Button>
+                        <>
+                            <Button asChild>
+                                <Link href={moviesIndex()} prefetch>
+                                    Movie library
+                                </Link>
+                            </Button>
+                            <Button variant="ghost" asChild>
+                                <Link
+                                    href={logout()}
+                                    as="button"
+                                    onClick={() => router.flushAll()}
+                                    data-test="logout-button"
+                                >
+                                    Log out
+                                </Link>
+                            </Button>
+                        </>
                     ) : (
                         <>
                             <Button variant="ghost" asChild>
