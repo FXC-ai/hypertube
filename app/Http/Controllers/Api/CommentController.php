@@ -52,7 +52,7 @@ class CommentController extends Controller
         tags: ['Comments'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'comment', description: 'The id of the comment.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'comment', description: 'The id of the comment.', schema: new OA\Schema(type: 'integer')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The comment.', ref: '#/components/schemas/Comment'),
@@ -77,7 +77,7 @@ class CommentController extends Controller
         tags: ['Comments'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
             new OA\QueryParameter(parameter: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
             new OA\QueryParameter(parameter: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
         ],
@@ -148,7 +148,7 @@ class CommentController extends Controller
         tags: ['Comments'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
         ],
         requestBody: new OA\RequestBody(
             required: true,
@@ -190,7 +190,7 @@ class CommentController extends Controller
         tags: ['Comments'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'comment', description: 'The id of the comment, which must be yours.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'comment', description: 'The id of the comment, which must be yours.', schema: new OA\Schema(type: 'integer')),
         ],
         requestBody: new OA\RequestBody(
             required: true,
@@ -230,7 +230,7 @@ class CommentController extends Controller
         tags: ['Comments'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'comment', description: 'The id of the comment, which must be yours.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'comment', description: 'The id of the comment, which must be yours.', schema: new OA\Schema(type: 'integer')),
         ],
         responses: [
             new OA\Response(response: 204, description: 'The comment is gone.'),

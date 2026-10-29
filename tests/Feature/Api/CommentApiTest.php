@@ -3,7 +3,10 @@
 use App\Models\Comment;
 use App\Models\Movie;
 use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Laravel\Passport\Passport;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 test('the comment listing asks for an access token', function () {
     Comment::factory()->count(2)->create();
@@ -178,3 +181,24 @@ test('the api root describes itself', function () {
         ->assertOk()
         ->assertJsonStructure(['name', 'documentation']);
 });
+
+test('an id that is not a bigint answers not found instead of reaching the database', function (string $method, string $uri) {
+    Passport::actingAs(User::factory()->create());
+
+    // SQLite would also answer 404 for these ids, PostgreSQL answers 500: what matters is that
+    // no route matches them, so they never reach the database.
+    expect(fn () => Route::getRoutes()->match(Request::create($uri, $method)))
+        ->toThrow(NotFoundHttpException::class);
+    $this->json($method, $uri)->assertNotFound();
+})->with([
+    ['GET', '/api/movies/abc'],
+    ['GET', '/api/movies/1.5'],
+    ['GET', '/api/movies/99999999999999999999'],
+    ['GET', '/api/movies/abc/comments'],
+    ['POST', '/api/movies/abc/comments'],
+    ['GET', '/api/users/abc'],
+    ['PATCH', '/api/users/99999999999999999999'],
+    ['GET', '/api/comments/abc'],
+    ['PATCH', '/api/comments/1.5'],
+    ['DELETE', '/api/comments/99999999999999999999'],
+]);

@@ -53,7 +53,7 @@ class UserController extends Controller
         tags: ['Users'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'user', description: 'The id of the user.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'user', description: 'The id of the user.', schema: new OA\Schema(type: 'integer')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The profile. The email address is only there for its owner.', ref: '#/components/schemas/User'),
@@ -79,7 +79,7 @@ class UserController extends Controller
         tags: ['Users'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'user', description: 'The id of the user, which must be yours.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'user', description: 'The id of the user, which must be yours.', schema: new OA\Schema(type: 'integer')),
         ],
         requestBody: new OA\RequestBody(
             required: true,

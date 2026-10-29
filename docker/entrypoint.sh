@@ -49,11 +49,9 @@ if [ ! -f storage/oauth-private.key ]; then
     php artisan passport:keys
 fi
 
-if ! grep -Eq '^PASSPORT_API_CLIENT_ID=.+$' .env; then
-    echo "Creating the OAuth2 client of the API..."
-    php artisan tinker --execute '$client = (new \Laravel\Passport\ClientRepository)->createPasswordGrantClient("Hypertube API", provider: "users", confidential: true); file_put_contents(base_path(".env"), PHP_EOL . "PASSPORT_API_CLIENT_ID=" . $client->id . PHP_EOL . "PASSPORT_API_CLIENT_SECRET=" . $client->plainSecret . PHP_EOL, FILE_APPEND);' \
-        || echo "Skipped: create it later with php artisan passport:client --password"
-fi
+echo "Checking the OAuth2 client of the API..."
+php artisan api:client \
+    || echo "Skipped: create it later with php artisan api:client"
 
 echo "Generating the API documentation..."
 php artisan l5-swagger:generate \

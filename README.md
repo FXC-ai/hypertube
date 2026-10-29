@@ -132,25 +132,36 @@ Une route inconnue répond 404, un verbe non supporté répond 405.
 
 Au premier `docker compose up`, un client « password grant » nommé *Hypertube API* est
 créé et ses credentials écrits dans `.env` (`PASSPORT_API_CLIENT_ID`,
-`PASSPORT_API_CLIENT_SECRET`) : rien à faire. Pour en recréer un (le secret n'est affiché
-qu'une fois) :
+`PASSPORT_API_CLIENT_SECRET`) : rien à faire. `migrate:fresh --seed` et chaque démarrage du
+conteneur `app` le recréent avec les mêmes credentials s'il a disparu de la base. Après un
+`migrate:fresh` sans `--seed` :
 
 ```bash
-docker compose exec app php artisan passport:client --password --name="Hypertube API" --no-interaction
+make oauth-client   # ou : docker compose exec app php artisan api:client
 ```
+
+Seule la route `POST /oauth/token` de Passport est exposée (grants `password` et
+`refresh_token`) ; les autres (`/oauth/authorize`, `/oauth/device`...) répondent 404.
 
 Les credentials ne doivent jamais être commités : `.env` est ignoré par git.
 
 ### Obtenir un token et appeler l'API
 
 ```bash
+eval "$(grep -E '^PASSPORT_API_CLIENT_(ID|SECRET)=' .env)"
+
 curl -s -X POST http://localhost:8000/oauth/token \
   -H 'Accept: application/json' \
-  -d "grant_type=password&client_id=$(grep -oP '(?<=PASSPORT_API_CLIENT_ID=).*' .env)&client_secret=$(grep -oP '(?<=PASSPORT_API_CLIENT_SECRET=).*' .env)&username=<email>&password=<mot de passe>"
+  -d "grant_type=password&client_id=$PASSPORT_API_CLIENT_ID&client_secret=$PASSPORT_API_CLIENT_SECRET&username=<email ou identifiant>&password=<mot de passe>"
 
-curl -s http://localhost:8000/api/movies \
+curl -s http://localhost:8000/api/movies/1 \
+  -H 'Accept: application/json' \
   -H "Authorization: Bearer <access_token>"
 ```
+
+Le token se renouvelle sur la même route avec
+`grant_type=refresh_token&refresh_token=<refresh_token>&client_id=...&client_secret=...`.
+Un id qui n'est pas un entier (`/api/movies/abc`) répond 404.
 
 ### Régénérer la documentation
 
