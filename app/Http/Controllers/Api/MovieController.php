@@ -59,8 +59,8 @@ class MovieController extends Controller
         operationId: 'listMovies',
         tags: ['Movies'],
         parameters: [
-            new OA\QueryParameter(parameter: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
-            new OA\QueryParameter(parameter: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
+            new OA\QueryParameter(parameter: 'page', name: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
+            new OA\QueryParameter(parameter: 'perPage', name: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The most popular movies available on this server.', ref: '#/components/schemas/MovieSummaryCollection'),
@@ -89,7 +89,7 @@ class MovieController extends Controller
         tags: ['Movies'],
         security: [['passport' => []]],
         parameters: [
-            new OA\PathParameter(parameter: 'movie', name: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
+            new OA\PathParameter(name: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The movie.', ref: '#/components/schemas/Movie'),
