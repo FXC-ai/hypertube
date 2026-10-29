@@ -16,14 +16,14 @@ return new class extends Migration
             $table->string('source');
             $table->string('imdb_id');
             $table->text('title');
-            $table->json('titles')->nullable();
+            $table->jsonb('titles')->nullable();
             $table->text('torrent_url')->nullable();
             $table->timestamps();
 
             $table->unique(['source', 'imdb_id']);
-            // titles is JSON: PostgreSQL has no B-tree operator for it, and a search
-            // with ILIKE '%...%' could not use such an index anyway.
-            $table->index(['source', 'title']);
+            $table->index(['source']);
+            $table->index(['titles']);
+            $table->index(['title']);
             $table->index('imdb_id');
         });
     }

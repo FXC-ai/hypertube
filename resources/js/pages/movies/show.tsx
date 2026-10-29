@@ -484,6 +484,9 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                             </span>
                                         </div>
                                         <div>
+                                            <span className="text-muted-foreground">
+                                                IMDB Rating :
+                                            </span>
                                             <span className="ml-2 font-medium">
                                                 {moviePageData.movieData
                                                     .imdbRating ?? 'N/A'}
