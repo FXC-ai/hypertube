@@ -71,6 +71,8 @@ class FortifyServiceProvider extends ServiceProvider
             'passwordRules' => Password::defaults()->toPasswordRulesString(),
         ]));
 
+        Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
+
     }
 
     /**

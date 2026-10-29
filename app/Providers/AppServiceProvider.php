@@ -35,6 +35,13 @@ class AppServiceProvider extends ServiceProvider
 
         Passport::enablePasswordGrant();
 
+        // Ids are bigint columns, on the web routes as on the API: anything else must answer
+        // 404, not reach PostgreSQL, which rejects "abc" or 99999999999999999999 with an error
+        // (500). 18 digits always fit in a bigint.
+        Route::pattern('movie', '[0-9]{1,18}');
+        Route::pattern('user', '[0-9]{1,18}');
+        Route::pattern('comment', '[0-9]{1,18}');
+
         Route::post('oauth/token', [AccessTokenController::class, 'issueToken'])
             ->middleware('throttle')
             ->name('passport.token');
