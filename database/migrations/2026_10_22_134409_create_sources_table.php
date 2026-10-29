@@ -20,7 +20,9 @@ return new class extends Migration {
             $table->timestamps();
 
             $table->unique(['source', 'imdb_id']);
-            $table->index(['source', 'title', 'titles']);
+            $table->index(['source']);
+            // $table->index(['titles']);
+            $table->index(['title']);
             $table->index('imdb_id');
         });
     }
