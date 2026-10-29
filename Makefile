@@ -1,3 +1,4 @@
+
 init:
 	docker compose up -d --build --scale worker-conversions=3
 	docker compose exec app php artisan migrate:fresh --seed
@@ -39,3 +40,11 @@ demo-scheduler:
 	docker compose exec app php artisan tinker --execute="print_r(App\Models\Movie::where('id', '$(ARG)')->first()?->toArray());"
 	docker compose exec --user webapp scheduler php artisan movies:purge-stale --isolated
 	docker compose exec app php artisan tinker --execute="print_r(App\Models\Movie::where('id', '$(ARG)')->first()?->toArray());"
+
+## API RESTful (OAuth2 + Swagger)
+
+oauth-client: ## Crée le client OAuth2 « password grant » (affiche le client_id/secret une seule fois)
+	$(COMPOSE) exec -T app php artisan passport:client --password --name="Hypertube API" --no-interaction
+
+docs: ## Régénère la spec Swagger (UI : http://localhost:8000/api/documentation)
+	$(COMPOSE) exec -T app php artisan l5-swagger:generate
