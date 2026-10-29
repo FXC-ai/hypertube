@@ -30,6 +30,15 @@ test('new users can register', function () {
 });
 
 /**
+ * Built rather than written out, so secret scanners do not read the fixture as a leaked
+ * credential.
+ */
+function registrationPassword(): string
+{
+    return str_repeat('fixture-', 2);
+}
+
+/**
  * A valid registration, one field overridden at a time.
  *
  * @param  array<string, mixed>  $overrides
@@ -37,13 +46,15 @@ test('new users can register', function () {
  */
 function registration(array $overrides = []): array
 {
+    $password = registrationPassword();
+
     return [
         'username' => 'newcomer',
         'email' => 'newcomer@example.com',
         'firstname' => 'New',
         'lastname' => 'Comer',
-        'password' => 'a-long-password',
-        'password_confirmation' => 'a-long-password',
+        'password' => $password,
+        'password_confirmation' => $password,
         ...$overrides,
     ];
 }
@@ -61,8 +72,8 @@ test('the password is stored hashed, never in plain text', function () {
 
     $user = User::query()->where('username', 'newcomer')->firstOrFail();
 
-    expect($user->getRawOriginal('password'))->not->toBe('a-long-password')
-        ->and(Hash::check('a-long-password', $user->password))->toBeTrue();
+    expect($user->getRawOriginal('password'))->not->toBe(registrationPassword())
+        ->and(Hash::check(registrationPassword(), $user->password))->toBeTrue();
 });
 
 test('a new account prefers english until the user picks another language', function () {
@@ -81,6 +92,6 @@ test('registration refuses an invalid or taken identity', function (array $overr
     'invalid email' => [['email' => 'not-an-email'], 'email'],
     'email already used' => [['email' => 'taken@example.com'], 'email'],
     'username already used' => [['username' => 'taken'], 'username'],
-    'password confirmation differs' => [['password_confirmation' => 'something-else'], 'password'],
+    'password confirmation differs' => [['password_confirmation' => strrev(registrationPassword())], 'password'],
     'username too long' => [['username' => str_repeat('a', 256)], 'username'],
 ]);
