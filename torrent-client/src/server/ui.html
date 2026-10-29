@@ -71,8 +71,10 @@ video{width:100%;margin-top:12px;border-radius:8px;background:#000}
 
 <section class="card">
 <h2>Lancer un téléchargement</h2>
-<label for="url">torrentUrl (torrent archive.org court, environ 2 Mo, pré-rempli)</label>
+<label for="url">torrentUrl : URL d'un .torrent ou lien magnet (pré-rempli : torrent archive.org court, environ 2 Mo)</label>
 <input id="url" value="https://archive.org/download/1953_Movie_Trailers_Starting_Monday/1953_Movie_Trailers_Starting_Monday_archive.torrent">
+<div class="row tight"><span class="muted small">Exemples :</span><button type="button" class="small" data-example="torrent">torrent archive.org (2 Mo)</button><button type="button" class="small" data-example="magnet">magnet de la fiche d'évaluation (TPB AFK, MKV, 3,5 Go)</button></div>
+<p class="muted small">Un magnet ne contient que l'infohash : le service demande d'abord la liste des fichiers aux pairs (une dizaine de secondes, 45 s au plus), sans DHT.</p>
 <label for="torrentFile">ou un fichier .torrent local, envoyé en torrentBase64 (prend le dessus sur torrentUrl)</label>
 <input id="torrentFile" type="file" accept=".torrent,application/x-bittorrent">
 <div id="fileSource" class="row tight" hidden><span id="fileSourceName" class="muted"></span><button id="clearFile" type="button" class="small">Retirer</button></div>
@@ -181,7 +183,7 @@ var ROUTES=[
 {id:'inspect',method:'POST',path:'/torrents/inspect',summary:'liste les fichiers du torrent et propose lesquels télécharger',
  role:'Lit un <code>.torrent</code> et renvoie la liste de ses fichiers, sans rien télécharger d\'autre que le <code>.torrent</code> lui-même. Réponse synchrone. Sert à choisir les fichiers avant <code>POST /downloads</code>.',
  body:[
-  {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code>, que le service télécharge lui-même.'},
+  {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code>, que le service télécharge lui-même, ou lien magnet : la liste des fichiers est alors demandée aux pairs (BEP 9), en 45 s au plus.'},
   {name:'torrentBase64',type:'string',required:'un des deux',def:'-',desc:'Contenu brut du <code>.torrent</code> en base64. Si les deux sont présents, <code>torrentBase64</code> prend le dessus.'}],
  fields:[
   ['infoHash','SHA-1 du dictionnaire <code>info</code>, 40 caractères hexadécimaux. À renvoyer tel quel dans <code>expectedInfoHash</code>.'],
@@ -196,7 +198,7 @@ var ROUTES=[
   ['files[].kind','<code>"video"</code>, <code>"subtitle"</code> ou <code>"other"</code>, déduit de l\'extension'],
   ['files[].container','<code>"mp4"</code>, <code>"matroska"</code>, <code>"ogg"</code>, <code>"avi"</code> ou <code>null</code>, déduit de l\'extension'],
   ['files[].suggested','proposition du client : la vidéo principale et les sous-titres non vides (tout si aucune vidéo)']],
- responses:[['200','inspection réussie'],['400','JSON invalide, ni <code>torrentUrl</code> ni <code>torrentBase64</code>, ou <code>.torrent</code> malformé'],['502','<code>torrentUrl</code> injoignable ou réponse HTTP non-2xx']],
+ responses:[['200','inspection réussie'],['400','JSON invalide, ni <code>torrentUrl</code> ni <code>torrentBase64</code>, <code>.torrent</code> malformé, ou magnet sans infohash (<code>xt=urn:btih:</code>)'],['502','<code>torrentUrl</code> injoignable ou réponse HTTP non-2xx ; pour un magnet, aucun pair n\'a fourni la liste des fichiers en 45 s']],
  notes:'archive.org peut régénérer le <code>.torrent</code> servi à la même URL : entre l\'inspection et le lancement, les index peuvent changer de sens. D\'où <code>expectedInfoHash</code>.',
  example:{request:{torrentUrl:EXAMPLE_URL},status:200,response:{infoHash:EXAMPLE_HASH,name:'some_item',pieceLength:2097152,totalPieces:1421,totalLength:2980052992,mainVideoIndex:0,files:[
   {index:0,path:'Movie/Movie.mp4',fileName:'Movie.mp4',length:2961234567,kind:'video',container:'mp4',suggested:true},
@@ -208,7 +210,7 @@ var ROUTES=[
  role:'Crée un job en mémoire et répond tout de suite avec son id. Récupération du <code>.torrent</code>, trackers et pièces se font ensuite, en arrière-plan : suivre avec <code>GET /downloads/:id</code>. Le job commence en <code>"checking"</code> : si <code>outputDir</code> contient déjà des fichiers de ce torrent, chaque pièce y est revérifiée et seules les manquantes ou corrompues sont retéléchargées. Relancer sur le même <code>outputDir</code> reprend donc un téléchargement interrompu.',
  body:[
   {name:'outputDir',type:'string',required:'oui',def:'-',desc:'Chemin absolu où écrire les fichiers. Pour un film : <code>'+EXAMPLE_DIR.replace('42','{movieId}')+'</code>.'},
-  {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code>.'},
+  {name:'torrentUrl',type:'string',required:'un des deux',def:'-',desc:'URL d\'un <code>.torrent</code> ou lien magnet.'},
   {name:'torrentBase64',type:'string',required:'un des deux',def:'-',desc:'Contenu du <code>.torrent</code> en base64, prend le dessus sur <code>torrentUrl</code>.'},
   {name:'fileIndexes',type:'int[]',required:'non',def:'fichiers <code>suggested</code>',desc:'Index des fichiers à télécharger. Liste non vide d\'entiers positifs sans doublon, sinon <code>400</code>. Index hors bornes : le job passe en <code>"failed"</code>.'},
   {name:'expectedInfoHash',type:'string',required:'non (recommandé avec fileIndexes)',def:'aucune vérification',desc:'<code>infoHash</code> de l\'inspection, 40 caractères hexadécimaux, sinon <code>400</code>. S\'il ne correspond pas au <code>.torrent</code> récupéré, le job passe en <code>"failed"</code>.'}],
@@ -280,7 +282,21 @@ function isPadding(path){return /(^|\/)\.?_{4,}padding_file/.test(path)}
 function statusClass(s){return s==='completed'?'ok':(s==='failed'||s==='inconnu'?'bad':(s==='cancelled'?'warn':''))}
 
 function sourceBody(){return torrentFile?{torrentBase64:torrentFile.base64}:{torrentUrl:url.value}}
-function sourceLabel(){return torrentFile?torrentFile.name:(url.value.split('/').pop()||url.value)}
+var EXAMPLES={
+  torrent:'https://archive.org/download/1953_Movie_Trailers_Starting_Monday/1953_Movie_Trailers_Starting_Monday_archive.torrent',
+  magnet:'magnet:?xt=urn:btih:79816060ea56d56f2a2148cd45705511079f9bca&dn=TPB.AFK.2013.720p.h264-SimonKlose&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A80&tr=udp%3A%2F%2Fopen.demonii.com%3A1337&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Fexodus.desync.com%3A6969'
+};
+// Short name for the history: the file name of a .torrent URL, the dn (or the start of the
+// info-hash) of a magnet.
+function urlLabel(u){
+  if(/^magnet:\?/i.test(u)){
+    var params=new URLSearchParams(u.slice(u.indexOf('?')+1));
+    var hash=(params.get('xt')||'').replace(/^urn:btih:/i,'');
+    return 'magnet '+(params.get('dn')||hash.slice(0,8));
+  }
+  return u.split('/').pop()||u;
+}
+function sourceLabel(){return torrentFile?torrentFile.name:urlLabel(url.value)}
 function checkedIndexes(){
   return inspection.files.filter(function(f){return selected[f.index]}).map(function(f){return f.index});
 }
@@ -572,7 +588,7 @@ function sendTry(box){
       if(r.id==='start'&&res.status===202&&body){
         var sent=null;
         try{sent=JSON.parse(opts.body)}catch(e){}
-        addHistory(body.id,sent&&sent.torrentUrl&&!sent.torrentBase64?sent.torrentUrl.split('/').pop():'torrentBase64 (Essayer)');
+        addHistory(body.id,sent&&sent.torrentUrl&&!sent.torrentBase64?urlLabel(sent.torrentUrl):'torrentBase64 (Essayer)');
       }
     });
   }).catch(function(e){meta.innerHTML='<span class="pill bad">erreur réseau</span> '+esc(e.message);out.hidden=true});
@@ -623,6 +639,9 @@ $('torrentFile').onchange=function(){
   reader.readAsDataURL(file);
 };
 $('clearFile').onclick=function(){torrentFile=null;$('torrentFile').value='';renderSource();resetInspection()};
+Array.prototype.forEach.call(document.querySelectorAll('[data-example]'),function(b){b.onclick=function(){
+  url.value=EXAMPLES[b.dataset.example];torrentFile=null;$('torrentFile').value='';renderSource();resetInspection();
+}});
 $('hidePadding').onchange=renderFiles;
 $('verifyHash').onchange=renderCurl;
 Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'),function(b){b.onclick=function(){applyPreset(b.dataset.preset)}});
