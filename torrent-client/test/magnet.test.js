@@ -14,6 +14,7 @@ test('parseMagnet reads the info-hash, the name, the trackers and the web-seeds'
     name: 'TPB.AFK.2013.720p.h264-SimonKlose',
     trackers: ['udp://tracker.openbittorrent.com:80', 'udp://open.demonii.com:1337'],
     webSeeds: [],
+    exactSources: [],
   });
   assert.deepEqual(
     parseMagnet(
@@ -50,4 +51,12 @@ test('buildTorrentFile wraps the info dictionary into a .torrent with the same i
   assert.equal(torrent.name, 'movie.mkv');
   assert.equal(torrent.announce, 'udp://a.test:1');
   assert.deepEqual(torrent.urlList, ['https://seed.test/']);
+});
+
+test('parseMagnet reads the exact sources (xs), the URL of the .torrent itself', () => {
+  const magnet = parseMagnet(
+    'magnet:?xt=urn:btih:dd8255ecdc7ca55fb0bbf81323d87062db1f6d1c&xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fbig-buck-bunny.torrent',
+  );
+
+  assert.deepEqual(magnet.exactSources, ['https://webtorrent.io/torrents/big-buck-bunny.torrent']);
 });

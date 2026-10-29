@@ -74,7 +74,7 @@ video{width:100%;margin-top:12px;border-radius:8px;background:#000}
 <label for="url">torrentUrl : URL d'un .torrent ou lien magnet (pré-rempli : torrent archive.org court, environ 2 Mo)</label>
 <input id="url" value="https://archive.org/download/1953_Movie_Trailers_Starting_Monday/1953_Movie_Trailers_Starting_Monday_archive.torrent">
 <div class="row tight"><span class="muted small">Exemples :</span><button type="button" class="small" data-example="torrent">torrent archive.org (2 Mo)</button><button type="button" class="small" data-example="magnet">magnet de la fiche d'évaluation (TPB AFK, MKV, 3,5 Go)</button></div>
-<p class="muted small">Un magnet ne contient que l'infohash : le service demande d'abord la liste des fichiers aux pairs (une dizaine de secondes, 45 s au plus), sans DHT.</p>
+<p class="muted small">Un magnet ne contient que l'infohash : le service récupère d'abord la liste des fichiers, via l'URL du .torrent si le magnet en donne une (xs=, vérifiée par l'infohash), sinon auprès des pairs (une dizaine de secondes, 45 s au plus, sans DHT).</p>
 <label for="torrentFile">ou un fichier .torrent local, envoyé en torrentBase64 (prend le dessus sur torrentUrl)</label>
 <input id="torrentFile" type="file" accept=".torrent,application/x-bittorrent">
 <div id="fileSource" class="row tight" hidden><span id="fileSourceName" class="muted"></span><button id="clearFile" type="button" class="small">Retirer</button></div>

@@ -1,5 +1,5 @@
-// Magnet links (BEP 9): only the info-hash, and optionally a name (dn), trackers (tr) and
-// web-seeds (ws). The file list and piece hashes (the "info" dictionary) are fetched from peers
+// Magnet links (BEP 9): only the info-hash, and optionally a name (dn), trackers (tr),
+// web-seeds (ws) and exact sources (xs, the URL of the .torrent itself). The file list and piece hashes (the "info" dictionary) are fetched from peers
 // by peer/fetchMetadata.js, then wrapped back into a .torrent so the rest of the client does not
 // know where the torrent came from.
 
@@ -26,7 +26,7 @@ export function isMagnet(value) {
   return typeof value === 'string' && /^magnet:\?/i.test(value.trim());
 }
 
-// { infoHash (40 hex, lower case), name, trackers, webSeeds }. Throws MagnetError for a magnet
+// { infoHash (40 hex, lower case), name, trackers, webSeeds, exactSources }. Throws MagnetError for a magnet
 // without a BitTorrent v1 info-hash (urn:btih).
 export function parseMagnet(uri) {
   if (!isMagnet(uri)) {
@@ -46,6 +46,7 @@ export function parseMagnet(uri) {
     name: params.get('dn') || null,
     trackers: unique([...params.getAll('tr'), ...prefixed(params, 'tr.')]),
     webSeeds: unique(params.getAll('ws')),
+    exactSources: unique([...params.getAll('xs'), ...prefixed(params, 'xs.')]),
   };
 }
 
