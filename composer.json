@@ -53,7 +53,7 @@
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
             "@php artisan migrate --force",
-            "@php artisan passport:install --no-interaction",
+            "@php -r \"if (! file_exists('storage/oauth-private.key')) { passthru('php artisan passport:keys', \\$code); exit(\\$code); }\"",
             "@php artisan l5-swagger:generate",
             "npm install",
             "npm run build"
