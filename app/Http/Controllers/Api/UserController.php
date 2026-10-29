@@ -28,8 +28,8 @@ class UserController extends Controller
         tags: ['Users'],
         security: [['passport' => []]],
         parameters: [
-            new OA\QueryParameter(parameter: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
-            new OA\QueryParameter(parameter: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
+            new OA\QueryParameter(parameter: 'page', name: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
+            new OA\QueryParameter(parameter: 'perPage', name: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The accounts of this instance.', ref: '#/components/schemas/UserCollection'),

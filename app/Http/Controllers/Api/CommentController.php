@@ -27,8 +27,8 @@ class CommentController extends Controller
         tags: ['Comments'],
         security: [['passport' => []]],
         parameters: [
-            new OA\QueryParameter(parameter: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
-            new OA\QueryParameter(parameter: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
+            new OA\QueryParameter(parameter: 'page', name: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
+            new OA\QueryParameter(parameter: 'perPage', name: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The newest comments, most recent first.', ref: '#/components/schemas/CommentCollection'),
@@ -78,8 +78,8 @@ class CommentController extends Controller
         security: [['passport' => []]],
         parameters: [
             new OA\PathParameter(name: 'movie', description: 'The id of the movie.', schema: new OA\Schema(type: 'integer')),
-            new OA\QueryParameter(parameter: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
-            new OA\QueryParameter(parameter: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
+            new OA\QueryParameter(parameter: 'page', name: 'page', description: 'The page to read.', schema: new OA\Schema(type: 'integer', default: 1, minimum: 1)),
+            new OA\QueryParameter(parameter: 'perPage', name: 'perPage', description: 'Rows per page, 20 by default.', schema: new OA\Schema(type: 'integer', default: 20, minimum: 1, maximum: 100)),
         ],
         responses: [
             new OA\Response(response: 200, description: 'The comments of that movie.', ref: '#/components/schemas/CommentCollection'),
