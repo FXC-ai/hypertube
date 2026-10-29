@@ -58,8 +58,9 @@ composer run setup   # première fois seulement
 composer run dev     # serveur + worker + Vite
 ```
 
-`composer run setup` appelle `passport:install` : à ne relancer qu'après avoir supprimé
-`storage/oauth-*.key`, sinon la commande échoue parce que les clés existent déjà.
+`composer run setup` génère les clés OAuth2 (`storage/oauth-*.key`) si elles n'existent pas
+encore : il peut être relancé sans les écraser. Le client de l'API se crée ensuite avec
+`php artisan api:client`.
 
 ```bash
 docker compose up -d --build          # démarrer la stack
