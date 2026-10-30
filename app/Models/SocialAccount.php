@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable(
     [
@@ -17,6 +18,11 @@ use Illuminate\Database\Eloquent\Model;
     ]
 )]
 
+/**
+ * The link between an account of this instance and the provider it signed in with.
+ *
+ * @property-read User $user
+ */
 class SocialAccount extends Model
 {
     /*
@@ -30,7 +36,10 @@ class SocialAccount extends Model
     }
     */
 
-    public function user()
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }

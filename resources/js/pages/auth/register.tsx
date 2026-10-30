@@ -1,4 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -8,12 +9,23 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
+import { redirect } from '@/routes/socialite';
 
 type Props = {
     passwordRules: string;
+    providers: Record<string, string>;
 };
 
-export default function Register({ passwordRules }: Props) {
+export default function Register({ passwordRules, providers }: Props) {
+    const [redirectingProvider, setRedirectingProvider] = useState<
+        string | null
+    >(null);
+
+    const redirectToProvider = (provider: string) => {
+        setRedirectingProvider(provider);
+        window.location.assign(redirect.url(provider));
+    };
+
     return (
         <>
             <Head title="Register" />
@@ -151,9 +163,32 @@ export default function Register({ passwordRules }: Props) {
                             </Button>
                         </div>
 
+                        {Object.entries(providers).map(
+                            ([provider, label], index) => (
+                                <Button
+                                    key={provider}
+                                    type="button"
+                                    variant="secondary"
+                                    className={
+                                        index === 0
+                                            ? 'mt-4 w-full'
+                                            : 'mt-2 w-full'
+                                    }
+                                    onClick={() => redirectToProvider(provider)}
+                                    disabled={redirectingProvider !== null}
+                                    data-test={`omniauth-${provider}`}
+                                >
+                                    {redirectingProvider === provider && (
+                                        <Spinner />
+                                    )}
+                                    Sign up with {label}
+                                </Button>
+                            ),
+                        )}
+
                         <div className="text-center text-sm text-muted-foreground">
                             Already have an account?{' '}
-                            <TextLink href={login()} tabIndex={6}>
+                            <TextLink href={login()} tabIndex={9}>
                                 Log in
                             </TextLink>
                         </div>

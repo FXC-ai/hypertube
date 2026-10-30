@@ -7,13 +7,13 @@ use App\Http\Controllers\MovieController;
 use App\Http\Controllers\MovieConversionController;
 use App\Http\Controllers\Settings\ProfilePictureController;
 use App\Http\Controllers\UserController;
+use App\Support\SocialiteProviders;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
 
-Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->whereIn('provider', ['github', 'fortytwo'])->name('socialite.redirect');
-Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->whereIn('provider', ['github', 'fortytwo'])->name('socialite.callback');
-
+Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->whereIn('provider', SocialiteProviders::values())->name('socialite.redirect');
+Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->whereIn('provider', SocialiteProviders::values())->name('socialite.callback');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
