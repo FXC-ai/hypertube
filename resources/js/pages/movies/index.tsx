@@ -161,7 +161,7 @@ function MovieCard({ movie }: { movie: Movie }) {
                     }}
                 />
 
-                {movie.data?.imdbRating && (
+                {movie.data?.imdbRating !== null ? (
                     <div className="absolute right-3 bottom-3 flex gap-1 rounded-lg bg-secondary px-2 py-1 text-secondary-foreground">
                         {movie.data.imdbRating}
                         <img
@@ -171,7 +171,7 @@ function MovieCard({ movie }: { movie: Movie }) {
                             aria-hidden
                         />
                     </div>
-                )}
+                ) : (<></>)}
 
                 {movie.popularity ? (
                     <div
@@ -194,7 +194,7 @@ function MovieCard({ movie }: { movie: Movie }) {
                 >
                     {sourceLabels[movie.source] ?? movie.source}
                 </Badge>
-                {movie.watched && (
+                {movie.watched ? (
                     <span
                         className="absolute top-3 right-3 flex items-center rounded-full bg-secondary p-1 text-blue-600 shadow ring-2 ring-black/5"
                         title="Already watched"
@@ -202,7 +202,7 @@ function MovieCard({ movie }: { movie: Movie }) {
                         <Check className="size-5" strokeWidth={3} aria-hidden />
                         <span className="sr-only">Watched</span>
                     </span>
-                )}
+                ) : (<></>)}
             </div>
 
             <span className="min-w-0 flex-1 text-center font-medium wrap-break-word">
@@ -500,15 +500,15 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                                     errors.yearTo ||
                                     errors.ratingFrom ||
                                     errors.ratingTo) && (
-                                    <InputError className="mt-2">
-                                        {
-                                            (errors.yearFrom ??
-                                                errors.yearTo ??
-                                                errors.ratingFrom ??
-                                                errors.ratingTo) as string
-                                        }
-                                    </InputError>
-                                )}
+                                        <InputError className="mt-2">
+                                            {
+                                                (errors.yearFrom ??
+                                                    errors.yearTo ??
+                                                    errors.ratingFrom ??
+                                                    errors.ratingTo) as string
+                                            }
+                                        </InputError>
+                                    )}
                             </>
                         )}
                     </Form>
