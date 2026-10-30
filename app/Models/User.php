@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -30,6 +31,10 @@ use League\OAuth2\Server\Entities\ClientEntityInterface;
  * @property string|null $remember_token
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property string|null $firstname
+ * @property string|null $lastname
+ * @property string|null $profilepicture
+ * @property Languages $preferredlanguage
  * @property array<string, bool>|null $sources
  */
 #[Fillable(['username', 'email', 'firstname', 'lastname', 'password', 'preferredlanguage', 'profilepicture', 'sources'])]
@@ -54,7 +59,8 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
         ];
     }
 
-    public function socialAccounts()
+    /** @return HasMany<SocialAccount, $this> */
+    public function socialAccounts(): HasMany
     {
         return $this->hasMany(SocialAccount::class);
     }
@@ -87,7 +93,7 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
     /**
      * The movies this user has already watched.
      *
-     * @return HasManyThrough<Movie, WatchedMovie>
+     * @return HasManyThrough<Movie, WatchedMovie, $this>
      */
     public function watchedMovies(): HasManyThrough
     {

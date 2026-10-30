@@ -14,18 +14,20 @@ class CommentResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $comment = $this->resource;
+
         return [
-            'id' => $this->id,
-            'movie_id' => $this->movie_id,
-            'user_id' => $this->user_id,
-            'content' => $this->content,
-            'created_at' => $this->created_at,
+            'id' => $comment->id,
+            'movie_id' => $comment->movie_id,
+            'user_id' => $comment->user_id,
+            'content' => $comment->content,
+            'created_at' => $comment->created_at,
             'user' => [
-                'id' => $this->user->id,
-                'username' => $this->user->username,
-                'profilepicture' => $this->user->profilepicture,
+                'id' => $comment->user->id,
+                'username' => $comment->user->username,
+                'profilepicture' => $comment->user->profilepicture,
             ],
-            'can_delete' => auth()->check() && auth()->id() === $this->user_id,
+            'can_delete' => auth()->check() && auth()->id() === $comment->user_id,
         ];
     }
 }
