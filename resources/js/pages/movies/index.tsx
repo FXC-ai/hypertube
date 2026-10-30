@@ -171,7 +171,9 @@ function MovieCard({ movie }: { movie: Movie }) {
                             aria-hidden
                         />
                     </div>
-                ) : (<></>)}
+                ) : (
+                    <></>
+                )}
 
                 {movie.popularity ? (
                     <div
@@ -202,7 +204,9 @@ function MovieCard({ movie }: { movie: Movie }) {
                         <Check className="size-5" strokeWidth={3} aria-hidden />
                         <span className="sr-only">Watched</span>
                     </span>
-                ) : (<></>)}
+                ) : (
+                    <></>
+                )}
             </div>
 
             <span className="min-w-0 flex-1 text-center font-medium wrap-break-word">
@@ -500,15 +504,15 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                                     errors.yearTo ||
                                     errors.ratingFrom ||
                                     errors.ratingTo) && (
-                                        <InputError className="mt-2">
-                                            {
-                                                (errors.yearFrom ??
-                                                    errors.yearTo ??
-                                                    errors.ratingFrom ??
-                                                    errors.ratingTo) as string
-                                            }
-                                        </InputError>
-                                    )}
+                                    <InputError className="mt-2">
+                                        {
+                                            (errors.yearFrom ??
+                                                errors.yearTo ??
+                                                errors.ratingFrom ??
+                                                errors.ratingTo) as string
+                                        }
+                                    </InputError>
+                                )}
                             </>
                         )}
                     </Form>
