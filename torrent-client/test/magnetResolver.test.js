@@ -211,9 +211,15 @@ test('slow exact sources share the overall timeout: the answer never comes later
     fetchImpl: async (url, { signal }) => {
       fetched.push(url);
 
-      // Never answers: only the timeout signal ends it.
+      // Never answers: only the timeout signal ends it. AbortSignal.timeout() does not keep
+      // Node alive, so a timer stands in for the open socket a real request would hold.
       return new Promise((resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason));
+        const socket = setTimeout(() => {}, 10000);
+
+        signal.addEventListener('abort', () => {
+          clearTimeout(socket);
+          reject(signal.reason);
+        });
       });
     },
     timeoutMs: 300,

@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
 
 beforeEach(function () {
@@ -15,15 +17,12 @@ test('registration screen can be rendered', function () {
 });
 
 test('new users can register', function () {
-
-    $response = $this->post(route('register.store'), [
-        'username' => 'test user',
+    $response = $this->post(route('register.store'), registration([
+        'username' => 'test-user',
         'email' => 'test@example.com',
         'firstname' => 'Firstname',
         'lastname' => 'Lastname',
-        'password' => 'password',
-        'password_confirmation' => 'password',
-    ]);
+    ]));
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('movies.index', absolute: false));
@@ -35,7 +34,7 @@ test('new users can register', function () {
  */
 function registrationPassword(): string
 {
-    return str_repeat('fixture-', 2);
+    return 'Fixture123!';
 }
 
 /**
@@ -55,6 +54,7 @@ function registration(array $overrides = []): array
         'lastname' => 'Comer',
         'password' => $password,
         'password_confirmation' => $password,
+        'profilepicture' => UploadedFile::fake()->image('avatar.png'),
         ...$overrides,
     ];
 }
@@ -75,6 +75,46 @@ test('the password is stored hashed, never in plain text', function () {
     expect($user->getRawOriginal('password'))->not->toBe(registrationPassword())
         ->and(Hash::check(registrationPassword(), $user->password))->toBeTrue();
 });
+
+test('a profile picture uploaded at registration is kept on the public disk', function () {
+    $this->post(route('register.store'), registration());
+
+    $user = User::query()->where('username', 'newcomer')->firstOrFail();
+
+    expect($user->profilepicture)->not->toBeNull();
+    Storage::disk('public')->assertExists($user->profilepicture);
+});
+
+test('the profile picture is optional at registration', function () {
+    $payload = registration();
+    unset($payload['profilepicture']);
+
+    $this->post(route('register.store'), $payload)->assertSessionHasNoErrors();
+
+    $this->assertAuthenticated();
+    expect(User::query()->where('username', 'newcomer')->sole()->profilepicture)->toBeNull();
+});
+
+test('a profile picture sent at registration must still be a real image', function () {
+    $this->post(route('register.store'), registration([
+        'profilepicture' => UploadedFile::fake()->createWithContent('avatar.jpg', '<?php phpinfo();'),
+    ]))->assertSessionHasErrors('profilepicture');
+
+    $this->assertGuest();
+});
+
+test('a current French word is rejected as a password', function (string $password) {
+    $this->post(route('register.store'), registration([
+        'password' => $password,
+        'password_confirmation' => $password,
+    ]))->assertSessionHasErrors('password');
+
+    $this->assertGuest();
+})->with([
+    'motdepasse',
+    'Motdepasse1',
+    'password123',
+]);
 
 test('a new account prefers english until the user picks another language', function () {
     $this->post(route('register.store'), registration());

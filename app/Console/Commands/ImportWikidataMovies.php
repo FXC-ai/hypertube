@@ -13,7 +13,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Throwable;
 
 const WHITELIST = [
-    "tt42576262",
+    'tt42576262',
 ];
 
 #[Signature('import:wikidata-movies {--limit=1000000} {--dry-run} {--batch-size=1000} {--enrich=0} {--popularity=200}')]
@@ -40,7 +40,7 @@ class ImportWikidataMovies extends Command
         $enrichLimit = (int) ($this->option('enrich') ?? 0);
 
         $this->info('🎬 Importing public domain films from Wikidata...');
-        $this->info("Limit: {$limit} | Batch: {$batchSize} | Enrich Limit: {$enrichLimit} | Popularity Limit: {$popularityLimit} | Mode: " . ($dryRun ? 'DRY RUN' : 'LIVE'));
+        $this->info("Limit: {$limit} | Batch: {$batchSize} | Enrich Limit: {$enrichLimit} | Popularity Limit: {$popularityLimit} | Mode: ".($dryRun ? 'DRY RUN' : 'LIVE'));
 
         $source = WikidataSource::factory(MovieSource::Wikidata);
 
@@ -60,16 +60,16 @@ class ImportWikidataMovies extends Command
 
         $this->newLine();
         $this->info('🎉 Import complete!');
-        $this->line('   ' . ($dryRun ? 'Would insert' : 'Inserted') . ':   ' . $entryCount);
-        $this->line('   Whitelisted: ' . count(WHITELIST));
+        $this->line('   '.($dryRun ? 'Would insert' : 'Inserted').':   '.$entryCount);
+        $this->line('   Whitelisted: '.count(WHITELIST));
 
-        if ($enrichLimit > 0 && !$dryRun) {
+        if ($enrichLimit > 0 && ! $dryRun) {
             $enriched = $this->enrichWithOmdbMetadata($enrichLimit);
 
-            $this->line('   OMDb enriched: ' . $enriched . '/' . $enrichLimit . ' (IMDb grade used by the filters)');
+            $this->line('   OMDb enriched: '.$enriched.'/'.$enrichLimit.' (IMDb grade used by the filters)');
         }
 
-        if ($popularityLimit > 0 && !$dryRun) {
+        if ($popularityLimit > 0 && ! $dryRun) {
             $this->call('archive:fetch-popularity', ['--limit' => $popularityLimit]);
         }
 

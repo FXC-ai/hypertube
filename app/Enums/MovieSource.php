@@ -7,6 +7,8 @@ enum MovieSource: string
     case Wikidata = 'wikidata';
     case Whitelist = 'whitelist';
     case Omdb = 'omdb';
+    // A torrent or magnet link an admin imported: not a catalog, never listed in the search.
+    case Import = 'import';
 
     /**
      * Human readable name shown in the UI (the website is in english).
@@ -17,6 +19,7 @@ enum MovieSource: string
             self::Wikidata => 'Wikidata (public domain)',
             self::Whitelist => 'Whitelist',
             self::Omdb => 'OMDb',
+            self::Import => 'Imported',
         };
     }
 

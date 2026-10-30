@@ -15,6 +15,7 @@ test('the video page shows everything collected about the movie', function () {
         'imdb_id' => 'tt0032599',
         'plot' => 'A newspaper editor uses every trick to keep his ex-wife on the paper.',
         'director' => 'Howard Hawks',
+        'producer' => 'Lois C. Webber',
         'writers' => ['Charles Lederer'],
         'actors' => ['Cary Grant', 'Rosalind Russell'],
         'runtime' => 92,
@@ -29,6 +30,7 @@ test('the video page shows everything collected about the movie', function () {
         ->assertInertia(fn ($page) => $page
             ->where('moviePageData.movieData.plot', 'A newspaper editor uses every trick to keep his ex-wife on the paper.')
             ->where('moviePageData.movieData.director', 'Howard Hawks')
+            ->where('moviePageData.movieData.producer', 'Lois C. Webber')
             ->where('moviePageData.movieData.writer', 'Charles Lederer')
             ->where('moviePageData.movieData.actors', 'Cary Grant, Rosalind Russell')
             ->where('moviePageData.movieData.runtime', '92 min')

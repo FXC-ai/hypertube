@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\WatchedMovieFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,6 +15,7 @@ use Illuminate\Support\Carbon;
 #[Fillable(['movie_id', 'user_id', 'watched_at'])]
 class WatchedMovie extends Model
 {
+    /** @use HasFactory<WatchedMovieFactory> */
     use HasFactory;
 
     protected function casts(): array
@@ -23,11 +25,13 @@ class WatchedMovie extends Model
         ];
     }
 
+    /** @return BelongsTo<Movie, $this> */
     public function movie(): BelongsTo
     {
         return $this->belongsTo(Movie::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -37,6 +41,7 @@ class WatchedMovie extends Model
     {
         $movie->last_watched_at = now();
         $movie->save();
+
         return static::firstOrCreate(
             ['movie_id' => $movie->id, 'user_id' => $user->id],
             ['watched_at' => Carbon::now()],

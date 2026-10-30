@@ -39,6 +39,8 @@ test('a movie whose download is over, or that never had one, is read from disk',
 })->with([DownloadStatus::Completed, DownloadStatus::Pending, DownloadStatus::Failed]);
 
 test('ffmpeg always gets -xerror, and the stream options go before -i only for a URL', function () {
+    config(['media.torrent_client_shared_secret' => null]);
+
     $tracks = new SelectedTracks(
         video: new MediaStream(index: 0, type: 'video', codec: 'h264', language: 'und', title: '', disposition: []),
         audio: null,
@@ -59,4 +61,21 @@ test('ffmpeg always gets -xerror, and the stream options go before -i only for a
         '-reconnect_on_http_error', '5xx',
         '-reconnect_delay_max', '5',
     ])->and($stream[$input + 1])->toBe('http://client-torrent:7881/downloads/j/files/1');
+});
+
+test('ffmpeg and ffprobe send the Client Torrent shared secret with the streaming URL', function () {
+    config(['media.torrent_client_shared_secret' => 'the-shared-secret']);
+
+    $stream = new MovieInput('http://client-torrent:7881/downloads/j/files/1', isStream: true);
+    $file = new MovieInput('/movies/1/movie.mp4', isStream: false);
+
+    expect($stream->inputOptions())->toContain('-headers', "x-torrent-client-secret: the-shared-secret\r\n")
+        ->and($file->inputOptions())->toBe([]);
+});
+
+test('no header is sent when the Client Torrent has no shared secret', function () {
+    config(['media.torrent_client_shared_secret' => null]);
+
+    expect((new MovieInput('http://client-torrent:7881/downloads/j/files/1', isStream: true))->inputOptions())
+        ->not->toContain('-headers');
 });

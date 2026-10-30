@@ -213,6 +213,21 @@ test('MonitorDownload records the end of the download, or checks again later', f
     'unknown to a restarted client' => [404, DownloadStatus::Failed],
 ]);
 
+test('Laravel authenticates its Client Torrent requests with the shared secret', function () {
+    config([
+        'media.torrent_client_url' => 'http://client-torrent:7881',
+        'media.torrent_client_shared_secret' => 'topsecret',
+    ]);
+
+    Http::fake([
+        '*/torrents/inspect' => Http::response(['infoHash' => 'abc', 'mainVideoIndex' => null, 'files' => []]),
+    ]);
+
+    app(TorrentClient::class)->inspect('http://example.test/movie.torrent');
+
+    Http::assertSent(fn (Request $request): bool => $request->hasHeader('x-torrent-client-secret', 'topsecret'));
+});
+
 test('the streaming URL of a file points at the Client Torrent', function () {
     config(['media.torrent_client_url' => 'http://client-torrent:7881/']);
 

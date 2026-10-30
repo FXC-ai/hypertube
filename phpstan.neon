@@ -11,3 +11,8 @@ parameters:
         - routes/
 
     level: 7
+
+    # Larastan otherwise reads the model attributes straight from the database schema,
+    # where an enum cast column is only a string: parsing casts() is what tells the two
+    # apart and keeps `$movie->download_status` an enum.
+    parseModelCastsMethod: true

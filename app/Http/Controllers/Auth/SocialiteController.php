@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
+use Laravel\Socialite\Two\User as SocialiteUser;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Throwable;
 
 class SocialiteController
@@ -20,12 +22,12 @@ class SocialiteController
         private readonly DownloadProfilePicture $downloadProfilePicture,
     ) {}
 
-    public function redirect(string $provider)
+    public function redirect(string $provider): RedirectResponse
     {
         return Socialite::driver($provider)->redirect();
     }
 
-    private function generateUsername(string $provider, $socialUser): string
+    private function generateUsername(string $provider, SocialiteUser $socialUser): string
     {
         $source = $socialUser->getNickname()
             ?: $socialUser->getName()
@@ -63,16 +65,14 @@ class SocialiteController
         return ($this->downloadProfilePicture)($url);
     }
 
-    protected function findOrCreateUser(string $provider, $socialUser): User
+    protected function findOrCreateUser(string $provider, SocialiteUser $socialUser): User
     {
-
-        // Recherche si un social account existe déjà
+        // An account of this provider is already known: its tokens are refreshed and the
+        // user it belongs to is the one signing in.
         $account = SocialAccount::where('provider', $provider)
             ->where('provider_id', $socialUser->getId())
             ->first();
 
-        // si un solcial account existe alors on rafraichit les tokens
-        // puis on renvoit le user relié a ce ce social account
         if ($account) {
             $account->update([
                 'token' => $socialUser->token,
@@ -82,22 +82,19 @@ class SocialiteController
             return $account->user;
         }
 
-        // Si c'est la premiere fois que l'utilisateur se connecte avec un compte externe
-        // on crée un nouveau user
-        return DB::transaction(function () use ($provider, $socialUser) {
-
-            // ici on gere le cas ou l'utilisateur a déjà un compte
+        // First visit through this provider: the account of that email address is either
+        // found, or created with a username built from what the provider answers with.
+        return DB::transaction(function () use ($provider, $socialUser): User {
             $user = User::firstOrCreate(
                 ['email' => $socialUser->getEmail()],
                 [
                     'username' => $this->generateUsername($provider, $socialUser),
-                    // 'profilepicture' => $this->downloadProfilepicture($socialUser->getAvatar()),
                     'email_verified_at' => now(),
                 ]
             );
 
-            // Si le user n'avait pas de compte avant on marque son email comme verfied
-            // et on download son avatar
+            // A brand new account has its email verified by the provider itself, and its
+            // picture is copied on this server.
             if ($user->wasRecentlyCreated) {
                 $user->markEmailAsVerified();
                 $user->update(['profilepicture' => $this->downloadProfilepicture($socialUser->getAvatar())]);
@@ -115,10 +112,9 @@ class SocialiteController
         });
     }
 
-    public function callback(Request $request, string $provider)
+    public function callback(Request $request, string $provider): RedirectResponse
     {
-        Log::channel('my_debug')->info('callback appelé');
-        // on vérifie si le service externe a renvoyé une erreur
+        // The provider refused the request: the user is sent back to the login page.
         $providerError = $request->query('error');
 
         if (is_string($providerError) && $providerError !== '') {
@@ -138,13 +134,23 @@ class SocialiteController
 
         try {
             $socialUser = Socialite::driver($provider)->user();
+
+            // Both strategies are OAuth2, so the provider answers with a `Two\User`; the
+            // tokens of that answer are what gets stored.
+            if (! $socialUser instanceof SocialiteUser) {
+                return redirect()->route('login')->withErrors([
+                    'social' => 'External sign in is temporarily unavailable. Please try again.',
+                ]);
+            }
+
             if ($socialUser->getEmail() == null) {
                 return redirect()->route('login')->withErrors(
                     [
-                        'social' => 'No mail adress had been provided to this provider account.',
+                        'social' => 'That provider did not share an email address, so no account can be opened.',
                     ]
                 );
             }
+
             $user = $this->findOrCreateUser($provider, $socialUser);
 
             Auth::login($user, remember: true);

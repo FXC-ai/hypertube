@@ -39,7 +39,7 @@ test('the pages leave no debugging output in the browser console', function () {
         ->reject(fn ($file) => str_starts_with($file->getRelativePathname(), 'actions/')
             || str_starts_with($file->getRelativePathname(), 'routes/')
             || str_starts_with($file->getRelativePathname(), 'wayfinder/'))
-        ->filter(fn ($file) => preg_match('/console\.(log|debug|info)\(/', $file->getContents()))
+        ->filter(fn ($file) => preg_match('/console\.(log|debug|info|warn|error|trace|group)\(/', $file->getContents()))
         ->map(fn ($file) => $file->getRelativePathname())
         ->values()
         ->all();

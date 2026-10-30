@@ -5,7 +5,7 @@ use App\Services\Sources\ArchivePopularity;
 use Illuminate\Support\Facades\Http;
 
 /**
- * @param array<string, int> $counts
+ * @param  array<string, int>  $counts
  * @return array<string, array<string, array<string, mixed>>>
  */
 function archiveSearchResponse(array $counts): array
@@ -13,7 +13,7 @@ function archiveSearchResponse(array $counts): array
     return [
         'response' => [
             'docs' => collect($counts)
-                ->map(fn(int $downloads, string $identifier): array => [
+                ->map(fn (int $downloads, string $identifier): array => [
                     'identifier' => $identifier,
                     'downloads' => $downloads,
                 ])
@@ -29,7 +29,7 @@ function archiveSearchResponse(array $counts): array
 function archiveRequests(): int
 {
     return collect(Http::recorded())
-        ->filter(fn(array $recorded): bool => str_starts_with($recorded[0]->url(), 'https://archive.org/advancedsearch.php'))
+        ->filter(fn (array $recorded): bool => str_starts_with($recorded[0]->url(), 'https://archive.org/advancedsearch.php'))
         ->count();
 }
 
@@ -48,7 +48,7 @@ describe('archive.org popularity', function () {
             'archive.org/*' => Http::response(archiveSearchResponse([])),
         ]);
 
-        app(ArchivePopularity::class)->fetch(array_map(fn(int $index): string => "item-{$index}", range(1, 250)));
+        app(ArchivePopularity::class)->fetch(array_map(fn (int $index): string => "item-{$index}", range(1, 250)));
 
         expect(archiveRequests())->toBe(5);
     });
@@ -58,7 +58,7 @@ describe('archive.org popularity', function () {
             'archive.org/*' => Http::response(archiveSearchResponse([])),
         ]);
 
-        $identifiers = array_map(fn(int $index): string => 'a'.str_repeat('x', 39).$index, range(1, 200));
+        $identifiers = array_map(fn (int $index): string => 'a'.str_repeat('x', 39).$index, range(1, 200));
 
         app(ArchivePopularity::class)->fetch($identifiers);
 
@@ -68,7 +68,7 @@ describe('archive.org popularity', function () {
             return (string) ($query['q'] ?? '');
         });
 
-        $lengths = $queries->map(fn(string $query): int => strlen($query));
+        $lengths = $queries->map(fn (string $query): int => strlen($query));
 
         expect($lengths)->not->toBeEmpty()
             ->and($lengths->max())->toBeLessThanOrEqual(1500);
@@ -133,9 +133,9 @@ describe('archive.org popularity', function () {
     it('stops after the asked number of entries', function () {
         Http::fake([
             // archive.org only answers for the identifiers the request actually asked for.
-            'archive.org/*' => fn($request) => Http::response(archiveSearchResponse(
+            'archive.org/*' => fn ($request) => Http::response(archiveSearchResponse(
                 collect(['first' => 1, 'second' => 2])
-                    ->filter(fn(int $downloads, string $identifier): bool => str_contains($request->url(), $identifier))
+                    ->filter(fn (int $downloads, string $identifier): bool => str_contains($request->url(), $identifier))
                     ->all(),
             )),
         ]);

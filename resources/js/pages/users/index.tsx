@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useInitials } from '@/hooks/use-initials';
-import { index } from '@/routes/users';
+import { index, show as showUser } from '@/routes/users';
 
 type User = {
     id: number;
@@ -27,7 +27,7 @@ type UserIndexProps = {
 };
 
 function formatRegistrationDate(date: string): string {
-    return new Intl.DateTimeFormat('fr-FR', {
+    return new Intl.DateTimeFormat('en-US', {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
@@ -39,7 +39,7 @@ function UserItem({ user }: { user: User }) {
 
     return (
         <Link
-            href={`/users/${user.id}`}
+            href={showUser.url(user.id)}
             className="flex items-center gap-4 border-b p-4 transition-colors last:border-b-0 hover:bg-muted/50"
         >
             <Avatar className="size-10">

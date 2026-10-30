@@ -2,10 +2,10 @@
 
 namespace App\Services\Media;
 
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
-use Illuminate\Support\Facades\Log;
 
 final class ExternalSubtitleConverter
 {
@@ -33,12 +33,12 @@ final class ExternalSubtitleConverter
 
         try {
             $process->mustRun();
-            Log::channel("my_debug")->info("La conversion des sous-titre externes a été faite", $context);
-        } catch (ProcessFailedException | ProcessTimedOutException) {
+            Log::channel('my_debug')->info('La conversion des sous-titre externes a été faite', $context);
+        } catch (ProcessFailedException|ProcessTimedOutException) {
             if (is_file($outputPath)) {
                 unlink($outputPath);
             }
-            Log::channel("my_debug")->error("La conversion des sous-titre externes a échouée", $context);
+            Log::channel('my_debug')->error('La conversion des sous-titre externes a échouée', $context);
 
             return false;
         }

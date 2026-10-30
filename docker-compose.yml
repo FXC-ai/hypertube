@@ -128,8 +128,11 @@ services:
       dockerfile: Dockerfile
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     container_name: torrent-client
-    ports:
-      - "7881:7881"
+    environment:
+      PORT: 7881
+      TORRENT_CLIENT_SHARED_SECRET: "${TORRENT_CLIENT_SHARED_SECRET}"
+      TORRENT_OUTPUT_ROOT: "/var/www/html/storage/app/public/movies"
+      TORRENT_CLIENT_UI: "false"
     volumes:
       - ./storage:/var/www/html/storage
 

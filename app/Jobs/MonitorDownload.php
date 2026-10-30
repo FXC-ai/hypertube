@@ -175,7 +175,7 @@ final class MonitorDownload implements ShouldQueue
                 [
                     ...$context,
                     'download_status' => DownloadStatus::Failed->value,
-                    'download_error' => $update['download_error'] ?? null,
+                    'download_error' => $update['download_error'],
                     'client_status' => $download['status'] ?? null,
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,

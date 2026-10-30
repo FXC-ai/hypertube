@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\Storage;
  * The local state of a movie: what lives on this server (torrent, files, conversion).
  * Catalog information (titles, source) comes from the Source entries sharing its imdb_id.
  *
- * @property string|null $imdb_id
+ * @property string $imdb_id
  * @property string|null $filename
  * @property string|null $torrent_url
  * @property ConversionStatus $conversion_status
@@ -103,6 +103,15 @@ class Movie extends Model
     }
 
     /**
+     * Whether the user asking for a listing already watched this movie; the flag comes
+     * from `withExists(['watchedMovies as watched']) on the listing query.
+     */
+    public function getWatchedAttribute(): bool
+    {
+        return (bool) ($this->attributes['watched'] ?? false);
+    }
+
+    /**
      * The subtitle files this movie can be watched with, as links a player loads.
      *
      * @return list<array{id: int, label: string, language: string|null, url: string}>
@@ -153,10 +162,6 @@ class Movie extends Model
 
     public function getEnrichedData(): ?MovieData
     {
-        if ($this->imdb_id === null) {
-            return null;
-        }
-
         return OmdbService::factory()->enrichByImdbId($this->imdb_id);
     }
 

@@ -21,7 +21,7 @@ class SourceSettingsController extends Controller
 
         return Inertia::render('settings/sources', [
             'sources' => array_map(
-                fn(MovieSource $source): array => [
+                fn (MovieSource $source): array => [
                     'value' => $source->value,
                     'label' => $source->label(),
                     'legal' => $source->isLegal(),

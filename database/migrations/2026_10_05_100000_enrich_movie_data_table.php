@@ -20,7 +20,6 @@ return new class extends Migration
             $table->json('language')->nullable()->after('rated');
             $table->json('awards')->nullable()->after('language');
 
-
             $table->decimal('imdbRating', 3, 1)->nullable();
             $table->string('imdbVotes')->nullable();
             $table->string('boxOffice')->nullable();

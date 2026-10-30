@@ -1,12 +1,12 @@
 <?php
 
+use App\Enums\ConversionStatus;
+use App\Enums\DownloadStatus;
 use App\Enums\ExternalSubtitleStatus;
 use App\Models\Movie;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
-use App\Enums\DownloadStatus;
-use App\Enums\ConversionStatus;
 
 test('the movie page exposes only prepared external subtitles through public URLs', function () {
     config(['services.omdb.key' => null]);
@@ -32,7 +32,7 @@ test('the movie page exposes only prepared external subtitles through public URL
 
     $response = $this->actingAs($user)->get(route('movies.show', $movie));
 
-    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->component('movies/show')
         ->where('moviePageData.external_subtitles_status', ExternalSubtitleStatus::Ready->value)
         ->has('moviePageData.external_subtitles', 1)
@@ -61,7 +61,7 @@ test('the movie page present an error message if the download fail', function ()
     );
     $response = $this->actingAs($user)->get(route('movies.show', $movie));
 
-    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->component('movies/show')
         ->where('moviePageData.download_status', DownloadStatus::Failed->value)
         ->where(
@@ -78,7 +78,7 @@ test('the movie page present an error message if the conversion fail', function 
     ]);
     $response = $this->actingAs($user)->get(route('movies.show', $movie));
 
-    $response->assertOk()->assertInertia(fn(Assert $page) => $page
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->component('movies/show')
         ->where('moviePageData.conversion_error', 'The conversion failed.'));
 });

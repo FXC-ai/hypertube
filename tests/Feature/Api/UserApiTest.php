@@ -74,11 +74,11 @@ test('a password sent to the api is stored hashed', function () {
     $user = User::factory()->create();
     Passport::actingAs($user);
 
-    $this->patchJson('/api/users/'.$user->id, ['password' => 'a-longer-secret'])
+    $this->patchJson('/api/users/'.$user->id, ['password' => 'ApiStrong123!'])
         ->assertOk()
         ->assertJsonMissingPath('data.password');
 
-    expect(Hash::check('a-longer-secret', $user->fresh()->password))->toBeTrue();
+    expect(Hash::check('ApiStrong123!', $user->fresh()->password))->toBeTrue();
 });
 
 test('a changed email has to be verified again', function () {
@@ -113,6 +113,15 @@ test('an invalid payload is rejected with the field that fails', function () {
         ->assertJsonValidationErrors(['email']);
 
     $this->patchJson('/api/users/'.$user->id, ['password' => 'short'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['password']);
+});
+
+test('a common password sent to the api is rejected', function () {
+    $user = User::factory()->create();
+    Passport::actingAs($user);
+
+    $this->patchJson('/api/users/'.$user->id, ['password' => 'Motdepasse1'])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['password']);
 });

@@ -5,11 +5,14 @@ use App\Models\Movie;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
     Http::fake([
         'www.omdbapi.com/*' => Http::response(['Response' => 'False', 'Error' => 'Movie not found']),
     ]);
+
+    Queue::fake();
 
     $this->actingAs(User::factory()->create());
 });
@@ -67,7 +70,7 @@ describe('loading a movie from a source', function () {
 
         $this->get(route('movies.show', $movie))
             ->assertOk()
-            ->assertInertia(fn($assert) => $assert
+            ->assertInertia(fn ($assert) => $assert
                 ->component('movies/show')
                 ->where('moviePageData.title', 'Cops')
                 ->where('moviePageData.source', 'whitelist')

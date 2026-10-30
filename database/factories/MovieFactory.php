@@ -21,13 +21,13 @@ class MovieFactory extends Factory
      */
     public function definition(): array
     {
-        $filename = fake()->unique()->slug(3) . '.mp4';
+        $filename = fake()->unique()->slug(3).'.mp4';
         /** @var ConversionStatus $status */
         $status = fake()->randomElement(ConversionStatus::cases());
 
         return [
             'filename' => $filename,
-            'imdb_id' => 'fake_imdb_id' . fake()->numerify('######'),
+            'imdb_id' => 'fake_imdb_id'.fake()->numerify('######'),
             'torrent_url' => null,
             ...$this->conversionAttributes($status),
         ];
@@ -49,7 +49,7 @@ class MovieFactory extends Factory
 
     public function withConversionStatus(ConversionStatus $status): static
     {
-        return $this->state(fn(): array => $this->conversionAttributes($status));
+        return $this->state(fn (): array => $this->conversionAttributes($status));
     }
 
     /**
@@ -77,35 +77,45 @@ class MovieFactory extends Factory
 
         $startedAt = CarbonImmutable::instance(fake()->dateTimeBetween('-1 month', '-1 hour'));
         $playableAt = $startedAt->addSeconds(fake()->numberBetween(5, 1800));
+        $attempt = (string) Str::uuid();
 
-        return match ($status) {
-            ConversionStatus::Converting => [
+        /** @var array{
+         *     conversion_status: ConversionStatus,
+         *     conversion_attempt: string|null,
+         *     conversion_error: string|null,
+         *     conversion_started_at: CarbonImmutable|null,
+         *     conversion_playable_at: CarbonImmutable|null,
+         *     conversion_completed_at: CarbonImmutable|null
+         * } $attributes
+         */
+        $attributes = [
+            ConversionStatus::Converting->value => [
                 'conversion_status' => $status,
-                'conversion_attempt' => (string) Str::uuid(),
+                'conversion_attempt' => $attempt,
                 'conversion_error' => null,
                 'conversion_started_at' => $startedAt,
                 'conversion_playable_at' => null,
                 'conversion_completed_at' => null,
             ],
-            ConversionStatus::Playable => [
+            ConversionStatus::Playable->value => [
                 'conversion_status' => $status,
-                'conversion_attempt' => (string) Str::uuid(),
+                'conversion_attempt' => $attempt,
                 'conversion_error' => null,
                 'conversion_started_at' => $startedAt,
                 'conversion_playable_at' => $playableAt,
                 'conversion_completed_at' => null,
             ],
-            ConversionStatus::Converted => [
+            ConversionStatus::Converted->value => [
                 'conversion_status' => $status,
-                'conversion_attempt' => (string) Str::uuid(),
+                'conversion_attempt' => $attempt,
                 'conversion_error' => null,
                 'conversion_started_at' => $startedAt,
                 'conversion_playable_at' => $playableAt,
                 'conversion_completed_at' => $playableAt->addSeconds(fake()->numberBetween(1, 3600)),
             ],
-            ConversionStatus::Failed => [
+            ConversionStatus::Failed->value => [
                 'conversion_status' => $status,
-                'conversion_attempt' => (string) Str::uuid(),
+                'conversion_attempt' => $attempt,
                 'conversion_error' => fake()->randomElement([
                     'ffprobe_failed',
                     'ffmpeg_failed',
@@ -115,7 +125,8 @@ class MovieFactory extends Factory
                 'conversion_playable_at' => fake()->boolean() ? $playableAt : null,
                 'conversion_completed_at' => null,
             ],
-            default => unreachable(),
-        };
+        ][$status->value];
+
+        return $attributes;
     }
 }

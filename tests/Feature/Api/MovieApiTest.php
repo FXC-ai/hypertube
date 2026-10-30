@@ -50,6 +50,7 @@ test('a movie answers with everything the server collected about it', function (
         'release_date' => '1995-05-05',
         'plot' => 'A story worth telling.',
         'director' => 'Jane Doe',
+        'producer' => 'Samuel Broker',
     ]);
     $movie->comments()->create(['user_id' => User::factory()->create()->id, 'content' => 'A comment']);
 
@@ -64,6 +65,7 @@ test('a movie answers with everything the server collected about it', function (
             'length' => 95,
             'summary' => 'A story worth telling.',
             'director' => 'Jane Doe',
+            'producer' => 'Samuel Broker',
             'comments_count' => 1,
         ],
     ]);

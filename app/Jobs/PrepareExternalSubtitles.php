@@ -41,7 +41,7 @@ final class PrepareExternalSubtitles implements ShouldQueue
         try {
             $movie = Movie::query()->findOrFail($this->movieId);
             $movieDirectory = Storage::disk('public')->path("movies/{$movie->id}");
-            $outputDirectory = $movieDirectory . DIRECTORY_SEPARATOR . 'subtitles';
+            $outputDirectory = $movieDirectory.DIRECTORY_SEPARATOR.'subtitles';
 
             if (! is_dir($outputDirectory) && ! mkdir($outputDirectory, 0755, true) && ! is_dir($outputDirectory)) {
                 throw new \RuntimeException('Unable to create the external subtitle directory.');
@@ -66,11 +66,11 @@ final class PrepareExternalSubtitles implements ShouldQueue
                 }
 
                 $outputFile = sprintf('external_%02d_%s.vtt', $position, $language);
-                $sourcePath = $movieDirectory . DIRECTORY_SEPARATOR . $fileName;
-                $outputPath = $outputDirectory . DIRECTORY_SEPARATOR . $outputFile;
+                $sourcePath = $movieDirectory.DIRECTORY_SEPARATOR.$fileName;
+                $outputPath = $outputDirectory.DIRECTORY_SEPARATOR.$outputFile;
 
                 $subtitle['output_file'] = $converter->convert($sourcePath, $outputPath)
-                    ? 'subtitles/' . $outputFile
+                    ? 'subtitles/'.$outputFile
                     : null;
 
                 $preparedSubtitles[] = $subtitle;

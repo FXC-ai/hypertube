@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * The criteria a catalog entry can be filtered and sorted on, so the listing is
      * narrowed inside every source query instead of after the sources have been merged.

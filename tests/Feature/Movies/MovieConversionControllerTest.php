@@ -26,6 +26,23 @@ test('a pending movie is queued and a conversion job is dispatched', function ()
     });
 });
 
+test('preparing a movie already downloaded does not start a download again', function () {
+    Queue::fake();
+
+    $movie = Movie::factory()
+        ->withConversionStatus(ConversionStatus::Pending)
+        ->create([
+            'torrent_url' => 'https://example.com/movie.torrent',
+            'download_status' => DownloadStatus::Completed,
+            'filename' => 'movie.mkv',
+        ]);
+
+    app(MovieConversionController::class)->store($movie);
+
+    Queue::assertNotPushed(DownloadMovie::class);
+    Queue::assertPushed(ConvertMovie::class, fn (ConvertMovie $job): bool => $job->movieId === $movie->id);
+});
+
 test('an unsupported torrent cannot be prepared again', function () {
     Queue::fake();
 

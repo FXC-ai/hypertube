@@ -4,16 +4,16 @@ namespace App\Jobs;
 
 use App\Enums\ConversionStatus;
 use App\Enums\DownloadStatus;
+use App\Enums\ExternalSubtitleStatus;
 use App\Models\Movie;
 use App\Services\Torrent\TorrentClient;
+use App\Services\Torrent\TorrentSubtitleSelector;
 use App\Services\Torrent\TorrentVideoSelector;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
-use App\Services\Torrent\TorrentSubtitleSelector;
-use App\Enums\ExternalSubtitleStatus;
 
 final class DownloadMovie implements ShouldQueue
 {
@@ -39,10 +39,10 @@ final class DownloadMovie implements ShouldQueue
         ];
 
         Log::channel('my_debug')->info(
-            "Le job de téléchargement du film démarre.\n" . json_encode(
+            "Le job de téléchargement du film démarre.\n".json_encode(
                 [...$context],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
+            )."\n",
         );
 
         $claimed = Movie::query()
@@ -50,7 +50,7 @@ final class DownloadMovie implements ShouldQueue
             ->whereNotNull('torrent_url')
             ->whereIn('download_status', [
                 DownloadStatus::Pending->value,
-                DownloadStatus::Failed->value
+                DownloadStatus::Failed->value,
             ])
             ->update([
                 'download_status' => DownloadStatus::Downloading->value,
@@ -72,14 +72,14 @@ final class DownloadMovie implements ShouldQueue
             };
 
             Log::channel('my_debug')->debug(
-                "Le téléchargement du film ne peut pas démarrer.\n" . json_encode(
+                "Le téléchargement du film ne peut pas démarrer.\n".json_encode(
                     [
                         ...$context,
                         'reason' => $reason,
                         'download_status' => $movie?->download_status?->value,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             return;
@@ -92,17 +92,16 @@ final class DownloadMovie implements ShouldQueue
             $selectedVideo = $videoSelector->select($inspection['files']);
             $selectedSubtitles = $subtitleSelector->select($inspection['files']);
 
-
             Log::channel('my_debug')->info(
-                "L’inspection du torrent est terminée.\n" . json_encode(
+                "L’inspection du torrent est terminée.\n".json_encode(
                     [
                         ...$context,
                         'file_count' => count($inspection['files']),
                         'video selectionnee' => $selectedVideo,
-                        'sous-titre selectionnes' => $selectedSubtitles
+                        'sous-titre selectionnes' => $selectedSubtitles,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             if ($selectedVideo === null) {
@@ -120,10 +119,10 @@ final class DownloadMovie implements ShouldQueue
                     ]);
 
                 Log::channel('my_debug')->warning(
-                    "Le torrent ne contient aucune vidéo MP4 ou MKV prise en charge.\n" . json_encode(
+                    "Le torrent ne contient aucune vidéo MP4 ou MKV prise en charge.\n".json_encode(
                         [...$context, 'reason' => 'supported_video_missing'],
                         JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                    ) . "\n",
+                    )."\n",
                 );
 
                 return;
@@ -142,13 +141,13 @@ final class DownloadMovie implements ShouldQueue
             );
 
             Log::channel('my_debug')->info(
-                "Le client torrent a accepté la demande de téléchargement.\n" . json_encode(
+                "Le client torrent a accepté la demande de téléchargement.\n".json_encode(
                     [
                         ...$context,
-                        'download_id' => $downloadId
+                        'download_id' => $downloadId,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             Movie::query()->whereKey($movie->id)->update([
@@ -162,7 +161,7 @@ final class DownloadMovie implements ShouldQueue
             ]);
 
             Log::channel('my_debug')->info(
-                "Les informations du téléchargement ont été enregistrées pour le film.\n" . json_encode(
+                "Les informations du téléchargement ont été enregistrées pour le film.\n".json_encode(
                     [
                         ...$context,
                         'download_id' => $downloadId,
@@ -171,7 +170,7 @@ final class DownloadMovie implements ShouldQueue
                         'selected_file_count' => count($selectedFileIndexes),
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
         } catch (Throwable $exception) {
             Movie::query()->whereKey($movie->id)->update([
@@ -181,7 +180,7 @@ final class DownloadMovie implements ShouldQueue
             ]);
 
             Log::channel('my_debug')->error(
-                "Le téléchargement du film a échoué.\n" . json_encode(
+                "Le téléchargement du film a échoué.\n".json_encode(
                     [
                         ...$context,
                         'exception' => [
@@ -192,7 +191,7 @@ final class DownloadMovie implements ShouldQueue
                         ],
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
 
             throw $exception;
@@ -215,7 +214,7 @@ final class DownloadMovie implements ShouldQueue
             ConvertMovie::dispatch($movie->id);
 
             Log::channel('my_debug')->info(
-                "Le job de conversion du film a été ajouté à la file d’attente.\n" . json_encode(
+                "Le job de conversion du film a été ajouté à la file d’attente.\n".json_encode(
                     [
                         ...$context,
                         'download_id' => $downloadId,
@@ -223,27 +222,27 @@ final class DownloadMovie implements ShouldQueue
                         'job' => ConvertMovie::class,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
         } else {
             $movie->refresh();
 
             Log::channel('my_debug')->debug(
-                "La conversion du film n’a pas été ajoutée à la file d’attente car son statut ne le permet pas.\n" . json_encode(
+                "La conversion du film n’a pas été ajoutée à la file d’attente car son statut ne le permet pas.\n".json_encode(
                     [
                         ...$context,
                         'download_id' => $downloadId,
-                        'conversion_status' => $movie->conversion_status?->value,
+                        'conversion_status' => $movie->conversion_status->value,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
         }
 
         MonitorDownload::dispatch($movie->id)->delay(now()->addSeconds(MonitorDownload::POLL_SECONDS));
 
         Log::channel('my_debug')->info(
-            "Le suivi du téléchargement a été programmé.\n" . json_encode(
+            "Le suivi du téléchargement a été programmé.\n".json_encode(
                 [
                     ...$context,
                     'download_id' => $downloadId,
@@ -251,7 +250,7 @@ final class DownloadMovie implements ShouldQueue
                     'job' => MonitorDownload::class,
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
+            )."\n",
         );
     }
 }

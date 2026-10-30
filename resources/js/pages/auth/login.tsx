@@ -16,14 +16,15 @@ import { redirect } from '@/routes/socialite';
 type Props = {
     status?: string;
     canResetPassword: boolean;
+    providers: Record<string, string>;
 };
 
-export default function Login({ status, canResetPassword }: Props) {
+export default function Login({ status, canResetPassword, providers }: Props) {
     const [redirectingProvider, setRedirectingProvider] = useState<
-        'github' | 'fortytwo' | null
+        string | null
     >(null);
 
-    const redirectToProvider = (provider: 'github' | 'fortytwo') => {
+    const redirectToProvider = (provider: string) => {
         setRedirectingProvider(provider);
         window.location.assign(redirect.url(provider));
     };
@@ -100,27 +101,28 @@ export default function Login({ status, canResetPassword }: Props) {
                             </Button>
                         </div>
 
-                        <Button
-                            type="button"
-                            className="mt-4 w-full"
-                            variant="secondary"
-                            onClick={() => redirectToProvider('github')}
-                            disabled={redirectingProvider !== null}
-                        >
-                            {redirectingProvider === 'github' && <Spinner />}
-                            Sign in with GitHub
-                        </Button>
-
-                        <Button
-                            type="button"
-                            className="mt-2 w-full"
-                            variant="secondary"
-                            onClick={() => redirectToProvider('fortytwo')}
-                            disabled={redirectingProvider !== null}
-                        >
-                            {redirectingProvider === 'fortytwo' && <Spinner />}
-                            Sign in with 42
-                        </Button>
+                        {Object.entries(providers).map(
+                            ([provider, label], index) => (
+                                <Button
+                                    key={provider}
+                                    type="button"
+                                    variant="secondary"
+                                    className={
+                                        index === 0
+                                            ? 'mt-4 w-full'
+                                            : 'mt-2 w-full'
+                                    }
+                                    onClick={() => redirectToProvider(provider)}
+                                    disabled={redirectingProvider !== null}
+                                    data-test={`omniauth-${provider}`}
+                                >
+                                    {redirectingProvider === provider && (
+                                        <Spinner />
+                                    )}
+                                    Sign in with {label}
+                                </Button>
+                            ),
+                        )}
 
                         <div className="text-center text-sm text-muted-foreground">
                             Don't have an account?{' '}
@@ -143,5 +145,5 @@ export default function Login({ status, canResetPassword }: Props) {
 
 Login.layout = {
     title: 'Log in to your account',
-    description: 'Enter your email and password below to log in',
+    description: 'Enter your username and password below to log in',
 };

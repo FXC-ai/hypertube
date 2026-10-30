@@ -22,7 +22,7 @@ class SourceFactory extends Factory
 
         return [
             'source' => MovieSource::Wikidata->value,
-            'imdb_id' => 'tt' . fake()->unique()->numerify('######'),
+            'imdb_id' => 'tt'.fake()->unique()->numerify('######'),
             'title' => fake()->sentence(3),
             'titles' => [
                 'fr' => fake()->sentence(3),
@@ -43,7 +43,7 @@ class SourceFactory extends Factory
 
     public function forSource(MovieSource $source): static
     {
-        return $this->state(fn(): array => ['source' => $source->value]);
+        return $this->state(fn (): array => ['source' => $source->value]);
     }
 
     /**
@@ -51,7 +51,7 @@ class SourceFactory extends Factory
      */
     public function duplicateOf(Source $entry): static
     {
-        return $this->state(fn(): array => [
+        return $this->state(fn (): array => [
             'imdb_id' => $entry->imdb_id,
             'title' => $entry->title,
             'torrent_url' => $entry->torrent_url,

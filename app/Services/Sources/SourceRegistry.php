@@ -12,6 +12,7 @@ final class SourceRegistry
         return match ($source) {
             MovieSource::Wikidata, MovieSource::Whitelist => WikidataSource::factory($source),
             MovieSource::Omdb => throw new InvalidArgumentException('OMDb is a metadata provider, not a catalog source.'),
+            MovieSource::Import => throw new InvalidArgumentException('Imported links are not a catalog source.'),
         };
     }
 }

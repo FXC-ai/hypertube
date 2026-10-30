@@ -81,6 +81,31 @@ docker compose exec app php artisan movies:purge-stale       # supprimer les fic
 La purge est aussi exécutée automatiquement chaque jour par le service `scheduler`, à
 l'heure fixée par `MOVIE_CLEANUP_TIME`.
 
+## Import d'un lien torrent
+
+La librairie (`/movies`) affiche un champ « Add a torrent or magnet link... », réservé au
+compte **admin** : il crée le film et lance aussitôt sa préparation en arrière-plan
+(téléchargement BitTorrent côté serveur, puis conversion si le format n'est pas lisible
+par le navigateur). Un utilisateur normal ne voit pas le champ et reçoit 403.
+
+L'admin ne se crée pas par le formulaire d'inscription ni par l'API, seulement par
+commande (mot de passe saisi en masqué ; un compte existant est simplement promu) :
+
+```bash
+make admin USERNAME=admin EMAIL=admin@example.com
+```
+
+- Lien accepté : un magnet (`magnet:?xt=urn:btih:` suivi de 40 caractères hexadécimaux ou
+  de 32 caractères base32) ou une URL `http(s)` dont le chemin se termine par `.torrent`.
+  Le titre est déduit du paramètre `dn` du magnet, sinon du nom du fichier de l'URL.
+- Le Client Torrent va chercher le lien depuis le réseau Docker : une URL `.torrent` vers
+  un hôte interne (127.0.0.1, réseau privé, 169.254.169.254...) est refusée, et les
+  trackers, `xs` et `ws` d'un magnet qui visent un hôte interne sont retirés.
+- Le film importé a sa propre source `import`, jamais listée dans la recherche, sous un
+  `imdb_id` dérivé du lien : importer deux fois le même lien réutilise le même film.
+- C'est aussi la porte d'entrée pour tester le magnet d'exemple du sujet : collé dans ce
+  champ par l'admin, il déclenche le téléchargement puis la conversion du MKV.
+
 ## Qualité et tests
 
 ```bash
@@ -183,6 +208,7 @@ Tout est dans `.env` (ignoré par git), les clés à renseigner :
 | `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL. |
 | `RESEND_API_KEY`, `MAIL_FROM_ADDRESS` | Envoi des e-mails (réinitialisation de mot de passe). |
 | `OMDB_API_KEY` | Note IMDb, année, durée, casting, synopsis. |
+| `TORRENT_CLIENT_SHARED_SECRET` | Secret partagé entre Laravel et le client torrent. Le service `client-torrent` reste privé au réseau Docker. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI` | Stratégie OAuth GitHub. |
 | `FORTY_TWO_CLIENT_ID`, `FORTY_TWO_CLIENT_SECRET`, `FORTY_TWO_REDIRECT_URI` | Stratégie OAuth 42. |
 | `PASSPORT_API_CLIENT_ID`, `PASSPORT_API_CLIENT_SECRET` | Client confidentiel de l'API, rempli tout seul au premier lancement. |

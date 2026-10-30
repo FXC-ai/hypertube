@@ -1,4 +1,11 @@
-import { Form, Head, InfiniteScroll, Link, router } from '@inertiajs/react';
+import {
+    Form,
+    Head,
+    InfiniteScroll,
+    Link,
+    router,
+    usePage,
+} from '@inertiajs/react';
 import { Check } from 'lucide-react';
 import MovieController from '@/actions/App/Http/Controllers/MovieController';
 import Heading from '@/components/heading';
@@ -73,6 +80,7 @@ const ANY_GENRE = 'any';
 const sourceLabels: Record<string, string> = {
     wikidata: 'Wikidata',
     whitelist: 'Whitelist',
+    import: 'Imported',
 };
 
 const watchedFilterOptions: { value: WatchedFilter; label: string }[] = [
@@ -119,7 +127,7 @@ function hasActiveFilters(filters: MovieFilters): boolean {
 }
 
 function formatRegistrationDate(date: string): string {
-    return new Intl.DateTimeFormat('fr-FR', {
+    return new Intl.DateTimeFormat('en-US', {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
@@ -144,35 +152,36 @@ function MovieCard({ movie }: { movie: Movie }) {
     return (
         <div className="flex w-64 flex-col items-center gap-1 p-4">
             <div className="relative w-full">
-                <object
-                    className="aspect-2/3 w-full rounded"
-                    data={movie.data?.poster ?? undefined}
-                >
-                    <img
-                        className="aspect-2/3 w-full rounded"
-                        src="/default-poster.png"
-                        alt="Movie Image"
-                    />
-                </object>
+                <img
+                    className="aspect-2/3 w-full rounded bg-muted object-cover"
+                    src={movie.data?.poster ?? '/default-poster.png'}
+                    alt={movie.title}
+                    onError={(event) => {
+                        event.currentTarget.src = '/default-poster.png';
+                    }}
+                />
 
                 {movie.data?.imdbRating && (
-                    <div className="absolute bg-secondary text-secondary-foreground right-3 bottom-3 flex gap-1 rounded-lg px-2 py-1">
+                    <div className="absolute right-3 bottom-3 flex gap-1 rounded-lg bg-secondary px-2 py-1 text-secondary-foreground">
                         {movie.data.imdbRating}
                         <img
                             className="w-5"
                             src="/star-score.svg"
-                            alt="stars"
+                            alt=""
+                            aria-hidden
                         />
                     </div>
                 )}
 
                 {movie.popularity ? (
                     <div
-                        className="absolute bg-secondary bottom-3 left-3 rounded-lg px-2 py-1 text-xs"
+                        className="absolute bottom-3 left-3 rounded-lg bg-secondary px-2 py-1 text-xs"
                         title={`${formatDownloads(movie.popularity)} downloads on archive.org`}
                     >
                         {formatDownloads(movie.popularity)}
-                        <span className="ml-1 text-secondary-foreground/80">downloads</span>
+                        <span className="ml-1 text-secondary-foreground/80">
+                            downloads
+                        </span>
                     </div>
                 ) : (
                     <></>
@@ -314,6 +323,9 @@ function RangeInput({
 }
 
 export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
+    // Importing a link makes the server fetch it: only an admin may (Gate import-movies).
+    const { auth } = usePage().props;
+
     const hasFilters = hasActiveFilters(filters);
     const lastMeaningfulYear = new Date().getFullYear() + 1;
 
@@ -335,6 +347,48 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                         title="Search"
                         description="Search for a movie by title, then filter and sort the results"
                     />
+
+                    {auth.user?.is_admin && (
+                        <Form
+                            method="post"
+                            action="/movies/import"
+                            className="rounded-lg border p-4"
+                            data-test="import-torrent-form"
+                        >
+                            {({ processing, errors }) => (
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                                    <div className="w-full min-w-0 sm:flex-1">
+                                        <Label
+                                            htmlFor="torrent_url"
+                                            className="sr-only"
+                                        >
+                                            Torrent or magnet link
+                                        </Label>
+                                        <Input
+                                            id="torrent_url"
+                                            type="text"
+                                            name="torrent_url"
+                                            placeholder="Add a torrent or magnet link..."
+                                            aria-invalid={Boolean(
+                                                errors.torrent_url,
+                                            )}
+                                            autoComplete="off"
+                                            maxLength={2048}
+                                            disabled={processing}
+                                        />
+                                        <InputError
+                                            className="mt-2"
+                                            message={errors.torrent_url}
+                                        />
+                                    </div>
+
+                                    <Button type="submit" disabled={processing}>
+                                        Add video
+                                    </Button>
+                                </div>
+                            )}
+                        </Form>
+                    )}
 
                     <Form
                         {...MovieController.index.form()}
@@ -446,15 +500,15 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                                     errors.yearTo ||
                                     errors.ratingFrom ||
                                     errors.ratingTo) && (
-                                        <InputError className="mt-2">
-                                            {
-                                                (errors.yearFrom ??
-                                                    errors.yearTo ??
-                                                    errors.ratingFrom ??
-                                                    errors.ratingTo) as string
-                                            }
-                                        </InputError>
-                                    )}
+                                    <InputError className="mt-2">
+                                        {
+                                            (errors.yearFrom ??
+                                                errors.yearTo ??
+                                                errors.ratingFrom ??
+                                                errors.ratingTo) as string
+                                        }
+                                    </InputError>
+                                )}
                             </>
                         )}
                     </Form>

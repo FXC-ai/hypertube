@@ -3,14 +3,16 @@
 namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
+use App\Concerns\ProfilepictureRules;
 use App\Concerns\ProfileValidationRules;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
 class CreateNewUser implements CreatesNewUsers
 {
-    use PasswordValidationRules, ProfileValidationRules;
+    use PasswordValidationRules, ProfilepictureRules, ProfileValidationRules;
 
     /**
      * Validate and create a newly registered user.
@@ -22,7 +24,12 @@ class CreateNewUser implements CreatesNewUsers
         Validator::make($input, [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
+            'profilepicture' => $this->profilepictureRules(required: false),
         ])->validate();
+
+        // Validated above: an uploaded image, or nothing.
+        /** @var UploadedFile|null $profilepicture */
+        $profilepicture = $input['profilepicture'] ?? null;
 
         $user = User::create([
             'username' => $input['username'],
@@ -30,6 +37,7 @@ class CreateNewUser implements CreatesNewUsers
             'firstname' => $input['firstname'],
             'lastname' => $input['lastname'],
             'password' => $input['password'],
+            'profilepicture' => $profilepicture?->store('avatars', 'public') ?: null,
         ]);
 
         return $user;

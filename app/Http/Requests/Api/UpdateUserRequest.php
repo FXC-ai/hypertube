@@ -4,6 +4,7 @@ namespace App\Http\Requests\Api;
 
 use App\Concerns\ProfileUpdateValidationRules;
 use App\Models\User;
+use App\Rules\RejectCommonPassword;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
@@ -34,7 +35,7 @@ class UpdateUserRequest extends FormRequest
         return array_merge(
             $this->profileRules($profile instanceof User ? $profile->id : null),
             [
-                'password' => ['sometimes', 'string', Password::default()],
+                'password' => ['sometimes', 'string', Password::default(), new RejectCommonPassword],
                 'profilepicture' => ['sometimes', 'string', 'url', 'max:2048'],
             ],
         );

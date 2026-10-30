@@ -15,7 +15,7 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('settings/sources', [SourceSettingsController::class, 'update'])->name('sources.update');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('settings/security', [SecurityController::class, 'edit'])->name('security.edit');

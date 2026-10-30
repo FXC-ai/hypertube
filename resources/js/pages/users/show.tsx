@@ -34,6 +34,10 @@ function formatLanguage(language: string): string {
         english: 'English',
         fr: 'French',
         french: 'French',
+        de: 'German',
+        german: 'German',
+        it: 'Italian',
+        italian: 'Italian',
     };
 
     return languageNames[language.toLowerCase()] ?? language;

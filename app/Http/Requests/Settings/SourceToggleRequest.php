@@ -23,10 +23,10 @@ class SourceToggleRequest extends FormRequest
      */
     public function rules(): array
     {
-        $allowed = array_map(fn(MovieSource $source): string => $source->value, MovieSource::catalogSources());
+        $allowed = array_map(fn (MovieSource $source): string => $source->value, MovieSource::catalogSources());
 
         return [
-            'sources' => ['required', 'array:' . implode(',', $allowed)],
+            'sources' => ['required', 'array:'.implode(',', $allowed)],
             'sources.*' => ['boolean'],
         ];
     }

@@ -22,16 +22,14 @@ final class ArchivePopularity
      */
     private const MAX_QUERY_LENGTH = 1500;
 
-    public function __construct(private readonly int $batchSize = 50)
-    {
-    }
+    public function __construct(private readonly int $batchSize = 50) {}
 
     /**
      * The download counts of these items, keyed by identifier. Items archive.org does
      * not know are simply absent, and a failing request yields nothing instead of
      * breaking the import that asked for it.
      *
-     * @param list<string> $identifiers
+     * @param  list<string>  $identifiers
      * @return array<string, int>
      */
     public function fetch(array $identifiers): array
@@ -49,7 +47,7 @@ final class ArchivePopularity
      * Consecutive identifiers grouped so that neither the batch size nor the length of
      * the resulting query is exceeded.
      *
-     * @param list<string> $identifiers
+     * @param  list<string>  $identifiers
      * @return Generator<list<string>>
      */
     private function batches(array $identifiers): Generator
@@ -78,14 +76,14 @@ final class ArchivePopularity
     }
 
     /**
-     * @param list<string> $batch
+     * @param  list<string>  $batch
      * @return array<string, int>
      */
     private function fetchBatch(array $batch): array
     {
         $identifiers = array_values(array_filter(
             $batch,
-            fn(string $identifier): bool => preg_match('/^[A-Za-z0-9._\-]+$/', $identifier) === 1,
+            fn (string $identifier): bool => preg_match('/^[A-Za-z0-9._\-]+$/', $identifier) === 1,
         ));
 
         if ($identifiers === []) {

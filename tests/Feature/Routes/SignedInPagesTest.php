@@ -6,10 +6,10 @@ use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 /*
- * Every page of the app opens for a signed-in, verified user, and the pages behind "verified"
- * send an account whose email is not verified to the verification notice.
+ * Every page of the app opens for a signed-in user. The subject only requires authentication
+ * for the library and the video pages, so email verification is not a gate.
  */
-test('every page renders for a verified user', function (string $route, string $component) {
+test('every page renders for a signed-in user', function (string $route, string $component) {
     $user = User::factory()->create();
     $movie = Movie::factory()->create();
 
@@ -39,13 +39,14 @@ test('settings opens on the profile page', function () {
         ->assertRedirect('/settings/profile');
 });
 
-test('a page behind verified sends an unverified account to the verification notice', function (string $uri) {
+test('an authenticated account whose email is not verified still opens the app pages', function (string $uri) {
     $user = User::factory()->unverified()->create();
     $movie = Movie::factory()->create();
 
     $this->actingAs($user)
+        ->withSession(['auth.password_confirmed_at' => time()])
         ->get(strtr($uri, ['{movie}' => $movie->id, '{user}' => $user->id]))
-        ->assertRedirect(route('verification.notice'));
+        ->assertOk();
 })->with([
     '/movies',
     '/movies/{movie}',

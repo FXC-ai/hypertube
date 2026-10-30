@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -23,13 +24,17 @@ use League\OAuth2\Server\Entities\ClientEntityInterface;
  * @property string $username
  * @property string $email
  * @property Carbon|null $email_verified_at
- * @property string $password
+ * @property string|null $password
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $remember_token
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property string|null $firstname
+ * @property string|null $lastname
+ * @property string|null $profilepicture
+ * @property Languages $preferredlanguage
  * @property array<string, bool>|null $sources
  */
 #[Fillable(['username', 'email', 'firstname', 'lastname', 'password', 'preferredlanguage', 'profilepicture', 'sources'])]
@@ -38,6 +43,16 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    /**
+     * An account is never an admin until `php artisan user:admin` says so: `is_admin` is
+     * left out of the fillable attributes on purpose.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_admin' => false,
+    ];
 
     /**
      * Get the attributes that should be cast.
@@ -51,10 +66,12 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
             'password' => 'hashed',
             'preferredlanguage' => Languages::class,
             'sources' => 'array',
+            'is_admin' => 'boolean',
         ];
     }
 
-    public function socialAccounts()
+    /** @return HasMany<SocialAccount, $this> */
+    public function socialAccounts(): HasMany
     {
         return $this->hasMany(SocialAccount::class);
     }
@@ -87,7 +104,7 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
     /**
      * The movies this user has already watched.
      *
-     * @return HasManyThrough<Movie, WatchedMovie>
+     * @return HasManyThrough<Movie, WatchedMovie, $this>
      */
     public function watchedMovies(): HasManyThrough
     {

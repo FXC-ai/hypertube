@@ -7,7 +7,7 @@ use App\Services\Sources\WikidataSource;
 use Illuminate\Support\Facades\Http;
 
 /**
- * @param array<string, string> $criteria the year and the genres the listing filters on
+ * @param  array<string, string>  $criteria  the year and the genres the listing filters on
  * @return array<string, array<string, string>>
  */
 function sparqlBinding(string $imdbId, string $item, string $title, array $criteria = []): array
@@ -113,7 +113,7 @@ describe('catalog import', function () {
             'query.wikidata.org/*' => Http::response('Too Many Requests', 429),
         ]);
 
-        expect(fn(): int => WikidataSource::factory(MovieSource::Wikidata)->import(10))
+        expect(fn (): int => WikidataSource::factory(MovieSource::Wikidata)->import(10))
             ->toThrow(RuntimeException::class);
     });
 
