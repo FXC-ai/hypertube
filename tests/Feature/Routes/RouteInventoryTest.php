@@ -45,6 +45,7 @@ function routeInventory(): array
         'GET user/confirmed-password-status' => 'login',
         'GET movies' => 'login',
         'GET movies/{movie}' => 'login',
+        'POST movies/import' => 'login',
         'GET movies/sources/{source}/imdb/{imdb_id}' => 'login',
         'POST movies/{movie}/conversion' => 'login',
         'GET movies/{movie}/conversion' => 'login',

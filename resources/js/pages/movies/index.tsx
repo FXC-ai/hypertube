@@ -337,6 +337,46 @@ export default function MoviesIndex({ movies, filters }: MovieIndexProps) {
                     />
 
                     <Form
+                        method="post"
+                        action="/movies/import"
+                        className="rounded-lg border p-4"
+                        data-test="import-torrent-form"
+                    >
+                        {({ processing, errors }) => (
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                                <div className="w-full min-w-0 sm:flex-1">
+                                    <Label
+                                        htmlFor="torrent_url"
+                                        className="sr-only"
+                                    >
+                                        Torrent or magnet link
+                                    </Label>
+                                    <Input
+                                        id="torrent_url"
+                                        type="text"
+                                        name="torrent_url"
+                                        placeholder="Add a torrent or magnet link..."
+                                        aria-invalid={Boolean(
+                                            errors.torrent_url,
+                                        )}
+                                        autoComplete="off"
+                                        maxLength={2048}
+                                        disabled={processing}
+                                    />
+                                    <InputError
+                                        className="mt-2"
+                                        message={errors.torrent_url}
+                                    />
+                                </div>
+
+                                <Button type="submit" disabled={processing}>
+                                    Add video
+                                </Button>
+                            </div>
+                        )}
+                    </Form>
+
+                    <Form
                         {...MovieController.index.form()}
                         options={{
                             preserveScroll: true,

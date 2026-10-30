@@ -81,6 +81,22 @@ docker compose exec app php artisan movies:purge-stale       # supprimer les fic
 La purge est aussi exécutée automatiquement chaque jour par le service `scheduler`, à
 l'heure fixée par `MOVIE_CLEANUP_TIME`.
 
+## Import d'un lien torrent
+
+La librairie (`/movies`) affiche un champ « Add a torrent or magnet link... », réservé aux
+utilisateurs connectés : il crée le film et lance aussitôt sa préparation en arrière-plan
+(téléchargement BitTorrent côté serveur, puis conversion si le format n'est pas lisible
+par le navigateur).
+
+- Lien accepté : un magnet (`magnet:?xt=urn:btih:` suivi de 40 caractères hexadécimaux ou
+  de 32 caractères base32) ou une URL `http(s)` dont le chemin se termine par `.torrent`.
+  Le titre est déduit du paramètre `dn` du magnet, sinon du nom du fichier de l'URL.
+- Le lien et le titre sont enregistrés dans le catalogue `whitelist` sous un `imdb_id`
+  dérivé du lien : importer deux fois le même lien réutilise le même film, et un film déjà
+  téléchargé ne relance pas un téléchargement.
+- C'est aussi la porte d'entrée pour tester le magnet d'exemple du sujet : collé dans ce
+  champ, il déclenche le téléchargement puis la conversion du MKV.
+
 ## Qualité et tests
 
 ```bash
