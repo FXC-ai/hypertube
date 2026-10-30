@@ -15,7 +15,7 @@ Route::inertia('/', 'welcome')->name('home');
 Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->whereIn('provider', SocialiteProviders::values())->name('socialite.redirect');
 Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->whereIn('provider', SocialiteProviders::values())->name('socialite.callback');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
 
     Route::patch('/updateavatar', [ProfilePictureController::class, 'update'])->name('update.avatar');
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
