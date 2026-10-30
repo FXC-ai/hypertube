@@ -13,14 +13,16 @@ final class OmdbService
 {
     public function __construct(
         #[\SensitiveParameter] private ?string $apiKey
-    ) {
-    }
+    ) {}
 
     public static function factory(): self
     {
         return new self(config('services.omdb.key'));
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
     public function fetchByImdbId(string $imdbId): ?array
     {
         if ($this->apiKey == null) {
@@ -34,7 +36,7 @@ final class OmdbService
         }
 
         try {
-            $response = Http::timeout(30)->get('http://www.omdbapi.com/', [
+            $response = Http::timeout(30)->get('https://www.omdbapi.com/', [
                 // $response = Http::timeout(30)->get('http://www.omdbapi.com/demo.aspx/', [
                 'apikey' => $this->apiKey,
                 // 'token' => "demo",
@@ -43,7 +45,7 @@ final class OmdbService
                 'r' => 'json',
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('OMDb API request failed for {imdb_id}: status {status}', [
                     'imdb_id' => $imdbId,
                     'status' => $response->status(),

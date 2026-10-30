@@ -53,6 +53,19 @@ test('missing optional OMDb fields do not prevent movie data from being stored',
     'missing release date' => ['Released', 'release_date', 'released'],
 ]);
 
+test('the OMDb key only ever travels over an encrypted link', function () {
+    Http::fake([
+        'www.omdbapi.com/*' => Http::response(['Response' => 'True']),
+    ]);
+
+    (new OmdbService('test-api-key'))->enrichByImdbId('tt0000003');
+
+    $recorded = Http::recorded();
+
+    expect($recorded)->toHaveCount(1)
+        ->and($recorded[0][0]->url())->toStartWith('https://www.omdbapi.com/');
+});
+
 test('the catalog copy of the grade and of the production year follows the metadata', function () {
     $imdbId = 'tt0000001';
 

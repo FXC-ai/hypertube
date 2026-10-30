@@ -43,7 +43,7 @@ describe('merged catalog search', function () {
         $response->assertOk();
         expect(resultTitles($response))->toBe(['Cops', 'M', 'Metropolis']);
 
-        $response->assertInertia(fn($assert) => $assert
+        $response->assertInertia(fn ($assert) => $assert
             ->component('movies/index')
             ->where('movies.meta.total', 3)
             ->where('filters.sources', ['wikidata', 'whitelist'])
@@ -59,7 +59,7 @@ describe('merged catalog search', function () {
 
         $response = $this->actingAs($user)->get(route('movies.index'));
 
-        $response->assertInertia(fn($assert) => $assert
+        $response->assertInertia(fn ($assert) => $assert
             ->has('movies.data', 1)
             ->where('movies.data.0.source', 'wikidata')
             ->where('movies.data.0.title', 'Metropolis')
@@ -76,7 +76,7 @@ describe('merged catalog search', function () {
         $response = $this->actingAs($user)->get(route('movies.index'));
 
         expect(resultTitles($response))->toBe(['Metropolis']);
-        $response->assertInertia(fn($assert) => $assert->where('filters.sources', ['wikidata']));
+        $response->assertInertia(fn ($assert) => $assert->where('filters.sources', ['wikidata']));
     });
 
     it('ignores the sources the server disabled', function () {
@@ -99,7 +99,7 @@ describe('merged catalog search', function () {
         $response = $this->actingAs($user)->get(route('movies.index', ['search' => 'cop']));
 
         expect(resultTitles($response))->toBe(['Cops']);
-        $response->assertInertia(fn($assert) => $assert->where('filters.search', 'cop'));
+        $response->assertInertia(fn ($assert) => $assert->where('filters.search', 'cop'));
     });
 
     it('links the results to the movies already loaded on this server', function () {
@@ -130,7 +130,7 @@ describe('merged catalog search', function () {
 
         $firstPage = $this->actingAs($user)->get(route('movies.index', [...$ordered, 'perPage' => 2, 'page' => 1]));
 
-        $firstPage->assertInertia(fn($assert) => $assert
+        $firstPage->assertInertia(fn ($assert) => $assert
             ->has('movies.data', 2)
             ->where('movies.meta.total', 3)
             ->where('movies.meta.current_page', 1)
@@ -141,7 +141,7 @@ describe('merged catalog search', function () {
 
         $secondPage = $this->actingAs($user)->get(route('movies.index', [...$ordered, 'perPage' => 2, 'page' => 2]));
 
-        $secondPage->assertInertia(fn($assert) => $assert
+        $secondPage->assertInertia(fn ($assert) => $assert
             ->has('movies.data', 1)
             ->where('movies.data.0.title', 'Cops')
         );
@@ -153,12 +153,13 @@ describe('merged catalog search', function () {
             ->assertSessionHasErrors('page');
     });
 
-    it('enriches every result with the cached metadata', function () {        $user = User::factory()->create();
+    it('enriches every result with the cached metadata', function () {
+        $user = User::factory()->create();
 
         Source::factory()->forSource(MovieSource::Wikidata)->create(['imdb_id' => 'tt0000001', 'title' => 'Metropolis']);
 
         $this->actingAs($user)->get(route('movies.index'))
-            ->assertInertia(fn($assert) => $assert
+            ->assertInertia(fn ($assert) => $assert
                 ->where('movies.data.0.imdb_id', 'tt0000001')
                 ->where('movies.data.0.data.poster', 'https://poster.test/poster.jpg')
                 ->where('movies.data.0.data.imdbRating', 8.1)
@@ -166,7 +167,7 @@ describe('merged catalog search', function () {
 
         expect(Source::count())->toBe(1);
         expect(collect(Http::recorded())
-            ->filter(fn(array $recorded): bool => str_starts_with($recorded[0]->url(), 'http://www.omdbapi.com/'))
+            ->filter(fn (array $recorded): bool => str_starts_with($recorded[0]->url(), 'https://www.omdbapi.com/'))
             ->count())->toBe(1);
     });
 });
