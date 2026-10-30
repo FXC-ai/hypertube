@@ -8,6 +8,10 @@ use App\Models\WatchedMovie;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
+    // OmdbService skips every call without a key: the one of the local .env must not be
+    // what makes these tests pass (the CI has none).
+    config(['services.omdb.key' => 'test-api-key']);
+
     Http::fake([
         'www.omdbapi.com/*' => Http::response([
             'Response' => 'True',
