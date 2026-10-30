@@ -81,6 +81,14 @@ class TorrentUrl implements ValidationRule
      */
     private static function reachesPublicHost(string $url, array $schemes): bool
     {
+        // PHP and the Client Torrent (Node, WHATWG URL) must agree on the host: Node reads a
+        // backslash as a slash, so in https://10.0.0.5\@public.host/ PHP sees public.host
+        // but Node connects to 10.0.0.5. Such links, and any user@ before the host, are
+        // never needed for a torrent.
+        if (str_contains($url, '\\') || parse_url($url, PHP_URL_USER) !== null || parse_url($url, PHP_URL_PASS) !== null) {
+            return false;
+        }
+
         $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
         $host = parse_url($url, PHP_URL_HOST);
 

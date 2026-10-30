@@ -120,6 +120,10 @@ test('a torrent file on an internal host is refused', function (string $url) {
     'cloud metadata' => 'http://169.254.169.254/latest/movie.torrent',
     'private network' => 'https://10.0.0.5/movie.torrent',
     'ipv6 loopback' => 'http://[::1]/movie.torrent',
+    // PHP reads the public host after the @, the Client Torrent (Node) reads the backslash
+    // as a slash and connects to 10.0.0.5.
+    'backslash before a public host' => 'https://10.0.0.5\\@93.184.215.14/movie.torrent',
+    'userinfo' => 'https://user:secret@93.184.215.14/movie.torrent',
 ]);
 
 test('a torrent file on any public host is accepted', function (string $url) {
@@ -156,6 +160,8 @@ test('a magnet loses the links to internal hosts and keeps the public ones, what
         'tr=wss%3A%2F%2Flocalhost%3A8000',
         'xs=file%3A%2F%2F%2Fetc%2Fpasswd',
         'xs=wss%3A%2F%2F93.184.215.14%2Fmovie.torrent',
+        'xs=https%3A%2F%2F127.0.0.1%5C%4093.184.215.14%2Fmovie.torrent',
+        'ws=https%3A%2F%2Fuser%4093.184.215.14%2F',
     ];
 
     $this->actingAs(admin())
