@@ -1,7 +1,8 @@
+import { timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { streamFile } from '../stream/streamFile.js';
 import { TorrentFileError } from '../torrentFile.js';
 import {
@@ -16,6 +17,10 @@ const DEFAULT_STREAM_OPTIONS = {
   readaheadBytes: Number(process.env.STREAM_READAHEAD_BYTES ?? 8 * 1024 * 1024),
   stallTimeoutMs: Number(process.env.STREAM_STALL_TIMEOUT_MS ?? 60000),
 };
+const SECRET_HEADER = 'x-torrent-client-secret';
+const DEFAULT_SHARED_SECRET = process.env.TORRENT_CLIENT_SHARED_SECRET ?? '';
+const DEFAULT_OUTPUT_ROOT = process.env.TORRENT_OUTPUT_ROOT ?? '';
+const DEFAULT_UI_ENABLED = process.env.TORRENT_CLIENT_UI === 'true' || process.env.NODE_ENV !== 'production';
 
 // In Docker the shared volume exists: pre-fill the page with the path Laravel reads from.
 const DOCKER_STORAGE_DIR = '/var/www/html/storage';
@@ -34,9 +39,12 @@ function renderUiPage() {
 export function createServer({
   manager = createDownloadManager(),
   streamOptions = DEFAULT_STREAM_OPTIONS,
+  sharedSecret = DEFAULT_SHARED_SECRET,
+  outputRoot = DEFAULT_OUTPUT_ROOT,
+  uiEnabled = DEFAULT_UI_ENABLED,
 } = {}) {
   return createHttpServer((req, res) => {
-    handleRequest(req, res, manager, streamOptions).catch((err) => {
+    handleRequest(req, res, manager, streamOptions, { sharedSecret, outputRoot, uiEnabled }).catch((err) => {
       if (res.headersSent) {
         res.destroy(err);
 
@@ -48,9 +56,21 @@ export function createServer({
   });
 }
 
-async function handleRequest(req, res, manager, streamOptions) {
+async function handleRequest(req, res, manager, streamOptions, { sharedSecret, outputRoot, uiEnabled }) {
   if (req.method === 'GET' && req.url === '/health') {
     sendJson(res, 200, { status: 'ok' });
+
+    return;
+  }
+
+  if (req.method === 'GET' && req.url === '/' && !uiEnabled) {
+    sendJson(res, 404, { error: 'Not found' });
+
+    return;
+  }
+
+  if (!isAuthorized(req, sharedSecret)) {
+    sendJson(res, 401, { error: 'Missing or invalid torrent client secret' });
 
     return;
   }
@@ -73,7 +93,7 @@ async function handleRequest(req, res, manager, streamOptions) {
   }
 
   if (req.method === 'POST' && req.url === '/downloads') {
-    await handleStart(req, res, manager);
+    await handleStart(req, res, manager, outputRoot);
 
     return;
   }
@@ -129,19 +149,19 @@ async function handleInspect(req, res, manager) {
   }
 }
 
-async function handleStart(req, res, manager) {
+async function handleStart(req, res, manager, outputRoot) {
   const body = await readJsonBody(req, res);
 
   if (body === undefined) {
     return;
   }
 
-  const { outputDir, fileIndexes, expectedInfoHash } = body;
+  const { fileIndexes, expectedInfoHash } = body;
 
   try {
     const id = await manager.startDownload({
       ...torrentSource(body),
-      outputDir,
+      outputDir: validateOutputDir(body.outputDir, outputRoot),
       fileIndexes,
       expectedInfoHash,
     });
@@ -179,6 +199,48 @@ function handleCancel(res, manager, id) {
   }
 
   sendJson(res, 200, status);
+}
+
+function isAuthorized(req, sharedSecret) {
+  if (!sharedSecret) {
+    return true;
+  }
+
+  const header = req.headers[SECRET_HEADER];
+
+  if (typeof header !== 'string') {
+    return false;
+  }
+
+  const received = Buffer.from(header);
+  const expected = Buffer.from(sharedSecret);
+
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
+function validateOutputDir(outputDir, outputRoot) {
+  if (!outputDir || typeof outputDir !== 'string') {
+    throw new DownloadManagerError('outputDir is required');
+  }
+
+  const resolved = resolve(outputDir);
+
+  if (!outputRoot) {
+    return resolved;
+  }
+
+  const root = resolve(outputRoot);
+  const relativePath = relative(root, resolved);
+
+  if (relativePath === '') {
+    return resolved;
+  }
+
+  if (relativePath.startsWith('..') || relativePath.startsWith('/')) {
+    throw new DownloadManagerError('outputDir must stay inside the configured movie directory');
+  }
+
+  return resolved;
 }
 
 // Answers 400 itself and returns undefined when the body is not valid JSON.

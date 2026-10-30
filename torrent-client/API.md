@@ -7,7 +7,7 @@ Service HTTP séparé (voir [docs/architecture.md](../docs/architecture.md) et [
 - En local : `npm start` (ou `node src/index.js`) - port `7881` par défaut, override via `PORT`.
 - En Docker : service `client-torrent` dans `docker-compose.yml` racine, joignable depuis `app` à `http://client-torrent:7881` sur le réseau Docker interne (voir #17).
 
-Pas d'authentification - le service n'est censé être joignable que depuis le réseau Docker interne, jamais exposé publiquement.
+En Docker, `TORRENT_CLIENT_SHARED_SECRET` est requis : toutes les routes sauf `GET /health` doivent envoyer l'en-tête `x-torrent-client-secret`. Le service reste privé au réseau Docker interne et n'expose plus le port 7881 sur l'hôte.
 
 ## Évolutions en cours
 

@@ -183,6 +183,7 @@ Tout est dans `.env` (ignoré par git), les clés à renseigner :
 | `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL. |
 | `RESEND_API_KEY`, `MAIL_FROM_ADDRESS` | Envoi des e-mails (réinitialisation de mot de passe). |
 | `OMDB_API_KEY` | Note IMDb, année, durée, casting, synopsis. |
+| `TORRENT_CLIENT_SHARED_SECRET` | Secret partagé entre Laravel et le client torrent. Le service `client-torrent` reste privé au réseau Docker. |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI` | Stratégie OAuth GitHub. |
 | `FORTY_TWO_CLIENT_ID`, `FORTY_TWO_CLIENT_SECRET`, `FORTY_TWO_REDIRECT_URI` | Stratégie OAuth 42. |
 | `PASSPORT_API_CLIENT_ID`, `PASSPORT_API_CLIENT_SECRET` | Client confidentiel de l'API, rempli tout seul au premier lancement. |

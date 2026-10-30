@@ -55,7 +55,13 @@ final class TorrentClient
      * Current state of a download, or null when the service does not know the id
      * (it keeps its jobs in memory, so a restart forgets them).
      *
-     * @return array{status: string, error: string|null}|null
+     * @return array{
+     *     id?: string,
+     *     status: string,
+     *     error?: string|null,
+     *     piecesCompleted?: int,
+     *     totalPieces?: int,
+     * }|null
      */
     public function status(string $downloadId): ?array
     {
@@ -107,7 +113,7 @@ final class TorrentClient
         }
 
         try {
-            $response = $request(Http::baseUrl($this->baseUrl())->acceptJson()->timeout(60));
+            $response = $request($this->client());
         } catch (ConnectionException $exception) {
             $torrentClientException = new TorrentClientException(
                 'Client Torrent unreachable: '.$exception->getMessage(),
@@ -170,6 +176,18 @@ final class TorrentClient
         }
 
         return $response;
+    }
+
+    private function client(): PendingRequest
+    {
+        $request = Http::baseUrl($this->baseUrl())->acceptJson()->timeout(60);
+        $sharedSecret = config('media.torrent_client_shared_secret');
+
+        if (is_string($sharedSecret) && $sharedSecret !== '') {
+            $request = $request->withHeaders(['x-torrent-client-secret' => $sharedSecret]);
+        }
+
+        return $request;
     }
 
     private function baseUrl(): string

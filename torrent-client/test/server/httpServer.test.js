@@ -7,14 +7,14 @@ import { createServer } from '../../src/server/httpServer.js';
 const SINTEL = new URL('../fixtures/sintel.webtorrent.io.torrent', import.meta.url);
 
 // Real parsing and routing, no network: fetch always fails, nothing is ever downloaded.
-async function withServer(fn) {
+async function withServer(fn, serverOptions = {}) {
   const manager = createDownloadManager({
     torrentFetchRetryDelayMs: 0,
     fetchImpl: async () => {
       throw new Error('getaddrinfo ENOTFOUND example.test');
     },
   });
-  const server = createServer({ manager });
+  const server = createServer({ manager, ...serverOptions });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 
   try {
@@ -24,10 +24,10 @@ async function withServer(fn) {
   }
 }
 
-function postJson(url, body) {
+function postJson(url, body, headers = {}) {
   return fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 }
@@ -119,5 +119,54 @@ test('GET / serves the test page with the default outputDir and the API referenc
     assert.ok(page.includes('id="routes"'), 'API reference container');
     assert.ok(page.includes('id="inspectBox"'), 'inspection result');
     assert.ok(page.includes('id="historyRows"'), 'job history');
+  });
+});
+
+test('the debug UI can be disabled and protected routes require the shared secret', async () => {
+  await withServer(async (base) => {
+    const ui = await fetch(`${base}/`);
+    assert.equal(ui.status, 404);
+
+    const health = await fetch(`${base}/health`);
+    assert.equal(health.status, 200);
+
+    const missing = await postJson(`${base}/torrents/inspect`, { torrentUrl: 'http://example.test/x.torrent' });
+    assert.equal(missing.status, 401);
+
+    const wrong = await postJson(
+      `${base}/torrents/inspect`,
+      { torrentUrl: 'http://example.test/x.torrent' },
+      { 'x-torrent-client-secret': 'wrong-secret' },
+    );
+    assert.equal(wrong.status, 401);
+
+    const authorized = await postJson(
+      `${base}/torrents/inspect`,
+      { torrentUrl: 'http://example.test/x.torrent' },
+      { 'x-torrent-client-secret': 'topsecret' },
+    );
+    assert.notEqual(authorized.status, 401);
+  }, {
+    sharedSecret: 'topsecret',
+    uiEnabled: false,
+  });
+});
+
+test('POST /downloads refuses an outputDir outside the configured movie root', async () => {
+  await withServer(async (base) => {
+    const outside = await postJson(`${base}/downloads`, {
+      torrentUrl: 'http://example.test/x.torrent',
+      outputDir: '/tmp/outside',
+    });
+    assert.equal(outside.status, 400);
+    assert.match((await outside.json()).error, /inside the configured movie directory/);
+
+    const inside = await postJson(`${base}/downloads`, {
+      torrentUrl: 'http://example.test/x.torrent',
+      outputDir: '/tmp/root/movie',
+    });
+    assert.equal(inside.status, 202);
+  }, {
+    outputRoot: '/tmp/root',
   });
 });
