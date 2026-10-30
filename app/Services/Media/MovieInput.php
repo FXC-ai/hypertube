@@ -28,12 +28,23 @@ final readonly class MovieInput
             return [];
         }
 
-        return [
+        $options = [
             '-rw_timeout', (string) config('media.stream.rw_timeout_us'),
             '-reconnect', '1',
             '-reconnect_on_network_error', '1',
             '-reconnect_on_http_error', '5xx',
             '-reconnect_delay_max', '5',
         ];
+
+        // The Client Torrent answers 401 to any request without its shared secret, the
+        // streaming URL read by ffprobe and ffmpeg included.
+        $sharedSecret = config('media.torrent_client_shared_secret');
+
+        if (is_string($sharedSecret) && $sharedSecret !== '') {
+            $options[] = '-headers';
+            $options[] = "x-torrent-client-secret: {$sharedSecret}\r\n";
+        }
+
+        return $options;
     }
 }
