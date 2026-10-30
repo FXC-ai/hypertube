@@ -15,15 +15,12 @@ test('registration screen can be rendered', function () {
 });
 
 test('new users can register', function () {
-
-    $response = $this->post(route('register.store'), [
-        'username' => 'test user',
+    $response = $this->post(route('register.store'), registration([
+        'username' => 'test-user',
         'email' => 'test@example.com',
         'firstname' => 'Firstname',
         'lastname' => 'Lastname',
-        'password' => 'password',
-        'password_confirmation' => 'password',
-    ]);
+    ]));
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('movies.index', absolute: false));
@@ -35,7 +32,7 @@ test('new users can register', function () {
  */
 function registrationPassword(): string
 {
-    return str_repeat('fixture-', 2);
+    return 'Fixture123!';
 }
 
 /**
@@ -75,6 +72,19 @@ test('the password is stored hashed, never in plain text', function () {
     expect($user->getRawOriginal('password'))->not->toBe(registrationPassword())
         ->and(Hash::check(registrationPassword(), $user->password))->toBeTrue();
 });
+
+test('a current French word is rejected as a password', function (string $password) {
+    $this->post(route('register.store'), registration([
+        'password' => $password,
+        'password_confirmation' => $password,
+    ]))->assertSessionHasErrors('password');
+
+    $this->assertGuest();
+})->with([
+    'motdepasse',
+    'Motdepasse1',
+    'password123',
+]);
 
 test('a new account prefers english until the user picks another language', function () {
     $this->post(route('register.store'), registration());

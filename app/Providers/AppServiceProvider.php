@@ -70,11 +70,9 @@ class AppServiceProvider extends ServiceProvider
 
         Password::defaults(
             fn (): Password => Password::min(8)
-            // ->mixedCase()
-            // ->letters()
-            // ->numbers()
-            // ->symbols()
-            // ->uncompromised()
+                ->letters()
+                ->numbers()
+                ->mixedCase()
         );
     }
 }

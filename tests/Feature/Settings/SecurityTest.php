@@ -50,15 +50,34 @@ test('password can be updated', function () {
         ->from(route('security.edit'))
         ->put(route('user-password.update'), [
             'current_password' => 'password',
-            'password' => 'new-password',
-            'password_confirmation' => 'new-password',
+            'password' => 'Stronger123!',
+            'password_confirmation' => 'Stronger123!',
         ]);
 
     $response
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('security.edit'));
 
-    expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
+    expect(Hash::check('Stronger123!', $user->refresh()->password))->toBeTrue();
+});
+
+test('an account without a password can set one and then log in with it', function () {
+    $user = User::factory()->create(['password' => null]);
+
+    $this->actingAs($user)
+        ->from(route('security.edit'))
+        ->put(route('user-password.update'), [
+            'password' => 'Stronger123!',
+            'password_confirmation' => 'Stronger123!',
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('security.edit'));
+
+    $this->post(route('login.store'), [
+        'username' => $user->username,
+        'password' => 'Stronger123!',
+    ])->assertRedirect();
+    $this->assertAuthenticatedAs($user->fresh());
 });
 
 test('correct password must be provided to update password', function () {

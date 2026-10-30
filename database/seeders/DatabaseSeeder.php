@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
             'firstname' => 'Ben',
             'lastname' => 'Solo',
             'email' => 'ben.solo@starwars.com',
-            'password' => 'poirepoire',
+            'password' => 'Hypertube123!',
         ]);
 
         $this->call([MovieSeeder::class, UserSeeder::class]);
