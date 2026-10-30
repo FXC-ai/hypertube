@@ -74,6 +74,7 @@ final class PurgeStaleMovies extends Command implements Isolatable
             ->whereIn('conversion_status', [
                 ConversionStatus::Pending->value,
                 ConversionStatus::Failed->value,
+                ConversionStatus::Playable->value,
                 ConversionStatus::Converted->value,
             ])
             ->where(function (Builder $query) use ($cutoff): void {
@@ -178,6 +179,7 @@ final class PurgeStaleMovies extends Command implements Isolatable
         if (! in_array($movie->conversion_status, [
             ConversionStatus::Pending,
             ConversionStatus::Failed,
+            ConversionStatus::Playable,
             ConversionStatus::Converted,
         ], true)) {
             return false;

@@ -83,6 +83,19 @@ test('it uses updated at when the movie has never been watched', function () {
     expect($movie->refresh()->download_status)->toBe(DownloadStatus::Pending);
 });
 
+test('it purges a playable movie that has not been watched for one month', function () {
+    $movie = purgeCandidate(['conversion_status' => ConversionStatus::Playable]);
+
+    storePurgeCandidateFiles($movie);
+
+    $this->artisan('movies:purge-stale --isolated')->assertSuccessful();
+
+    Storage::disk('public')->assertMissing("movies/{$movie->id}/movie.mp4");
+
+    expect($movie->refresh()->download_status)->toBe(DownloadStatus::Pending)
+        ->and($movie->conversion_status)->toBe(ConversionStatus::Pending);
+});
+
 test('it never purges downloads or conversions that are still active', function () {
     $movies = collect([
         purgeCandidate([
@@ -91,7 +104,6 @@ test('it never purges downloads or conversions that are still active', function 
         ]),
         purgeCandidate(['conversion_status' => ConversionStatus::Queued]),
         purgeCandidate(['conversion_status' => ConversionStatus::Converting]),
-        purgeCandidate(['conversion_status' => ConversionStatus::Playable]),
     ]);
 
     $movies->each(fn (Movie $movie) => storePurgeCandidateFiles($movie));
