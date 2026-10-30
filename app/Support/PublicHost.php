@@ -27,10 +27,13 @@ final class PublicHost
             return false;
         }
 
-        $labels = explode('.', rtrim($host, '.'));
+        // Node drops the trailing dot of a host (127.0.0.1. is 127.0.0.1): every check below
+        // runs on the host without it.
+        $host = rtrim($host, '.');
+        $labels = explode('.', $host);
 
         if (preg_match('/^(0x[0-9a-f]*|[0-9]+)$/', (string) end($labels)) === 1
-            && filter_var(rtrim($host, '.'), FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
             return false;
         }
 

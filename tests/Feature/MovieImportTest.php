@@ -131,6 +131,9 @@ test('a torrent file on an internal host is refused', function (string $url) {
     'short decimal address' => 'https://127.1/movie.torrent',
     'octal address' => 'https://0177.0.0.1/movie.torrent',
     'single number address' => 'https://2130706433/movie.torrent',
+    'trailing dot loopback' => 'https://127.0.0.1./movie.torrent',
+    'trailing dot private network' => 'https://10.0.0.5./movie.torrent',
+    'trailing dot name' => 'https://localhost./movie.torrent',
 ]);
 
 test('a torrent file on any public host is accepted', function (string $url) {
