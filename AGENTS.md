@@ -206,15 +206,12 @@ This repository implements the 42 school project Hypertube.
 Before analyzing, planning, reviewing, or modifying the application, read:
 
 - `docs/42/subject.md`: official project requirements.
-- `docs/42/evaluation.md`: official evaluation criteria and correction sheet.
 
 Rules:
 
 - Treat the subject as the authoritative source for functional requirements.
-- Treat the evaluation sheet as the authoritative acceptance checklist.
 - When reviewing the project, verify every applicable evaluation criterion.
 - Never invent a requirement that is absent from these documents.
-- If the implementation, subject, and evaluation sheet conflict, report the conflict before proposing a solution.
 - Follow the existing Laravel, Inertia, React, Pest, and Wayfinder conventions.
 - Translate evaluation criteria into automated Pest tests whenever possible.
-- Mention the relevant subject and evaluation section in implementation plans.
+- Mention the relevant subject in implementation plans.
