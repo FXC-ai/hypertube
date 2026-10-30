@@ -8,7 +8,7 @@ import {
     Play,
     RotateCcw,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import CommentForm from '@/components/comment-form';
 import CommentItem from '@/components/comment-item';
@@ -118,6 +118,10 @@ const browserPlayback = {
                   .canPlayType('application/vnd.apple.mpegurl') !== '',
 };
 
+function subscribeToNothing(): () => void {
+    return () => {};
+}
+
 function HlsPlayer({
     src,
     preferredlanguage,
@@ -129,6 +133,14 @@ function HlsPlayer({
 }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [failure, setFailure] = useState<string | null>(null);
+    // The server render (Inertia SSR, in Node) has neither MediaSource nor a video
+    // element: it must not print the warning the browser then removes, which React
+    // reports as a hydration error in the console.
+    const cannotPlay = useSyncExternalStore(
+        subscribeToNothing,
+        () => !browserPlayback.mediaSource && !browserPlayback.nativeHls,
+        () => false,
+    );
 
     useEffect(() => {
         const languages: { [language: string]: string } = {
@@ -223,7 +235,7 @@ function HlsPlayer({
                 ))}
             </video>
 
-            {!browserPlayback.mediaSource && !browserPlayback.nativeHls && (
+            {cannotPlay && (
                 <p className="bg-destructive/10 px-4 py-3 text-sm text-destructive">
                     This browser cannot play the video stream.
                 </p>
