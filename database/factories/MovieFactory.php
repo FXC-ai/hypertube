@@ -27,7 +27,7 @@ class MovieFactory extends Factory
 
         return [
             'filename' => $filename,
-            'imdb_id' => 'fake_imdb_id'.fake()->numerify('######'),
+            'imdb_id' => 'fake_imdb_id'.fake()->unique()->numerify('######'),
             'torrent_url' => null,
             ...$this->conversionAttributes($status),
         ];
