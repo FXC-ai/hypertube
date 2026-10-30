@@ -24,11 +24,12 @@ class CreateNewUser implements CreatesNewUsers
         Validator::make($input, [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
-            'profilepicture' => $this->profilepictureRules(),
+            'profilepicture' => $this->profilepictureRules(required: false),
         ])->validate();
 
-        /** @var UploadedFile $profilepicture */
-        $profilepicture = $input['profilepicture'];
+        // Validated above: an uploaded image, or nothing.
+        /** @var UploadedFile|null $profilepicture */
+        $profilepicture = $input['profilepicture'] ?? null;
 
         $user = User::create([
             'username' => $input['username'],
@@ -36,7 +37,7 @@ class CreateNewUser implements CreatesNewUsers
             'firstname' => $input['firstname'],
             'lastname' => $input['lastname'],
             'password' => $input['password'],
-            'profilepicture' => $profilepicture->store('avatars', 'public'),
+            'profilepicture' => $profilepicture?->store('avatars', 'public') ?: null,
         ]);
 
         return $user;

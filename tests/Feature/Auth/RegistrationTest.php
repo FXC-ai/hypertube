@@ -65,7 +65,7 @@ test('registration asks for every field the subject lists', function (string $fi
 
     $this->post(route('register.store'), $payload)->assertSessionHasErrors($field);
     $this->assertGuest();
-})->with(['email', 'username', 'firstname', 'lastname', 'password', 'profilepicture']);
+})->with(['email', 'username', 'firstname', 'lastname', 'password']);
 
 test('the password is stored hashed, never in plain text', function () {
     $this->post(route('register.store'), registration());
@@ -83,6 +83,24 @@ test('a profile picture uploaded at registration is kept on the public disk', fu
 
     expect($user->profilepicture)->not->toBeNull();
     Storage::disk('public')->assertExists($user->profilepicture);
+});
+
+test('the profile picture is optional at registration', function () {
+    $payload = registration();
+    unset($payload['profilepicture']);
+
+    $this->post(route('register.store'), $payload)->assertSessionHasNoErrors();
+
+    $this->assertAuthenticated();
+    expect(User::query()->where('username', 'newcomer')->sole()->profilepicture)->toBeNull();
+});
+
+test('a profile picture sent at registration must still be a real image', function () {
+    $this->post(route('register.store'), registration([
+        'profilepicture' => UploadedFile::fake()->createWithContent('avatar.jpg', '<?php phpinfo();'),
+    ]))->assertSessionHasErrors('profilepicture');
+
+    $this->assertGuest();
 });
 
 test('a current French word is rejected as a password', function (string $password) {

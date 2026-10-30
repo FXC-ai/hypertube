@@ -106,13 +106,12 @@ export default function Register({ passwordRules, providers }: Props) {
 
                             <div className="grid gap-2">
                                 <Label htmlFor="profilepicture">
-                                    Profile picture
+                                    Profile picture (optional)
                                 </Label>
                                 <Input
                                     id="profilepicture"
                                     type="file"
                                     className="mt-1 block w-full"
-                                    required
                                     tabIndex={5}
                                     autoComplete="off"
                                     name="profilepicture"
