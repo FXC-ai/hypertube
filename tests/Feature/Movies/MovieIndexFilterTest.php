@@ -35,7 +35,7 @@ describe('criteria filters', function () {
         $response = $this->actingAs($user)->get(route('movies.index', ['genre' => 'horror film']));
 
         expect(orderedTitles($response))->toBe(['Nosferatu']);
-        $response->assertInertia(fn($assert) => $assert
+        $response->assertInertia(fn ($assert) => $assert
             ->where('filters.genre', 'horror film')
             ->where('movies.meta.total', 1)
         );
@@ -77,7 +77,7 @@ describe('criteria filters', function () {
         ]));
 
         expect(orderedTitles($response))->toBe(['Metropolis', 'M']);
-        $response->assertInertia(fn($assert) => $assert
+        $response->assertInertia(fn ($assert) => $assert
             ->where('filters.yearFrom', 1920)
             ->where('filters.yearTo', 1940)
         );
@@ -98,11 +98,11 @@ describe('criteria filters', function () {
         ]));
 
         expect(orderedTitles($response))->toBe(['Metropolis', 'M']);
-        $response->assertInertia(fn($assert) => $assert->where('filters.ratingFrom', 6.5));
+        $response->assertInertia(fn ($assert) => $assert->where('filters.ratingFrom', 6.5));
 
         $this->actingAs($user)
             ->get(route('movies.index', ['ratingTo' => 3]))
-            ->assertInertia(fn($assert) => $assert->has('movies.data', 1));
+            ->assertInertia(fn ($assert) => $assert->has('movies.data', 1));
     });
 
     it('combines the criteria of a single listing', function () {
@@ -146,7 +146,7 @@ describe('criteria filters', function () {
         Source::factory()->forSource(MovieSource::Wikidata)->create(['genres' => null]);
 
         $this->actingAs(User::factory()->create())->get(route('movies.index'))
-            ->assertInertia(fn($assert) => $assert
+            ->assertInertia(fn ($assert) => $assert
                 ->where('filters.genres', ['drama film', 'western film'])
             );
     });
@@ -165,7 +165,7 @@ describe('criteria filters', function () {
             'sort' => 'created_at',
             'dir' => 'asc',
         ]))
-            ->assertInertia(fn($assert) => $assert
+            ->assertInertia(fn ($assert) => $assert
                 ->where('filters.genre', 'drama film')
                 ->where('movies.meta.current_page', 2)
                 ->where('movies.meta.total', 2)
@@ -177,7 +177,7 @@ describe('criteria filters', function () {
 describe('sorting criteria', function () {
     it('offers every criterion the listing can be sorted on', function () {
         $this->actingAs(User::factory()->create())->get(route('movies.index'))
-            ->assertInertia(fn($assert) => $assert
+            ->assertInertia(fn ($assert) => $assert
                 ->where('filters.sorts', [
                     'popularity' => 'Popularity (downloads)',
                     'created_at' => 'Date added',
@@ -338,7 +338,7 @@ describe('merged pagination', function () {
 
         $response = $this->actingAs($user)->get(route('movies.index', ['perPage' => 1, 'page' => 7]));
 
-        $response->assertInertia(fn($assert) => $assert
+        $response->assertInertia(fn ($assert) => $assert
             ->has('movies.data', 0)
             ->where('movies.meta.total', 6)
         );

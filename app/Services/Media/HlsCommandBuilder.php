@@ -5,15 +5,12 @@ namespace App\Services\Media;
 use App\Data\SelectedTracks;
 use Illuminate\Support\Facades\Log;
 
-use App\Services\Media\MovieInput;
-
 final class HlsCommandBuilder
 {
     /** @return list<string> */
     public function build(MovieInput $movieInput, string $outputDirectory, SelectedTracks $tracks): array
     {
         Log::channel('my_debug')->debug('HlsCommandBuilder = ', ['build' => 'Création de la commande ffmpeg pour le movie demandé.']);
-
 
         $segmentDuration = (int) config('media.hls.segment_duration', 6);
         $separator = DIRECTORY_SEPARATOR;
@@ -72,8 +69,8 @@ final class HlsCommandBuilder
             '-hls_flags',
             'independent_segments+temp_file',
             '-hls_segment_filename',
-            $outputDirectory . $separator . 'video_%05d.ts',
-            $outputDirectory . $separator . 'video.m3u8',
+            $outputDirectory.$separator.'video_%05d.ts',
+            $outputDirectory.$separator.'video.m3u8',
         );
 
         foreach ($tracks->subtitles as $position => $subtitle) {
@@ -90,14 +87,14 @@ final class HlsCommandBuilder
                 '-segment_time',
                 (string) $segmentDuration,
                 '-segment_list',
-                $outputDirectory . $separator . "{$prefix}.m3u8",
+                $outputDirectory.$separator."{$prefix}.m3u8",
                 '-segment_list_type',
                 'm3u8',
                 '-segment_list_flags',
                 '+live',
                 '-segment_list_size',
                 '0',
-                $outputDirectory . $separator . "{$prefix}_%05d.vtt",
+                $outputDirectory.$separator."{$prefix}_%05d.vtt",
             );
         }
 

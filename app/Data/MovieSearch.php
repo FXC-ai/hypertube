@@ -12,12 +12,12 @@ use App\Enums\WatchedFilter;
 final readonly class MovieSearch
 {
     /**
-     * @param 'asc'|'desc' $direction
-     * @param string|null $genre a genre label exactly as the catalog stores it
-     * @param int|null $yearFrom the oldest production year accepted
-     * @param int|null $yearTo the most recent production year accepted
-     * @param float|null $ratingFrom the lowest IMDb grade accepted
-     * @param float|null $ratingTo the highest IMDb grade accepted
+     * @param  'asc'|'desc'  $direction
+     * @param  string|null  $genre  a genre label exactly as the catalog stores it
+     * @param  int|null  $yearFrom  the oldest production year accepted
+     * @param  int|null  $yearTo  the most recent production year accepted
+     * @param  float|null  $ratingFrom  the lowest IMDb grade accepted
+     * @param  float|null  $ratingTo  the highest IMDb grade accepted
      */
     public function __construct(
         public string $term,

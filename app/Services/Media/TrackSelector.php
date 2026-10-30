@@ -31,7 +31,9 @@ final class TrackSelector
         );
     }
 
-    /**@paramlist<MediaStream> $audios */
+    /**
+     * @param  list<MediaStream>  $audios
+     */
     private function selectAudio(array $audios): ?MediaStream
     {
         foreach (['eng', 'fra', 'deu', 'ita'] as $preferredLanguage) {

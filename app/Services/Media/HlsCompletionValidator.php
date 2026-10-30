@@ -17,36 +17,36 @@ final class HlsCompletionValidator
             'class' => self::class,
             'method' => __FUNCTION__,
             'sourceDurationSeconds' => $sourceDurationSeconds,
-            'hlsDurationSeconds' => $hlsDurationSeconds
+            'hlsDurationSeconds' => $hlsDurationSeconds,
         ];
         Log::channel('my_debug')->info(
-            "Vérification de la conversion \n" . json_encode(
+            "Vérification de la conversion \n".json_encode(
                 [
                     ...$context,
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
+            )."\n",
         );
         if (! is_finite($sourceDurationSeconds) || $sourceDurationSeconds <= 0) {
             Log::channel('my_debug')->error(
-                "La durée de la source fournie par ffbrobe est invalide.\n" . json_encode(
+                "La durée de la source fournie par ffbrobe est invalide.\n".json_encode(
                     [
                         ...$context,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
             throw new MediaConversionException('The source duration is invalid.');
         }
 
         if (! is_finite($hlsDurationSeconds) || $hlsDurationSeconds <= 0) {
             Log::channel('my_debug')->error(
-                "La durée des hls post conversion est invalide.\n" . json_encode(
+                "La durée des hls post conversion est invalide.\n".json_encode(
                     [
                         ...$context,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
             throw new MediaConversionException('The HLS duration is invalid.');
         }
@@ -55,12 +55,12 @@ final class HlsCompletionValidator
 
         if ($contents === false) {
             Log::channel('my_debug')->error(
-                "video.m3u8 est manquant ou son contenu est invalide.\n" . json_encode(
+                "video.m3u8 est manquant ou son contenu est invalide.\n".json_encode(
                     [
                         ...$context,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
             throw new MediaConversionException(
                 'The final HLS video playlist is missing or unreadable.',
@@ -71,12 +71,12 @@ final class HlsCompletionValidator
 
         if ($lines === false || end($lines) !== '#EXT-X-ENDLIST') {
             Log::channel('my_debug')->error(
-                "La playlist video.m3u8 ne se termine pas par EXT-X-ENDLIST\n" . json_encode(
+                "La playlist video.m3u8 ne se termine pas par EXT-X-ENDLIST\n".json_encode(
                     [
                         ...$context,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
             throw new MediaConversionException(
                 'The final HLS video playlist has no final EXT-X-ENDLIST marker.',
@@ -94,12 +94,12 @@ final class HlsCompletionValidator
 
         if ($hlsDurationSeconds < $minimumAcceptedDuration) {
             Log::channel('my_debug')->error(
-                "La durée totals des segments hls ne correspond pas à la durée attendue.\n" . json_encode(
+                "La durée totals des segments hls ne correspond pas à la durée attendue.\n".json_encode(
                     [
                         ...$context,
                     ],
                     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
+                )."\n",
             );
             throw new MediaConversionException(sprintf(
                 'The HLS output is truncated: %.3f seconds produced for a %.3f-second source; at least %.3f seconds were required.',
@@ -110,12 +110,12 @@ final class HlsCompletionValidator
         }
 
         Log::channel('my_debug')->info(
-            "Le contrôle des fichiers converties est passé avec succés\n" . json_encode(
+            "Le contrôle des fichiers converties est passé avec succés\n".json_encode(
                 [
                     ...$context,
                 ],
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
+            )."\n",
         );
     }
 }

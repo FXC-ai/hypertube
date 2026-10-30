@@ -101,13 +101,13 @@ class Source extends Model
      * How a genre list is stored for filtering: lowercase labels, deduplicated, each of
      * them wrapped in pipes so a criterion is matched whole.
      *
-     * @param list<string> $labels
+     * @param  list<string>  $labels
      */
     public static function storedGenres(array $labels): ?string
     {
         $genres = collect($labels)
-            ->map(fn(string $label): string => mb_strtolower(trim($label)))
-            ->filter(fn(string $label): bool => $label !== '')
+            ->map(fn (string $label): string => mb_strtolower(trim($label)))
+            ->filter(fn (string $label): bool => $label !== '')
             ->unique()
             ->sort()
             ->values();
@@ -119,7 +119,7 @@ class Source extends Model
      * Every genre the given catalogs actually offer, so the filter never proposes a
      * criterion that matches nothing.
      *
-     * @param list<string> $sources
+     * @param  list<string>  $sources
      * @return list<string>
      */
     public static function genreOptions(array $sources): array
@@ -136,9 +136,9 @@ class Source extends Model
                     ->pluck('genres');
 
                 return array_values($stored
-                    ->flatMap(fn(string $genres): array => array_filter(
+                    ->flatMap(fn (string $genres): array => array_filter(
                         explode('|', $genres),
-                        fn(string $label): bool => $label !== '',
+                        fn (string $label): bool => $label !== '',
                     ))
                     ->unique()
                     ->sort()
@@ -157,7 +157,7 @@ class Source extends Model
     {
         return array_values(array_filter(
             explode('|', (string) $this->genres),
-            fn(string $label): bool => $label !== '',
+            fn (string $label): bool => $label !== '',
         ));
     }
 

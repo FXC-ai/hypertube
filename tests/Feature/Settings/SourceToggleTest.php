@@ -12,7 +12,7 @@ describe('source preferences', function () {
 
         $response->assertOk();
         $response->assertInertia(
-            fn($assert) => $assert
+            fn ($assert) => $assert
                 ->component('settings/sources')
                 ->has('sources', 2)
                 ->where('sources.0.value', 'wikidata')
@@ -53,7 +53,7 @@ describe('source preferences', function () {
     it('uses the default preferences for a user without stored preferences', function () {
         $user = User::factory()->create(['sources' => null]);
 
-        expect(array_map(fn($source): string => $source->value, $user->enabledSources()))
+        expect(array_map(fn ($source): string => $source->value, $user->enabledSources()))
             ->toBe(['wikidata', 'whitelist']);
     });
 
@@ -62,14 +62,14 @@ describe('source preferences', function () {
 
         config(['services.sources.whitelist.enabled' => false]);
 
-        expect(array_map(fn($source): string => $source->value, $user->enabledSources()))
+        expect(array_map(fn ($source): string => $source->value, $user->enabledSources()))
             ->toBe(['wikidata']);
     });
 
     it('skips the sources the user disabled', function () {
         $user = User::factory()->create(['sources' => ['wikidata' => false, 'whitelist' => true]]);
 
-        expect(array_map(fn($source): string => $source->value, $user->enabledSources()))
+        expect(array_map(fn ($source): string => $source->value, $user->enabledSources()))
             ->toBe(['whitelist']);
     });
 });

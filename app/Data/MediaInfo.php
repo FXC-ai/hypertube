@@ -10,7 +10,9 @@ final readonly class MediaInfo
         public float $durationSeconds,
     ) {}
 
-    /**@return list<MediaStream> */
+    /**
+     * @return list<MediaStream>
+     */
     public function videos(): array
     {
         return array_values(array_filter(
@@ -19,7 +21,9 @@ final readonly class MediaInfo
         ));
     }
 
-    /**@return list<MediaStream> */
+    /**
+     * @return list<MediaStream>
+     */
     public function audios(): array
     {
         return array_values(array_filter(
@@ -28,7 +32,9 @@ final readonly class MediaInfo
         ));
     }
 
-    /**@return list<MediaStream> */
+    /**
+     * @return list<MediaStream>
+     */
     public function subtitles(): array
     {
         return array_values(array_filter(
