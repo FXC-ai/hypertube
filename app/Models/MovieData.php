@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\MovieSource;
 use Carbon\Carbon;
+use Database\Factories\MovieDataFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Model;
     'runtime',
     'actors',
     'director',
+    'producer',
     'writers',
     'rated',
     'language',
@@ -28,6 +30,7 @@ use Illuminate\Database\Eloquent\Model;
 ])]
 class MovieData extends Model
 {
+    /** @use HasFactory<MovieDataFactory> */
     use HasFactory;
 
     protected function casts(): array
@@ -48,6 +51,9 @@ class MovieData extends Model
         return self::where('imdb_id', $imdbId)->first();
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
     public static function storeFromOmdb(string $imdbId, array $data): self
     {
         return static::updateOrCreate(
@@ -60,6 +66,7 @@ class MovieData extends Model
                 'runtime' => isset($data['Runtime']) ? (int) preg_replace('/\D/', '', $data['Runtime']) : null,
                 'actors' => isset($data['Actors']) ? explode(',', $data['Actors']) : null,
                 'director' => $data['Director'] ?? null,
+                'producer' => $data['Producer'] ?? null,
                 'writers' => isset($data['Writer']) ? explode(',', $data['Writer']) : null,
                 'rated' => $data['Rated'] ?? null,
                 'language' => isset($data['Language']) ? explode(',', $data['Language']) : null,
@@ -82,9 +89,10 @@ class MovieData extends Model
             'year' => $this->release_date?->format('Y') ?? 'N/A',
             'rated' => $this->rated,
             'released' => $this->release_date?->format('d M Y'),
-            'runtime' => $this->runtime ? (string) $this->runtime . ' min' : 'N/A',
+            'runtime' => $this->runtime ? (string) $this->runtime.' min' : 'N/A',
             'genre' => $this->genres ? implode(', ', $this->genres) : 'N/A',
             'director' => $this->director ?? 'N/A',
+            'producer' => $this->producer ?? 'N/A',
             'writer' => $this->writers ? implode(', ', $this->writers) : 'N/A',
             'actors' => $this->actors ? implode(', ', $this->actors) : 'N/A',
             'plot' => $this->plot ?? 'No plot available.',

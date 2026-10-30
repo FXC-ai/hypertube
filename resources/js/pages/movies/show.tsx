@@ -47,6 +47,7 @@ type OmdbData = {
     runtime: string;
     genre: string;
     director: string;
+    producer: string;
     writer: string;
     actors: string;
     plot: string;
@@ -480,6 +481,15 @@ export default function MovieShow({ moviePageData, comments }: MovieShowProps) {
                                         </span>
                                         <span className="ml-2 font-medium">
                                             {moviePageData.movieData.genre}
+                                        </span>
+                                    </div>
+
+                                    <div>
+                                        <span className="text-muted-foreground">
+                                            Producer:
+                                        </span>
+                                        <span className="ml-2 font-medium">
+                                            {moviePageData.movieData.producer}
                                         </span>
                                     </div>
 

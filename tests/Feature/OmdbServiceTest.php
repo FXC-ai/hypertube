@@ -66,6 +66,42 @@ test('the OMDb key only ever travels over an encrypted link', function () {
         ->and($recorded[0][0]->url())->toStartWith('https://www.omdbapi.com/');
 });
 
+test('the producer is stored next to the director', function () {
+    $imdbId = 'tt0032599';
+
+    Http::fake([
+        'www.omdbapi.com/*' => Http::response([
+            'Response' => 'True',
+            'Director' => 'Howard Hawks',
+            'Producer' => 'Lois C. Webber',
+        ]),
+    ]);
+
+    $movieData = (new OmdbService('test-api-key'))->enrichByImdbId($imdbId);
+
+    expect($movieData->producer)->toBe('Lois C. Webber')
+        ->and($movieData->displayArray()['producer'])->toBe('Lois C. Webber');
+
+    $this->assertDatabaseHas('movie_data', [
+        'imdb_id' => $imdbId,
+        'producer' => 'Lois C. Webber',
+    ]);
+});
+
+test('a movie OMDb knows no producer for still shows the casting field', function () {
+    $imdbId = 'tt0000002';
+
+    Http::fake([
+        'www.omdbapi.com/*' => Http::response([
+            'Response' => 'True',
+            'Director' => 'Unknown',
+        ]),
+    ]);
+
+    expect((new OmdbService('test-api-key'))->enrichByImdbId($imdbId)->displayArray()['producer'])
+        ->toBe('N/A');
+});
+
 test('the catalog copy of the grade and of the production year follows the metadata', function () {
     $imdbId = 'tt0000001';
 

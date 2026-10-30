@@ -20,7 +20,7 @@ class MovieDataFactory extends Factory
     {
         return [
             'source' => MovieSource::Omdb->value,
-            'imdb_id' => 'tt' . fake()->unique()->numerify('#######'),
+            'imdb_id' => 'tt'.fake()->unique()->numerify('#######'),
             'release_date' => fake()->dateTimeBetween('-100 years', 'now'),
             'poster' => fake()->imageUrl(600, 900, 'movies'),
             'plot' => fake()->paragraph(),
@@ -40,6 +40,7 @@ class MovieDataFactory extends Factory
                 fake()->name(),
             ],
             'director' => fake()->name(),
+            'producer' => fake()->name(),
             'writers' => [
                 fake()->name(),
                 fake()->name(),
@@ -72,12 +73,12 @@ class MovieDataFactory extends Factory
      */
     public function forImdbId(string $imdbId): static
     {
-        return $this->state(fn(): array => ['imdb_id' => $imdbId]);
+        return $this->state(fn (): array => ['imdb_id' => $imdbId]);
     }
 
     public function withoutPoster(): static
     {
-        return $this->state(fn(): array => [
+        return $this->state(fn (): array => [
             'poster' => null,
         ]);
     }
