@@ -20,7 +20,7 @@ class MovieImportController extends Controller
     public function store(ImportMovieRequest $request): RedirectResponse
     {
         $data = $request->validated();
-        $torrentUrl = TorrentUrl::withoutInternalLinks((string) $data['torrent_url']);
+        $torrentUrl = TorrentUrl::withoutUntrustedLinks((string) $data['torrent_url']);
         $imdbId = 'manual-'.substr(hash('sha256', $torrentUrl), 0, 32);
         $title = is_string($data['title'] ?? null) && $data['title'] !== ''
             ? mb_substr($data['title'], 0, 255)

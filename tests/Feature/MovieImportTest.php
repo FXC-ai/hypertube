@@ -60,15 +60,17 @@ test('a non torrent URL is refused with validation', function () {
 });
 
 /*
- * The Client Torrent fetches the link from inside the Docker network: a link to the app,
- * the database or the cloud metadata service would let any user probe that network (SSRF).
+ * The Client Torrent fetches the link from inside the Docker network. A link to the app,
+ * the database or the cloud metadata service, directly or through a redirect or the
+ * trackers of a .torrent, would let any user probe that network (SSRF): imports only take
+ * the trusted sites of config('movies.import_trusted_hosts').
  */
-test('a torrent file on an internal host is refused', function (string $url) {
+test('a torrent file from an untrusted host is refused', function (string $url) {
     Queue::fake();
 
     $this->actingAs(User::factory()->create())
         ->post(route('movies.import'), ['torrent_url' => $url])
-        ->assertSessionHasErrors('torrent_url');
+        ->assertSessionHasErrors(['torrent_url' => 'The torrent URL must come from a trusted source: archive.org, webtorrent.io.']);
 
     expect(Movie::count())->toBe(0);
     Queue::assertNothingPushed();
@@ -78,44 +80,51 @@ test('a torrent file on an internal host is refused', function (string $url) {
     'cloud metadata' => 'http://169.254.169.254/latest/movie.torrent',
     'private network' => 'https://10.0.0.5/movie.torrent',
     'ipv6 loopback' => 'http://[::1]/movie.torrent',
+    'public but untrusted, could redirect anywhere' => 'https://93.184.215.14/movie.torrent',
+    'look-alike host' => 'https://archive.org.attacker.test/movie.torrent',
+    'trusted name in the path only' => 'https://attacker.test/archive.org/movie.torrent',
 ]);
 
-test('a torrent file on a public host is accepted', function () {
+test('a torrent file from a trusted site is accepted', function (string $url) {
     Queue::fake();
 
     $this->actingAs(User::factory()->create())
-        ->post(route('movies.import'), ['torrent_url' => 'https://93.184.215.14/movies/sintel.torrent'])
+        ->post(route('movies.import'), ['torrent_url' => $url])
         ->assertSessionHasNoErrors();
 
-    expect(Movie::query()->sole()->torrent_url)->toBe('https://93.184.215.14/movies/sintel.torrent');
-});
+    expect(Movie::query()->sole()->torrent_url)->toBe($url);
+})->with([
+    'archive.org' => 'https://archive.org/download/his_girl_friday/his_girl_friday_archive.torrent',
+    'archive.org mirror' => 'https://ia800300.us.archive.org/12/items/his_girl_friday/his_girl_friday_archive.torrent',
+    'webtorrent.io' => 'https://webtorrent.io/torrents/sintel.torrent',
+]);
 
-test('a magnet loses the links to internal hosts and keeps the others', function () {
+test('a magnet keeps only its trusted sources and its public udp trackers', function () {
     Queue::fake();
     $hash = 'xt=urn:btih:0123456789abcdef0123456789abcdef01234567';
-    $public = [
+    $kept = [
         'dn=Sintel',
         'tr=udp%3A%2F%2F93.184.215.14%3A6969',
-        'tr=wss%3A%2F%2F93.184.215.14',
-        'ws=https%3A%2F%2F93.184.215.14%2Ftorrents%2F',
-        'xs=https%3A%2F%2F93.184.215.14%2Fsintel.torrent',
+        'ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F',
+        'xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fsintel.torrent',
+        'xs.1=https%3A%2F%2Farchive.org%2Fdownload%2Fsintel%2Fsintel_archive.torrent',
     ];
-    $internal = [
+    $dropped = [
         'xs=http%3A%2F%2F127.0.0.1%3A8000%2Fmovie.torrent',
-        'xs.1=http%3A%2F%2F192.168.1.1%2Fmovie.torrent',
+        'xs.2=https%3A%2F%2F93.184.215.14%2Fmovie.torrent',
         'as=http%3A%2F%2F169.254.169.254%2Flatest',
         'ws=http%3A%2F%2F172.16.0.2%2F',
-        'tr=udp%3A%2F%2F127.0.0.1%3A6969',
-        'tr=wss%3A%2F%2Flocalhost%3A8000',
         'xs=file%3A%2F%2F%2Fetc%2Fpasswd',
-        'xs=wss%3A%2F%2F93.184.215.14%2Fmovie.torrent',
+        'tr=udp%3A%2F%2F127.0.0.1%3A6969',
+        'tr=https%3A%2F%2F93.184.215.14%2Fannounce',
+        'tr=wss%3A%2F%2F93.184.215.14',
     ];
 
     $this->actingAs(User::factory()->create())
-        ->post(route('movies.import'), ['torrent_url' => 'magnet:?'.implode('&', [$hash, ...$internal, ...$public])])
+        ->post(route('movies.import'), ['torrent_url' => 'magnet:?'.implode('&', [$hash, ...$dropped, ...$kept])])
         ->assertSessionHasNoErrors();
 
-    expect(Movie::query()->sole()->torrent_url)->toBe('magnet:?'.implode('&', [$hash, ...$public]));
+    expect(Movie::query()->sole()->torrent_url)->toBe('magnet:?'.implode('&', [$hash, ...$kept]));
 });
 
 test('the magnets of webtorrent.io and of the evaluation sheet are accepted', function (string $magnet, string $kept) {
@@ -125,8 +134,6 @@ test('the magnets of webtorrent.io and of the evaluation sheet are accepted', fu
         ->post(route('movies.import'), ['torrent_url' => $magnet])
         ->assertSessionHasNoErrors();
 
-    // Trackers come and go (tracker.btorrent.xyz now resolves to 127.0.0.1 and is dropped):
-    // only the links that matter for each magnet are checked.
     expect(Movie::query()->sole()->torrent_url)
         ->toStartWith(explode('&', $magnet)[0])
         ->toContain($kept);
