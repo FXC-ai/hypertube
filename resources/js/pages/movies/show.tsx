@@ -92,6 +92,7 @@ type MovieShowProps = {
 const sourceLabels: Record<string, string> = {
     wikidata: 'Wikidata',
     whitelist: 'Whitelist',
+    import: 'Imported',
 };
 
 const conversionStatusLabel: Record<ConversionStatus, string> = {

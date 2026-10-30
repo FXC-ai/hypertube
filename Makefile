@@ -1,6 +1,6 @@
 COMPOSE ?= docker compose
 
-.PHONY: init import-movies logs-workers restart-workers start stop clean fclean test show-movies demo-scheduler oauth-client docs
+.PHONY: init import-movies logs-workers restart-workers start stop clean fclean test show-movies demo-scheduler oauth-client admin docs
 
 init:
 	docker compose up -d --build --scale worker-conversions=3
@@ -48,6 +48,9 @@ demo-scheduler:
 
 oauth-client: ## Crée ou recrée le client OAuth2 « password grant » de l'API (id et secret dans .env)
 	$(COMPOSE) exec -T app php artisan api:client
+
+admin: ## Crée (ou promeut) le compte admin, seul autorisé à importer un torrent ou un magnet. Usage : make admin USERNAME=admin EMAIL=admin@example.com
+	$(COMPOSE) exec app php artisan user:admin $(USERNAME) $(EMAIL)
 
 docs: ## Régénère la spec Swagger (UI : http://localhost:8000/api/documentation)
 	$(COMPOSE) exec -T app php artisan l5-swagger:generate

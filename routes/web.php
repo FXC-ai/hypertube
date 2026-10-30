@@ -24,7 +24,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
     Route::get('/movies', [MovieController::class, 'index'])->name('movies.index');
-    Route::post('/movies/import', [MovieImportController::class, 'store'])->name('movies.import');
+    Route::post('/movies/import', [MovieImportController::class, 'store'])->middleware('can:import-movies')->name('movies.import');
 
     Route::get('/movies/sources/{source}/imdb/{imdb_id}', [MovieController::class, 'select'])
         ->where('source', implode('|', array_map(fn (MovieSource $source): string => $source->value, MovieSource::catalogSources())))

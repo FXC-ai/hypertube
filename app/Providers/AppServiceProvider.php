@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use App\Socialite\FortyTwoProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -34,6 +36,10 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
 
         Passport::enablePasswordGrant();
+
+        // Importing a link makes the server fetch it: only an admin, created with
+        // `php artisan user:admin`, may do it.
+        Gate::define('import-movies', fn (User $user): bool => $user->is_admin);
 
         // Ids are bigint columns, on the web routes as on the API: anything else must answer
         // 404, not reach PostgreSQL, which rejects "abc" or 99999999999999999999 with an error

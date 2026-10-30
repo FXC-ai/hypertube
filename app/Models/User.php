@@ -45,6 +45,16 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
+     * An account is never an admin until `php artisan user:admin` says so: `is_admin` is
+     * left out of the fillable attributes on purpose.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_admin' => false,
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -56,6 +66,7 @@ class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
             'password' => 'hashed',
             'preferredlanguage' => Languages::class,
             'sources' => 'array',
+            'is_admin' => 'boolean',
         ];
     }
 
