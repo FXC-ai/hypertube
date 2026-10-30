@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
 
 beforeEach(function () {
@@ -52,6 +54,7 @@ function registration(array $overrides = []): array
         'lastname' => 'Comer',
         'password' => $password,
         'password_confirmation' => $password,
+        'profilepicture' => UploadedFile::fake()->image('avatar.png'),
         ...$overrides,
     ];
 }
@@ -62,7 +65,7 @@ test('registration asks for every field the subject lists', function (string $fi
 
     $this->post(route('register.store'), $payload)->assertSessionHasErrors($field);
     $this->assertGuest();
-})->with(['email', 'username', 'firstname', 'lastname', 'password']);
+})->with(['email', 'username', 'firstname', 'lastname', 'password', 'profilepicture']);
 
 test('the password is stored hashed, never in plain text', function () {
     $this->post(route('register.store'), registration());
@@ -71,6 +74,15 @@ test('the password is stored hashed, never in plain text', function () {
 
     expect($user->getRawOriginal('password'))->not->toBe(registrationPassword())
         ->and(Hash::check(registrationPassword(), $user->password))->toBeTrue();
+});
+
+test('a profile picture uploaded at registration is kept on the public disk', function () {
+    $this->post(route('register.store'), registration());
+
+    $user = User::query()->where('username', 'newcomer')->firstOrFail();
+
+    expect($user->profilepicture)->not->toBeNull();
+    Storage::disk('public')->assertExists($user->profilepicture);
 });
 
 test('a current French word is rejected as a password', function (string $password) {

@@ -27,7 +27,7 @@ export default function Register({ passwordRules }: Props) {
                     <>
                         <div className="grid gap-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Username</Label>
+                                <Label htmlFor="username">Username</Label>
                                 <Input
                                     id="username"
                                     type="text"
@@ -45,14 +45,13 @@ export default function Register({ passwordRules }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="name">First Name</Label>
+                                <Label htmlFor="firstname">First Name</Label>
                                 <Input
                                     id="firstname"
                                     type="text"
                                     required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="First Name"
+                                    tabIndex={2}
+                                    autoComplete="given-name"
                                     name="firstname"
                                     placeholder="First Name"
                                 />
@@ -63,14 +62,13 @@ export default function Register({ passwordRules }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Last Name</Label>
+                                <Label htmlFor="lastname">Last Name</Label>
                                 <Input
                                     id="lastname"
                                     type="text"
                                     required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="Last Name"
+                                    tabIndex={3}
+                                    autoComplete="family-name"
                                     name="lastname"
                                     placeholder="Last Name"
                                 />
@@ -86,7 +84,7 @@ export default function Register({ passwordRules }: Props) {
                                     id="email"
                                     type="email"
                                     required
-                                    tabIndex={2}
+                                    tabIndex={4}
                                     autoComplete="email"
                                     name="email"
                                     placeholder="email@example.com"
@@ -95,11 +93,27 @@ export default function Register({ passwordRules }: Props) {
                             </div>
 
                             <div className="grid gap-2">
+                                <Label htmlFor="profilepicture">
+                                    Profile picture
+                                </Label>
+                                <Input
+                                    id="profilepicture"
+                                    type="file"
+                                    className="mt-1 block w-full"
+                                    required
+                                    tabIndex={5}
+                                    autoComplete="off"
+                                    name="profilepicture"
+                                />
+                                <InputError message={errors.profilepicture} />
+                            </div>
+
+                            <div className="grid gap-2">
                                 <Label htmlFor="password">Password</Label>
                                 <PasswordInput
                                     id="password"
                                     required
-                                    tabIndex={3}
+                                    tabIndex={6}
                                     autoComplete="new-password"
                                     name="password"
                                     placeholder="Password"
@@ -115,7 +129,7 @@ export default function Register({ passwordRules }: Props) {
                                 <PasswordInput
                                     id="password_confirmation"
                                     required
-                                    tabIndex={4}
+                                    tabIndex={7}
                                     autoComplete="new-password"
                                     name="password_confirmation"
                                     placeholder="Confirm password"
@@ -129,7 +143,7 @@ export default function Register({ passwordRules }: Props) {
                             <Button
                                 type="submit"
                                 className="mt-2 w-full"
-                                tabIndex={5}
+                                tabIndex={8}
                                 data-test="register-user-button"
                             >
                                 {processing && <Spinner />}

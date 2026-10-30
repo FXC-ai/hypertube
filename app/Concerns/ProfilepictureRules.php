@@ -7,6 +7,9 @@ use Illuminate\Validation\Rules\File;
 
 trait ProfilepictureRules
 {
+    /**
+     * @return array<int, File|string>
+     */
     protected function profilepictureRules(): array
     {
         return [
