@@ -18,6 +18,22 @@ final class PublicHost
             return false;
         }
 
+        // The Client Torrent (Node) reads a host the WHATWG way: it percent-decodes it, and a
+        // host whose last label is a number is an IPv4 address in decimal, octal or hex
+        // (127.0.0.1%2E, %31%32%37.0.0.1, 0x7f.1 and 127.1 all mean 127.0.0.1), while PHP
+        // takes them as names that resolve to nothing. Only the plain a.b.c.d form is
+        // accepted for an address, and never a percent-encoded host.
+        if (str_contains($host, '%')) {
+            return false;
+        }
+
+        $labels = explode('.', rtrim($host, '.'));
+
+        if (preg_match('/^(0x[0-9a-f]*|[0-9]+)$/', (string) end($labels)) === 1
+            && filter_var(rtrim($host, '.'), FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+            return false;
+        }
+
         $addresses = filter_var($host, FILTER_VALIDATE_IP) !== false
             ? [$host]
             : (gethostbynamel($host) ?: []);

@@ -124,6 +124,13 @@ test('a torrent file on an internal host is refused', function (string $url) {
     // as a slash and connects to 10.0.0.5.
     'backslash before a public host' => 'https://10.0.0.5\\@93.184.215.14/movie.torrent',
     'userinfo' => 'https://user:secret@93.184.215.14/movie.torrent',
+    // Node percent-decodes the host and reads numbers in any base as an IPv4 address.
+    'percent-encoded dot' => 'https://127.0.0.1%2E/movie.torrent',
+    'percent-encoded digits' => 'https://%31%32%37.0.0.1/movie.torrent',
+    'short hex address' => 'https://0x7f.1/movie.torrent',
+    'short decimal address' => 'https://127.1/movie.torrent',
+    'octal address' => 'https://0177.0.0.1/movie.torrent',
+    'single number address' => 'https://2130706433/movie.torrent',
 ]);
 
 test('a torrent file on any public host is accepted', function (string $url) {
@@ -162,6 +169,12 @@ test('a magnet loses the links to internal hosts and keeps the public ones, what
         'xs=wss%3A%2F%2F93.184.215.14%2Fmovie.torrent',
         'xs=https%3A%2F%2F127.0.0.1%5C%4093.184.215.14%2Fmovie.torrent',
         'ws=https%3A%2F%2Fuser%4093.184.215.14%2F',
+        // Node drops tabs and newlines from a URL, PHP reads them as part of the host.
+        'xs=https%3A%2F%2F127.0.0.1%09%2Fmovie.torrent',
+        'xs.3=https%3A%2F%2F127.0.0.1%0A%2Fmovie.torrent',
+        'as=https%3A%2F%2F127.0.0.1%0D%2Fmovie.torrent',
+        'ws=https%3A%2F%2F127.0.0.1%20%2F',
+        'tr=udp%3A%2F%2F%00127.0.0.1%3A6969',
     ];
 
     $this->actingAs(admin())
