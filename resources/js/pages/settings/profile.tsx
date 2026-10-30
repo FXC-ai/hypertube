@@ -191,11 +191,11 @@ export default function Profile({
 
                                         {status ===
                                             'verification-link-sent' && (
-                                                <div className="mt-2 text-sm font-medium text-green-600">
-                                                    A new verification link has been
-                                                    sent to your email address.
-                                                </div>
-                                            )}
+                                            <div className="mt-2 text-sm font-medium text-green-600">
+                                                A new verification link has been
+                                                sent to your email address.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -221,7 +221,9 @@ export default function Profile({
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Profile picture</Label>
+                                <Label htmlFor="profilepicture">
+                                    Profile picture
+                                </Label>
                                 <Avatar className="h-40 w-64 overflow-hidden rounded-xl">
                                     <AvatarImage
                                         src={
@@ -255,7 +257,7 @@ export default function Profile({
                             <div className="flex items-center gap-4">
                                 <Button
                                     disabled={processing}
-                                    data-test="update-profile-button"
+                                    data-test="update-avatar-button"
                                 >
                                     Save
                                 </Button>

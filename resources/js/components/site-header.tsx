@@ -1,4 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
+import { LogOut } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { Button } from '@/components/ui/button';
 import { home, login, logout, register } from '@/routes';
@@ -22,17 +23,24 @@ export function SiteHeader() {
                         <>
                             <Button asChild>
                                 <Link href={moviesIndex()} prefetch>
-                                    Movie library
+                                    <span className="sm:hidden">Library</span>
+                                    <span className="hidden sm:inline">
+                                        Movie library
+                                    </span>
                                 </Link>
                             </Button>
                             <Button variant="ghost" asChild>
                                 <Link
                                     href={logout()}
                                     as="button"
+                                    aria-label="Log out"
                                     onClick={() => router.flushAll()}
                                     data-test="logout-button"
                                 >
-                                    Log out
+                                    <LogOut className="h-4 w-4 sm:hidden" />
+                                    <span className="hidden sm:inline">
+                                        Log out
+                                    </span>
                                 </Link>
                             </Button>
                         </>
