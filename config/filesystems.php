@@ -33,7 +33,7 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],
@@ -43,6 +43,9 @@ return [
             'root' => storage_path('app/public'),
             'url' => rtrim((string) env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
+            // Served by nginx in Docker, and by this route when the app runs without a
+            // front server (`php artisan serve`): the same files, the same links.
+            'serve' => true,
             'throw' => false,
             'report' => false,
         ],
