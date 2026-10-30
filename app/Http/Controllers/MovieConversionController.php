@@ -14,46 +14,39 @@ use Inertia\Response;
 
 final class MovieConversionController extends Controller
 {
+    private const LOG_FLAGS = JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE;
+
     public function store(Movie $movie): RedirectResponse
     {
+        $this->prepare($movie);
+
+        return to_route('movies.show', $movie);
+    }
+
+    /**
+     * Launch the background pipeline a video page needs: download it first when the
+     * server does not have it yet, then convert it when it can be read.
+     */
+    public function prepare(Movie $movie): void
+    {
+        // A movie created by `firstOrCreate` carries no status yet: the defaults only
+        // exist on the row the database just wrote.
+        $movie = $movie->refresh();
+
         $context = [
             'class' => self::class,
             'method' => __FUNCTION__,
             'movie_id' => $movie->id,
             'user_id' => request()->user()?->getAuthIdentifier(),
+            'download_status' => $movie->download_status->value,
+            'conversion_status' => $movie->conversion_status->value,
+            'has_torrent' => $movie->torrent_url !== null,
         ];
 
-        Log::channel('my_debug')->info(
-            "Une demande de préparation du film a été reçue.\n" . json_encode(
-                [
-                    ...$context,
-                    'download_status' => $movie->download_status?->value,
-                    'conversion_status' => $movie->conversion_status?->value,
-                    'has_torrent' => $movie->torrent_url !== null,
-                ],
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) . "\n",
-        );
+        if (in_array($movie->download_status, [DownloadStatus::Purging, DownloadStatus::Unsupported], true)) {
+            $this->log('La préparation du film est refusée par son statut de téléchargement.', $context, 'debug');
 
-        if ($movie->download_status === DownloadStatus::Purging) {
-            Log::channel('my_debug')->debug(
-                "La préparation du film est refusée car le film est en cours de purge.\n" . json_encode(
-                    $context,
-                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
-            );
-            return to_route('movies.show', $movie);
-        }
-
-        if ($movie->download_status === DownloadStatus::Unsupported) {
-            Log::channel('my_debug')->debug(
-                "La préparation du film est refusée car son torrent n’est pas pris en charge.\n" . json_encode(
-                    [...$context, 'reason' => 'torrent_unsupported'],
-                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
-            );
-
-            return to_route('movies.show', $movie);
+            return;
         }
 
         if (
@@ -66,18 +59,9 @@ final class MovieConversionController extends Controller
         ) {
             DownloadMovie::dispatch($movie->id)->afterCommit();
 
-            Log::channel('my_debug')->info(
-                "Le job de téléchargement du film a été ajouté à la file d’attente.\n" . json_encode(
-                    [
-                        ...$context,
-                        'previous_download_status' => $movie->download_status?->value,
-                        'job' => DownloadMovie::class,
-                    ],
-                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
-            );
+            $this->log('Le job de téléchargement du film a été ajouté à la file d’attente.', [...$context, 'job' => DownloadMovie::class]);
 
-            return to_route('movies.show', $movie);
+            return;
         }
 
         $queued = Movie::query()
@@ -96,20 +80,33 @@ final class MovieConversionController extends Controller
         if ($queued === 1) {
             ConvertMovie::dispatch($movie->id)->afterCommit();
 
-            Log::channel('my_debug')->info(
-                "Le job de conversion du film a été ajouté à la file d’attente.\n" . json_encode(
-                    [
-                        ...$context,
-                        'previous_conversion_status' => $movie->conversion_status?->value,
-                        'conversion_status' => ConversionStatus::Queued->value,
-                        'job' => ConvertMovie::class,
-                    ],
-                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
-                ) . "\n",
-            );
+            $this->log('Le job de conversion du film a été ajouté à la file d’attente.', [...$context, 'job' => ConvertMovie::class]);
+
+            return;
         }
 
-        return to_route('movies.show', $movie);
+        $this->log(
+            'Aucun job n’a été ajouté à la file : le film n’attend ni téléchargement ni conversion.',
+            [...$context, 'rows_queued' => $queued],
+            'debug',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function log(string $message, array $context, string $level = 'info'): void
+    {
+        $line = $message."\n".json_encode($context, self::LOG_FLAGS)."\n";
+        $logger = Log::channel('my_debug');
+
+        if ($level === 'debug') {
+            $logger->debug($line);
+
+            return;
+        }
+
+        $logger->info($line);
     }
 
     public function show(Movie $movie): Response
@@ -118,7 +115,6 @@ final class MovieConversionController extends Controller
             'movies/show',
             [
                 'conversion' => [
-
                     'status' => $movie->conversion_status->value,
                     'attempt' => $movie->conversion_attempt,
                     'error' => $movie->conversion_status === ConversionStatus::Failed ? 'The conversion failed.' : null,
